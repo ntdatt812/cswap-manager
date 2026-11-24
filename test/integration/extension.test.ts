@@ -6,7 +6,7 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import type { TestApi } from '../../src/extension';
 
-const EXTENSION_ID = 'cswap-manager-dev.cswap-manager';
+const EXTENSION_ID = 'nguyenthanhdat.cswap-manager';
 const COMMANDS = [
   'cswapManager.refresh',
   'cswapManager.showDiagnostics',

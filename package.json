@@ -2,10 +2,18 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.1.1",
-  "publisher": "cswap-manager-dev",
-  "private": true,
-  "license": "UNLICENSED",
+  "version": "0.1.2",
+  "publisher": "nguyenthanhdat",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ntdatt812/cswap-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ntdatt812/cswap-manager/issues"
+  },
+  "homepage": "https://github.com/ntdatt812/cswap-manager#readme",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -15,7 +23,9 @@
   "keywords": [
     "cswap",
     "claude-swap",
-    "accounts"
+    "claude code",
+    "accounts",
+    "usage"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -453,7 +463,7 @@
     "test:integration": "npm run build:tests && npm run bundle && vscode-test",
     "package": "node esbuild.mjs --production",
     "vscode:prepublish": "npm run package",
-    "package:vsix": "npm run typecheck && vsce package --skip-license --allow-missing-repository"
+    "package:vsix": "npm run typecheck && vsce package"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

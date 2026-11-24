@@ -123,4 +123,4 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - The filter is not persisted across window reloads.
 - Killing a timed-out process is best-effort (`child.kill()`); a process tree is not killed explicitly.
 - Alias, `fiveHour`, switch JSON output and non-`ok` `usageStatus` values have not been observed.
-- `publisher` in `package.json` is a placeholder (`cswap-manager-dev`); there is no LICENSE yet.
+- Published as `nguyenthanhdat.cswap-manager` under the MIT license; the extension ID must stay stable across releases.

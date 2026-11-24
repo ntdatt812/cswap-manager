@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.2 — 2026-11-24
+- First Marketplace release: publisher `nguyenthanhdat`, MIT license, extension icon, repository links, independence notice in the README.
+
 ## 0.1.1 — 2026-11-24
 - Verified against cswap 1.2.0 (source diff + live probes + full test suite); the 1.2 line is now reported as tested in diagnostics.
 

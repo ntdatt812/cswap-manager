@@ -2,16 +2,16 @@
 
 Manage your [Claude Swap](https://github.com/realiti4/claude-swap) (`cswap`) accounts without leaving VS Code: see every account's usage, switch the active Claude Code account, and adjust account settings. The `cswap` CLI does all the work; this extension is a GUI on top of it.
 
+> Cswap Manager is an independent project. It is not affiliated with or endorsed by Anthropic or the authors of claude-swap. You are responsible for using your Claude accounts in line with Anthropic's terms.
+
 ## Requirements
 - `cswap` installed and managing at least one account (verified with cswap 1.1.0 and 1.2.0).
 - VS Code 1.90 or newer.
 - Windows is the primary platform; macOS/Linux should work but are untested.
 
 ## Install
-The extension is distributed as a `.vsix` file.
-
-- VS Code: **Extensions** view → `…` menu → **Install from VSIX…** → pick `cswap-manager-<version>.vsix`.
-- Terminal: `code --install-extension cswap-manager-<version>.vsix`
+- From the Marketplace: search for **Cswap Manager** in the Extensions view, or run `code --install-extension nguyenthanhdat.cswap-manager`.
+- From a `.vsix` file (for example a GitHub release): **Extensions** view → `…` menu → **Install from VSIX…**.
 
 The extension finds `cswap` on `PATH` or in `~/.local/bin`. If yours lives elsewhere, set **Cswap Manager › Cli Path** in your user settings to the full path of `cswap.exe`.
 
@@ -85,4 +85,4 @@ Not available in the extension (use the CLI): adding, removing, importing and ex
 - Only one cswap operation runs at a time; others wait for it to finish.
 
 ## License
-Private use (UNLICENSED). Development notes: `docs/DEVELOPMENT.md`.
+MIT — see `LICENSE`. Issues and source: https://github.com/ntdatt812/cswap-manager. Development notes: `docs/DEVELOPMENT.md`.

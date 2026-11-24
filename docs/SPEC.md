@@ -14,7 +14,7 @@ Create an independent, modern VS Code extension to manage accounts maintained by
 ## 3. Verified environment
 - Windows PowerShell 5.1
 - cswap 1.1.0
-- executable path observed: `C:\Users\ntdat\.local\bin\cswap.exe`
+- executable path observed: `%USERPROFILE%\.local\bin\cswap.exe`
 - JSON output observed for `list` and `status`
 - Help reports JSON support for `list`, `status`, `switch`.
 - Exact `switch` target syntax observed in help: `cswap switch <num|email>`.

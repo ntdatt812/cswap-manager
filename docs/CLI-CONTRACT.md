@@ -1,7 +1,7 @@
 # CLI contract — observations and verification status
 
 ## Environment
-- Observed executable: `C:\Users\ntdat\.local\bin\cswap.exe`
+- Observed executable: `%USERPROFILE%\.local\bin\cswap.exe`
 - Observed version: `cswap 1.1.0`
 - OS: Windows
 - Shell: PowerShell 5.1
