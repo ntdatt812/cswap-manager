@@ -98,7 +98,7 @@ function toCheck<T>(outcome: CliOutcome<T>): CommandCheck {
   const { meta } = outcome;
   return {
     command: meta.command,
-    args: meta.command === 'switch' || meta.command === 'manage' ? meta.command : COMMAND_ARGS[meta.command].join(' '),
+    args: meta.command === 'version' || meta.command === 'list' || meta.command === 'status' ? COMMAND_ARGS[meta.command].join(' ') : meta.command,
     ok: outcome.ok,
     ...(outcome.ok ? {} : { errorKind: outcome.error.kind }),
     ...(!outcome.ok && outcome.error.detail ? { errorDetail: outcome.error.detail } : {}),

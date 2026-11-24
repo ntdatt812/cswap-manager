@@ -38,7 +38,8 @@ export class AccountsView implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration(`${CONFIG_SECTION}.sidebar.sortOrder`) ||
-          event.affectsConfiguration(`${CONFIG_SECTION}.display`)
+          event.affectsConfiguration(`${CONFIG_SECTION}.display`) ||
+          event.affectsConfiguration(`${CONFIG_SECTION}.language`)
         ) {
           this.render();
         }

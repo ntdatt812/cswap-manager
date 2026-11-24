@@ -23,6 +23,7 @@ Requires Node.js 20.19+ and VS Code 1.90+.
 | `npm run test:live` | read-only smoke test against the installed `cswap` (`CSWAP_PATH` overrides the path) |
 | `npm run test:integration` | extension-host tests; set `VSCODE_EXECUTABLE` to a local `Code.exe` to avoid downloading VS Code; `CSWAP_E2E_MUTATE=1` also runs a reversible alias set/remove on an inactive account |
 | `npm run package:vsix` | production bundle + `cswap-manager-<version>.vsix` in the project root |
+| `npm run l10n:extract` | regenerate `l10n/bundle.l10n.json` (English source strings) and list missing/unused keys per translation; `npm test` fails if a translation is missing or loses a `{n}` placeholder |
 | F5 ("Run Extension") | launch an Extension Development Host |
 
 ## Documents

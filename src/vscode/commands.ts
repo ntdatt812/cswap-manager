@@ -1,5 +1,6 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
+import { localize } from './l10n';
 import type { CswapCli } from '../core/cli/cswapCli';
 import type { CachedExecutableResolver } from '../core/cli/executableResolver';
 import { collectDiagnostics, formatDiagnosticsReport } from '../core/diagnostics/diagnostics';
@@ -11,6 +12,7 @@ import type { OperationGate } from '../core/service/operationGate';
 import type { SwitchService } from '../core/service/switchService';
 import type { AccountActionId } from '../shared/dashboardProtocol';
 import type { AccountsView } from './accountsView';
+import type { AutoSwitchController } from './autoSwitchController';
 import type { DashboardController } from './dashboardPanel';
 import type { ExtensionConfiguration } from './configuration';
 import { describeCliError } from './messages';
@@ -28,6 +30,7 @@ export interface CommandDependencies {
   readonly configuration: ExtensionConfiguration;
   readonly accountsView: AccountsView;
   readonly dashboard: DashboardController;
+  readonly autoSwitch: AutoSwitchController;
   readonly homeDir: string;
 }
 
@@ -37,24 +40,24 @@ function extensionVersion(context: vscode.ExtensionContext): string {
 }
 
 const SORT_LABELS: Record<SortOrder, () => string> = {
-  slot: () => vscode.l10n.t('By slot number'),
-  mostUsed: () => vscode.l10n.t('Highest usage first'),
-  leastUsed: () => vscode.l10n.t('Most remaining quota first'),
-  soonestReset: () => vscode.l10n.t('Soonest reset first'),
+  slot: () => localize('By slot number'),
+  mostUsed: () => localize('Highest usage first'),
+  leastUsed: () => localize('Most remaining quota first'),
+  soonestReset: () => localize('Soonest reset first'),
 };
 
 async function refreshCommand(deps: CommandDependencies): Promise<void> {
   const result = await deps.refreshService.refresh({ trigger: 'manual' });
   if (result.ok) {
-    vscode.window.setStatusBarMessage(vscode.l10n.t('Cswap: {0} account(s) refreshed.', result.snapshot.accounts.length), 3000);
+    vscode.window.setStatusBarMessage(localize('Cswap: {0} account(s) refreshed.', result.snapshot.accounts.length), 3000);
     return;
   }
   if (result.error.kind === 'cancelled') {
     return;
   }
-  const diagnostics = vscode.l10n.t('Show Diagnostics');
-  const settings = vscode.l10n.t('Open Settings');
-  const stale = result.snapshot ? ` ${vscode.l10n.t('Showing last known data (stale).')}` : '';
+  const diagnostics = localize('Show Diagnostics');
+  const settings = localize('Open Settings');
+  const stale = result.snapshot ? ` ${localize('Showing last known data (stale).')}` : '';
   const choice = await vscode.window.showErrorMessage(`${describeCliError(result.error)}${stale}`, diagnostics, settings);
   if (choice === diagnostics) {
     await vscode.commands.executeCommand('cswapManager.showDiagnostics');
@@ -66,7 +69,7 @@ async function refreshCommand(deps: CommandDependencies): Promise<void> {
 async function diagnosticsCommand(deps: CommandDependencies): Promise<void> {
   const { configuration, cli, resolver, refreshService, homeDir, context } = deps;
   const text = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: vscode.l10n.t('Cswap: collecting diagnostics…') },
+    { location: vscode.ProgressLocation.Notification, title: localize('Cswap: collecting diagnostics…') },
     async () => {
       const report = await collectDiagnostics({
         environment: {
@@ -89,16 +92,16 @@ async function diagnosticsCommand(deps: CommandDependencies): Promise<void> {
   );
   const document = await vscode.workspace.openTextDocument({ content: text, language: 'markdown' });
   await vscode.window.showTextDocument(document, { preview: false });
-  const copy = vscode.l10n.t('Copy Report');
-  if ((await vscode.window.showInformationMessage(vscode.l10n.t('Cswap diagnostics report is ready (redacted).'), copy)) === copy) {
+  const copy = localize('Copy Report');
+  if ((await vscode.window.showInformationMessage(localize('Cswap diagnostics report is ready (redacted).'), copy)) === copy) {
     await vscode.env.clipboard.writeText(text);
   }
 }
 
 async function filterCommand(deps: CommandDependencies): Promise<void> {
   const value = await vscode.window.showInputBox({
-    title: vscode.l10n.t('Filter Cswap accounts'),
-    prompt: vscode.l10n.t('Match slot, email, organization, plan or usage status. Leave empty to clear.'),
+    title: localize('Filter Cswap accounts'),
+    prompt: localize('Match slot, email, organization, plan or usage status. Leave empty to clear.'),
     value: deps.accountsView.getFilter() ?? '',
   });
   if (value !== undefined) {
@@ -111,10 +114,10 @@ async function sortCommand(deps: CommandDependencies): Promise<void> {
   const picked = await vscode.window.showQuickPick(
     SORT_ORDERS.map((order) => ({
       label: SORT_LABELS[order](),
-      description: order === current ? vscode.l10n.t('current') : undefined,
+      description: order === current ? localize('current') : undefined,
       order,
     })),
-    { title: vscode.l10n.t('Sort Cswap accounts') },
+    { title: localize('Sort Cswap accounts') },
   );
   if (picked !== undefined && picked.order !== current) {
     await deps.configuration.setSortOrder(picked.order);
@@ -134,6 +137,8 @@ const ACTION_COMMANDS: ReadonlyArray<[string, AccountActionId]> = [
 
 export function registerCommands(deps: CommandDependencies): vscode.Disposable[] {
   return [
+    vscode.commands.registerCommand('cswapManager.autoSwitch', () => deps.autoSwitch.openMenu()),
+    vscode.commands.registerCommand('cswapManager.autoSwitchPreview', () => deps.autoSwitch.preview()),
     vscode.commands.registerCommand('cswapManager.manageAccount', (node?: NodeModel) => runAccountAction(deps, undefined, node?.slot)),
     ...ACTION_COMMANDS.map(([command, action]) =>
       vscode.commands.registerCommand(command, (node?: NodeModel) => runAccountAction(deps, action, node?.slot)),

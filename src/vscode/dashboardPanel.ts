@@ -11,6 +11,7 @@ import { parseWebviewMessage } from '../core/webview/messages';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 import type { Logger } from './logger';
+import { currentLanguage } from './l10n';
 import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
 import { runAccountAction } from './manageFlow';
 import { runSwitch } from './switchFlow';
@@ -106,7 +107,7 @@ export class DashboardController implements vscode.Disposable {
       localResourceRoots: [vscode.Uri.joinPath(this.deps.extensionUri, 'dist', 'webview'), vscode.Uri.joinPath(this.deps.extensionUri, 'media')],
     });
     panel.iconPath = vscode.Uri.joinPath(this.deps.extensionUri, 'resources', 'cswap.svg');
-    panel.webview.html = dashboardHtml(panel.webview, this.deps.extensionUri, randomBytes(16).toString('base64'), vscode.env.language);
+    panel.webview.html = dashboardHtml(panel.webview, this.deps.extensionUri, randomBytes(16).toString('base64'), currentLanguage());
     this.panel = panel;
     this.panelDisposables = [
       panel.webview.onDidReceiveMessage((raw: unknown) => void this.handleMessage(raw)),
@@ -224,6 +225,8 @@ export class DashboardController implements vscode.Disposable {
       switching: switchService.isSwitching() || this.deps.gate.isBusy(),
       describeError,
     });
+    // Keep the tab title in the chosen language after a language change.
+    this.panel.title = t('Cswap Dashboard');
     this.post({ type: 'state', model });
   }
 }

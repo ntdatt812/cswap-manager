@@ -111,7 +111,7 @@ const title = el('h1', { className: 'title' });
 const busyText = el('span', { className: 'busy', attrs: { role: 'status', 'aria-live': 'polite' } });
 const actions = el('div', { className: 'actions' });
 const message = el('p', { className: 'message', attrs: { role: 'status', 'aria-live': 'polite' } });
-const summary = el('section', { className: 'summary', attrs: { 'aria-label': 'Summary' } });
+const summary = el('section', { className: 'summary' });
 const accountsHeading = el('h2', { attrs: { id: 'accounts-heading' } });
 const searchLabel = el('label', { attrs: { for: 'search' } });
 const search = el('input', { className: 'search', attrs: { id: 'search', type: 'search', autocomplete: 'off', spellcheck: 'false' } });
@@ -159,6 +159,7 @@ function post(messageToHost: WebviewToHost): void {
 function renderHeader(current: DashboardModel): void {
   const s = current.strings;
   title.textContent = s.title;
+  summary.setAttribute('aria-label', s.summary);
   busyText.textContent = current.busy ? s.busy : '';
   const canSwitch = current.canSwitch && !current.busy;
   actions.replaceChildren(

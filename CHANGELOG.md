@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-11-24
+- Automatic switching with cswap's own `cswap auto`: **Cswap: Auto-Switch…** with modes off / notify only (dry runs) / switch automatically, a status bar indicator, notifications, a dry-run preview and an editor for cswap's auto-switch rules. Off by default; user settings only; one window runs it; ticks never overlap with other cswap changes.
+- Includes the 0.2.0 changes below (not published separately).
+
+## 0.2.0 — 2026-11-24
+- Switch Account picker redesigned: usage bars with the next reset, grouped by usefulness (automatic picks, current, most headroom, at limit by soonest reset, disabled/unknown), less text per row.
+- Vietnamese UI (`cswapManager.language`: auto, en, vi) for the sidebar, status bar, dialogs and dashboard; Vietnamese command titles and settings when VS Code runs in Vietnamese.
+- Dates follow the chosen language.
+
 ## 0.1.2 — 2026-11-24
 - First Marketplace release: publisher `nguyenthanhdat`, MIT license, extension icon, repository links, independence notice in the README.
 

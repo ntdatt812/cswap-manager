@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.1.2",
+  "version": "0.3.0",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -36,7 +36,8 @@
       "supported": "limited",
       "description": "%capabilities.untrustedWorkspaces.description%",
       "restrictedConfigurations": [
-        "cswapManager.confirmSwitch"
+        "cswapManager.confirmSwitch",
+        "cswapManager.autoSwitch.mode"
       ]
     }
   },
@@ -207,6 +208,17 @@
         "command": "cswapManager.moveAccount",
         "title": "%command.moveAccount.title%",
         "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.autoSwitch",
+        "title": "%command.autoSwitch.title%",
+        "category": "Cswap",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "cswapManager.autoSwitchPreview",
+        "title": "%command.autoSwitchPreview.title%",
+        "category": "Cswap"
       }
     ],
     "menus": {
@@ -250,6 +262,11 @@
           "command": "cswapManager.showDiagnostics",
           "when": "view == cswapManager.accounts",
           "group": "z_support@1"
+        },
+        {
+          "command": "cswapManager.autoSwitch",
+          "when": "view == cswapManager.accounts",
+          "group": "y_auto@1"
         }
       ],
       "commandPalette": [
@@ -362,12 +379,28 @@
           "order": 0,
           "markdownDescription": "%config.cliPath.description%"
         },
+        "cswapManager.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "en",
+            "vi"
+          ],
+          "enumDescriptions": [
+            "%config.language.auto%",
+            "%config.language.en%",
+            "%config.language.vi%"
+          ],
+          "markdownDescription": "%config.language.description%",
+          "order": 1
+        },
         "cswapManager.refreshIntervalSeconds": {
           "type": "number",
           "default": 120,
           "minimum": 0,
           "maximum": 3600,
-          "order": 1,
+          "order": 2,
           "markdownDescription": "%config.refreshIntervalSeconds.description%"
         },
         "cswapManager.statusBar.mode": {
@@ -385,15 +418,32 @@
             "%config.statusBarMode.nameUsage%",
             "%config.statusBarMode.hidden%"
           ],
-          "order": 2,
+          "order": 3,
           "markdownDescription": "%config.statusBarMode.description%"
         },
         "cswapManager.confirmSwitch": {
           "type": "boolean",
           "default": true,
-          "order": 3,
+          "order": 4,
           "markdownDescription": "%config.confirmSwitch.description%",
           "scope": "application"
+        },
+        "cswapManager.autoSwitch.mode": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "notify",
+            "switch"
+          ],
+          "enumDescriptions": [
+            "%config.autoSwitch.off%",
+            "%config.autoSwitch.notify%",
+            "%config.autoSwitch.switch%"
+          ],
+          "scope": "application",
+          "markdownDescription": "%config.autoSwitch.description%",
+          "order": 5
         },
         "cswapManager.sidebar.sortOrder": {
           "type": "string",
@@ -410,7 +460,7 @@
             "%config.sortOrder.leastUsed%",
             "%config.sortOrder.soonestReset%"
           ],
-          "order": 4,
+          "order": 6,
           "markdownDescription": "%config.sortOrder.description%"
         },
         "cswapManager.display.warningThreshold": {
@@ -418,7 +468,7 @@
           "default": 80,
           "minimum": 0,
           "maximum": 100,
-          "order": 5,
+          "order": 7,
           "markdownDescription": "%config.warningThreshold.description%"
         },
         "cswapManager.display.criticalThreshold": {
@@ -426,7 +476,7 @@
           "default": 95,
           "minimum": 0,
           "maximum": 100,
-          "order": 6,
+          "order": 8,
           "markdownDescription": "%config.criticalThreshold.description%"
         },
         "cswapManager.commandTimeoutSeconds": {
@@ -435,7 +485,7 @@
           "minimum": 2,
           "maximum": 300,
           "scope": "machine",
-          "order": 7,
+          "order": 9,
           "markdownDescription": "%config.commandTimeoutSeconds.description%"
         },
         "cswapManager.maxOutputKilobytes": {
@@ -444,7 +494,7 @@
           "minimum": 64,
           "maximum": 65536,
           "scope": "machine",
-          "order": 8,
+          "order": 10,
           "markdownDescription": "%config.maxOutputKilobytes.description%"
         }
       }
@@ -463,7 +513,8 @@
     "test:integration": "npm run build:tests && npm run bundle && vscode-test",
     "package": "node esbuild.mjs --production",
     "vscode:prepublish": "npm run package",
-    "package:vsix": "npm run typecheck && vsce package"
+    "package:vsix": "npm run typecheck && vsce package",
+    "l10n:extract": "npm run build:tests && node out/test/helpers/l10nExtract.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

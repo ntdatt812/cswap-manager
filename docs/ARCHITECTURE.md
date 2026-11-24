@@ -124,3 +124,17 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - Killing a timed-out process is best-effort (`child.kill()`); a process tree is not killed explicitly.
 - Alias, `fiveHour`, switch JSON output and non-`ok` `usageStatus` values have not been observed.
 - Published as `nguyenthanhdat.cswap-manager` under the MIT license; the extension ID must stay stable across releases.
+
+## Localization and picker layout (0.2.0)
+- Runtime strings go through one translator (`src/vscode/l10n.ts` → `localize`, exposed to the core as the injected `t`). Bundles live in `l10n/bundle.l10n.<lang>.json` keyed by the English text; `cswapManager.language` (`auto` → VS Code display language) picks the bundle, independently of VS Code's own language, and a change re-renders every surface. Contributions (command titles, settings, welcome views) use `package.nls.<lang>.json`, which VS Code applies only for its own display language.
+- `test/unit/l10n.test.ts` extracts every translator call with the TypeScript compiler API and fails on non-literal keys, missing or stale translations, changed `{n}` placeholders, or altered `command:` links in `package.nls.vi.json`.
+- Not translated on purpose: the diagnostics report (meant for support, kept in English), compact durations such as `4d 0h` (same notation as the cswap CLI), and cswap's own error messages.
+- The Switch Account picker groups accounts (`quickSwitchGroup`): current; available sorted by highest usage ascending; at limit (critical threshold) sorted by soonest future reset; disabled or without usage last. Rows show text usage bars per window (10 cells for one window, 6 for several) and the next reset; plan, scopes and data age move to the detail line, and the subscription status is only shown when the plan has expired.
+
+## Automatic switching (0.3.0)
+- `AutoSwitchService` (core) schedules `cswap auto --once --json` every `autoswitch.intervalSeconds` (read from `cswap config`, minimum 15 s; first check 5 s after enabling). Each tick is a short process that exits by itself, so turning auto-switch off never kills cswap mid-switch. A real tick is treated as a mutation (no cancellation, ≥ 120 s timeout); a dry run as a read.
+- Modes (`cswapManager.autoSwitch.mode`, `application` scope, read from user settings only, in `restrictedConfigurations`): `off` (default), `notify` (dry runs; notify once per would-be switch, with "Switch now"), `switch` (modal confirmation when turned on from the menu; after every switch a status-verified refresh confirms the new active account before the notification says so).
+- Ticks run through the shared `OperationGate` (skipped while a manual switch or account change runs) and only in the window holding a `FileLease` (`globalStorage/auto-switch.lease.json`, heartbeat, stale after 3 × interval), so several VS Code windows do not all poll.
+- Notices are de-duplicated: a would-be switch or "all accounts at limit" is reported once until the situation changes; errors only after 3 failed ticks in a row. Tick outcomes are logged without emails.
+- Rules editor: only `autoswitch.threshold`, `weeklyThreshold`, `cooldownSeconds`, `intervalSeconds` and `strategy`, validated like cswap before `cswap config set/unset`, then re-read to confirm.
+- Limitation: auto-switch only runs while VS Code is open (Windows has no cswap background service; the macOS menu bar app is out of scope).

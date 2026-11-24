@@ -92,6 +92,7 @@ export interface SummaryCard {
 
 export interface DashboardStrings {
   readonly title: string;
+  readonly summary: string;
   readonly refresh: string;
   readonly switchBest: string;
   readonly switchNext: string;

@@ -120,3 +120,12 @@ Upgraded with `uv tool upgrade claude-swap` (1.1.0 → 1.2.0; `platformdirs` 4.1
 
 ## Safety
 Do not invoke purge. Do not use add-token with a raw token in a process argument. Avoid exposing token diagnostics. For risky commands, require explicit confirmation and preview.
+
+## Auto-switch verification (cswap 1.2.0, 2026-11-24)
+Sources: `cswap auto --help`, `cswap config --help`, `claude_swap/autoswitch.py` (event classes, no-switch reasons, state lock) and live probes.
+- `cswap auto --once --json` evaluates once and exits: **0** switched · **1** error · **2** no action · **3** blocked. Each line on stdout is one JSON event: `poll` (active `{number,email}`, `threshold`, `headroomPct`, `windowsPct`), `switch` (`trigger`, `from`, `to`, `warnings`, `dryRun`), `no-switch` (`reason`, `detail`), `account-quarantined` / `account-unquarantined` (`number`, `email`, `reason`), `all-exhausted` (`earliestResetAt`), `error` (`message`, `transient`), `config-warning`, and `sleep` (loop mode only).
+- `--dry-run` "evaluates and reports, but never switches or writes state". Live probe: exit 2, `poll` + `no-switch` (`below-threshold`), active account unchanged.
+- No-switch reasons in source: `below-threshold`, `cooldown`, `no-qualifying-candidate`, `no-viable-target`, `no-candidates`, `stale-usage`, `active-usage-unknown`, `reset-unknown`, `no-comparison`, `unmanaged-active-account`, `no-active-account`, `active-idle`, `active-api-key`, `already-active`, `already-consuming-soonest`, `already-consuming-priority`.
+- A state file lock serialises concurrent engines (loop and cron `--once`), so overlapping ticks make one decision; the extension still runs ticks from a single window.
+- `cswap config --json list` → `{schemaVersion, path, settings:[{key, value, isSet}], unrecognized}`. `path` contains the home directory and is never read by the extension. `config set autoswitch.threshold 85` / `config --json get` / `config unset` worked and were reverted (config identical afterwards). Invalid values exit 1: threshold outside 50–99.9; strategy outside `best, weekly-first, consume-first, priority-consume-first`.
+- Not used: the long-running `cswap auto` loop (stopping it would mean killing a process that may be mid-switch), `--model`, `--include-api-key-accounts`.

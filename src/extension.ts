@@ -9,9 +9,11 @@ import { RefreshService } from './core/service/refreshService';
 import { SwitchService } from './core/service/switchService';
 import { AccountsView } from './vscode/accountsView';
 import { AutoRefreshController } from './vscode/autoRefresh';
+import { AutoSwitchController } from './vscode/autoSwitchController';
 import { registerCommands } from './vscode/commands';
 import { CONFIG_SECTION, ExtensionConfiguration } from './vscode/configuration';
 import { DashboardController } from './vscode/dashboardPanel';
+import { configureLocalization } from './vscode/l10n';
 import { Logger } from './vscode/logger';
 import { describeCliError } from './vscode/messages';
 import { StatusBarController } from './vscode/statusBarController';
@@ -23,12 +25,22 @@ export interface TestApi {
   readonly managementService: ManagementService;
   readonly accountsView: AccountsView;
   readonly dashboard: DashboardController;
+  readonly autoSwitch: AutoSwitchController;
 }
 
 export function activate(context: vscode.ExtensionContext): TestApi | undefined {
   const homeDir = os.homedir();
   const logger = new Logger(homeDir);
   const configuration = new ExtensionConfiguration();
+  configureLocalization(context.extensionPath, configuration.language());
+  // Registered before any view so the new language is loaded before they re-render.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(`${CONFIG_SECTION}.language`)) {
+        configureLocalization(context.extensionPath, configuration.language());
+      }
+    }),
+  );
   const resolver = new CachedExecutableResolver(() => configuration.cliPath(), nodeResolverEnvironment());
 
   const cli = new CswapCli({
@@ -48,6 +60,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const autoRefresh = new AutoRefreshController(refreshService, configuration);
   const accountsView = new AccountsView({ refreshService, configuration, autoRefresh, describeError: describeCliError });
   const statusBar = new StatusBarController({ refreshService, switchService, configuration, autoRefresh, describeError: describeCliError });
+  const autoSwitch = new AutoSwitchController({ context, cli, gate, refreshService, switchService, configuration, logger, homeDir });
   const dashboard = new DashboardController({
     extensionUri: context.extensionUri,
     refreshService,
@@ -70,6 +83,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     accountsView,
     statusBar,
     dashboard,
+    autoSwitch,
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.cliPath`)) {
         resolver.invalidate();
@@ -77,10 +91,10 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
         void refreshService.refresh({ trigger: 'configuration', requireFresh: true });
       }
     }),
-    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, homeDir }),
+    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, homeDir }),
   );
 
-  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard } : undefined;
+  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch } : undefined;
 }
 
 export function deactivate(): void {

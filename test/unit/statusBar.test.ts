@@ -86,21 +86,85 @@ describe('buildStatusBarModel', () => {
 });
 
 describe('buildQuickSwitchItems', () => {
-  const items = buildQuickSwitchItems(snapshot(), options());
+  const row = (number: number, pct: number | undefined, extra: Record<string, unknown> = {}) => ({
+    number,
+    email: `u${number}@example.com`,
+    active: number === 5,
+    usageStatus: 'ok',
+    usage: { sevenDay: { ...(pct === undefined ? {} : { pct }), resetsAt: `2026-11-2${(number % 5) + 4}T00:00:00Z` }, scoped: [{ name: 'ModelA', pct: 1 }] },
+    plan: { label: 'Ultra', subscriptionStatus: 'active', expired: false },
+    usageAgeSeconds: 0,
+    ...extra,
+  });
+  const smart = snapshot(
+    JSON.stringify({
+      schemaVersion: 1,
+      activeAccountNumber: 5,
+      accounts: [
+        row(1, 94),
+        row(2, 100),
+        row(3, 46),
+        row(4, 0),
+        row(5, 46),
+        row(6, 99),
+        row(7, 10, { disabled: true }),
+        { number: 8, email: 'u8@example.com', active: false, usageStatus: 'relogin_required', usage: null },
+      ],
+    }),
+  );
+  const items = buildQuickSwitchItems(smart, options());
+  const layout = items.map((item) => (item.separator ? `--${item.label}` : item.action?.kind === 'strategy' ? item.action.strategy : item.action?.kind === 'account' ? item.action.slot : '?'));
 
-  it('offers both strategies, then accounts in slot order', () => {
-    assert.deepEqual(
-      items.map((item) => (item.separator ? `--${item.label}` : item.action?.kind === 'strategy' ? item.action.strategy : item.action?.kind === 'account' ? item.action.slot : '?')),
-      ['--Strategies', 'best', 'next-available', '--Accounts', 1, 2],
-    );
+  it('groups accounts by usefulness: strategies, current, headroom first, soonest reset first, then the rest', () => {
+    assert.deepEqual(layout, [
+      '--Pick automatically',
+      'best',
+      'next-available',
+      '--Current account',
+      5,
+      '--Available — most headroom first',
+      4,
+      3,
+      1,
+      '--At limit — soonest reset first',
+      6,
+      2,
+      '--Disabled or usage unknown',
+      7,
+      8,
+    ]);
   });
 
-  it('marks the current account and includes searchable plan and usage text', () => {
-    const bob = items.find((item) => item.action?.kind === 'account' && item.action.slot === 2);
-    assert.equal(bob?.action?.kind === 'account' && bob.action.active, true);
-    assert.equal(bob?.iconId, 'pass-filled');
-    assert.equal(bob?.label, '2 · bob@example.com');
-    assert.match(bob?.description ?? '', /^current · Ultra · active · 7d 40% ↻ 4d 0h$/);
-    assert.match(bob?.detail ?? '', /ModelA 1%/);
+  it('shows a usage bar with the next reset and keeps details on the second line', () => {
+    const four = items.find((item) => item.action?.kind === 'account' && item.action.slot === 4);
+    assert.equal(four?.label, '4 · u4@example.com');
+    assert.equal(four?.description, '7d ░░░░░░░░░░ 0%   ↻ 3d 20h');
+    assert.equal(four?.detail, 'Ultra · ModelA 1% · updated 1m ago');
+    assert.equal(four?.iconId, 'account');
+    const current = items.find((item) => item.action?.kind === 'account' && item.action.active);
+    assert.match(current?.detail ?? '', /^Current · Ultra/);
+    assert.equal(current?.iconId, 'pass-filled');
+  });
+
+  it('flags limits with icons and does not repeat the subscription status', () => {
+    const icon = (slot: number) => items.find((item) => item.action?.kind === 'account' && item.action.slot === slot)?.iconId;
+    assert.equal(icon(1), 'warning');
+    assert.equal(icon(2), 'error');
+    assert.equal(icon(8), 'circle-slash');
+    assert.equal(items.some((item) => item.description?.includes('active') || item.detail?.includes('· active')), false);
+    const eight = items.find((item) => item.action?.kind === 'account' && item.action.slot === 8);
+    assert.equal(eight?.description, 're-login required');
+  });
+
+  it('uses shorter bars when an account has several windows', () => {
+    const multi = snapshot(
+      JSON.stringify({
+        schemaVersion: 1,
+        activeAccountNumber: 1,
+        accounts: [{ number: 1, email: 'a@example.com', active: true, usageStatus: 'ok', usage: { fiveHour: { pct: 50 }, sevenDay: { pct: 20 } } }],
+      }),
+    );
+    const item = buildQuickSwitchItems(multi, options()).find((candidate) => candidate.action?.kind === 'account');
+    assert.equal(item?.description, '5h ███░░░ 50%   7d █░░░░░ 20%');
   });
 });

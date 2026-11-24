@@ -28,6 +28,8 @@ const COMMANDS = [
   'cswapManager.setThreshold',
   'cswapManager.clearThreshold',
   'cswapManager.moveAccount',
+  'cswapManager.autoSwitch',
+  'cswapManager.autoSwitchPreview',
 ];
 
 suite('Cswap Manager (extension host)', () => {
@@ -130,6 +132,64 @@ suite('Cswap Manager (extension host)', () => {
     assert.deepEqual(set, { kind: 'applied', verification: 'confirmed' });
     assert.deepEqual(removed, { kind: 'applied', verification: 'confirmed' });
     assert.equal(api.refreshService.getState().snapshot?.accounts.find((account) => account.slot === target.slot)?.alias, undefined);
+  });
+
+  test('switches the UI language with cswapManager.language', async function () {
+    const refreshed = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
+    const activeSlot = refreshed.ok ? refreshed.snapshot.active.slot : undefined;
+    if (activeSlot === undefined) {
+      this.skip();
+      return;
+    }
+    const activeDescription = () =>
+      api.accountsView.provider.getChildren().find((node) => node.id === `account:${activeSlot}`)?.description ?? '';
+    const waitFor = async (predicate: () => boolean) => {
+      for (let attempt = 0; attempt < 40 && !predicate(); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return predicate();
+    };
+    const config = vscode.workspace.getConfiguration('cswapManager');
+    try {
+      await config.update('language', 'vi', vscode.ConfigurationTarget.Global);
+      assert.ok(await waitFor(() => activeDescription().startsWith('Đang dùng')), activeDescription());
+      await config.update('language', 'en', vscode.ConfigurationTarget.Global);
+      assert.ok(await waitFor(() => activeDescription().startsWith('Active')), activeDescription());
+    } finally {
+      await config.update('language', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('runs auto-switch in notify mode with real dry runs only (never switches)', async function () {
+    const before = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
+    if (!before.ok) {
+      this.skip();
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('cswapManager');
+    const service = api.autoSwitch.service;
+    try {
+      await config.update('autoSwitch.mode', 'notify', vscode.ConfigurationTarget.Global);
+      // Enabling sets the mode first, then loads the rules from `cswap config` asynchronously.
+      for (let attempt = 0; attempt < 100 && (service.getState().mode !== 'notify' || service.getState().rules === undefined); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.equal(service.getState().mode, 'notify');
+      assert.ok(service.getState().rules?.threshold !== undefined, 'rules read from cswap config');
+      assert.equal(await service.tick(), true);
+      const state = service.getState();
+      assert.ok(['no-action', 'switched', 'blocked'].includes(state.lastOutcome ?? ''), String(state.lastOutcome));
+      assert.equal(state.lastSwitch?.dryRun ?? true, true, 'notify mode never performs a real switch');
+      const after = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
+      assert.ok(after.ok);
+      assert.equal(after.snapshot.active.slot, before.snapshot.active.slot, 'active account unchanged');
+    } finally {
+      await config.update('autoSwitch.mode', undefined, vscode.ConfigurationTarget.Global);
+    }
+    for (let attempt = 0; attempt < 40 && service.getState().mode !== 'off'; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(service.getState().mode, 'off');
   });
 
   test('filters and clears through the commands', async function () {

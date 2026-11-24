@@ -28,9 +28,14 @@ Click the Cswap Manager icon in the Activity Bar.
 Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near the usage limit and shows a clock icon when the data is out of date. Click it to switch accounts. Choose what it shows with **Status Bar › Mode** (or hide it).
 
 ### Switching accounts
-**Cswap: Switch Account…** (or click the status bar) lets you pick an account or one of cswap's strategies:
-- **Most headroom** — `cswap switch --strategy best`
-- **Next available** — `cswap switch --strategy next-available`
+**Cswap: Switch Account…** (or click the status bar) opens a picker arranged by what you most likely want:
+1. **Pick automatically** — *Most headroom* (`cswap switch --strategy best`) or *Next available* (`--strategy next-available`).
+2. **Current account.**
+3. **Available** — accounts below the limit, most remaining quota first.
+4. **At limit** — soonest reset first.
+5. **Disabled or usage unknown.**
+
+Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email, alias or plan.
 
 You confirm every switch. The extension only reports success after re-reading cswap's state and confirming the new active account. Switching changes the login used by running Claude Code sessions.
 
@@ -46,15 +51,26 @@ From the account's right-click menu, **Cswap: Manage Account…**, or the dashbo
 
 Disabling and moving ask for confirmation first. Every change is checked against cswap afterwards.
 
-Not available in the extension (use the CLI): adding, removing, importing and exporting accounts, priorities, directory mappings, `cswap run`, auto-switch settings, and `purge`.
+Not available in the extension (use the CLI): adding, removing, importing and exporting accounts, priorities, directory mappings, `cswap run`, and `purge`.
+
+### Automatic switching
+**Cswap: Auto-Switch…** (also in the sidebar `…` menu and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
+- **Notify only** — checks regularly with a dry run and tells you when cswap *would* switch, with a **Switch now** button. Nothing is switched.
+- **Switch automatically** — cswap switches the active Claude Code account when it reaches the limit. You confirm once when turning it on, and get a notification for every switch.
+- **Preview now** shows what cswap would do at this moment (dry run).
+- **Rules…** edits cswap's own settings: switch threshold (default 90%), weekly threshold, cooldown (300 s), check interval (60 s) and strategy (most quota left, soonest weekly reset, …). They also apply to `cswap auto` in a terminal.
+
+With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
 | Setting | Default | Description |
 |---|---|---|
 | `cswapManager.cliPath` | empty (auto-detect) | Full path to `cswap.exe`. User settings only — a workspace cannot change it. `.cmd`/`.bat` shims are not supported. |
+| `cswapManager.language` | `auto` | Language of the extension's UI: `auto` (follow VS Code), `en` or `vi` (Tiếng Việt). Command titles and setting descriptions follow VS Code's display language. |
 | `cswapManager.refreshIntervalSeconds` | `120` | Automatic refresh while the sidebar, status bar or dashboard is shown and the window is focused. `0` turns it off; minimum 30. |
 | `cswapManager.statusBar.mode` | `slotUsage` | `slotUsage`, `slot`, `nameUsage` or `hidden`. |
 | `cswapManager.confirmSwitch` | `true` | Ask before switching accounts. User settings only — a workspace cannot turn it off. |
+| `cswapManager.autoSwitch.mode` | `off` | `off`, `notify` (dry runs, tell me) or `switch` (switch automatically). User settings only — a workspace cannot turn it on. |
 | `cswapManager.sidebar.sortOrder` | `slot` | `slot`, `mostUsed`, `leastUsed` or `soonestReset`. |
 | `cswapManager.display.warningThreshold` / `criticalThreshold` | `80` / `95` | Usage colours only; they do not change cswap. |
 | `cswapManager.commandTimeoutSeconds` | `30` | Time limit for reading commands (switching and account changes always get at least 120 s). |

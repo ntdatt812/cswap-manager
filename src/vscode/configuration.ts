@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { CliRunSettings } from '../core/cli/cswapCli';
 import { isSortOrder, normalizeThresholds, type SortOrder, type UsageThresholds } from '../core/presentation/format';
 import { isStatusBarMode, type StatusBarMode } from '../core/presentation/statusBar';
+import { isAutoSwitchMode, type AutoSwitchMode } from '../core/service/autoSwitchService';
 import { normalizeIntervalMs } from '../core/service/refreshScheduler';
 import { DEFAULT_STALE_AFTER_MS } from '../core/service/refreshService';
 
@@ -69,6 +70,21 @@ export class ExtensionConfiguration {
   statusBarMode(): StatusBarMode {
     const value = this.config.get<string>('statusBar.mode', 'slotUsage');
     return isStatusBarMode(value) ? value : 'slotUsage';
+  }
+
+  /** User scope only: a workspace must never be able to turn automatic switching on. */
+  autoSwitchMode(): AutoSwitchMode {
+    const value = this.config.inspect<string>('autoSwitch.mode')?.globalValue;
+    return isAutoSwitchMode(value) ? value : 'off';
+  }
+
+  async setAutoSwitchMode(mode: AutoSwitchMode): Promise<void> {
+    await this.config.update('autoSwitch.mode', mode, vscode.ConfigurationTarget.Global);
+  }
+
+  /** `auto` follows VS Code's display language. */
+  language(): string {
+    return this.config.get<string>('language', 'auto');
   }
 
   /** User scope only: a workspace must not be able to silence switch confirmations. */

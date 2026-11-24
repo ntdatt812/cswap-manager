@@ -2,7 +2,7 @@ import type { ExecutableResolutionFailure } from './executableResolver';
 import type { ProcessFailureKind } from './processRunner';
 
 export type ReadOnlyCommandId = 'version' | 'list' | 'status';
-export type CliCommandId = ReadOnlyCommandId | 'switch' | 'manage';
+export type CliCommandId = ReadOnlyCommandId | 'switch' | 'manage' | 'auto' | 'config';
 
 export type CliErrorKind =
   | 'executable-not-found'

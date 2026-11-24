@@ -45,6 +45,7 @@ function levelTone(level: UsageLevel): Tone {
 export function dashboardStrings(t: Translate): DashboardStrings {
   return {
     title: t('Cswap Dashboard'),
+    summary: t('Summary'),
     refresh: t('Refresh'),
     switchBest: t('Switch to most headroom'),
     switchNext: t('Switch to next available'),

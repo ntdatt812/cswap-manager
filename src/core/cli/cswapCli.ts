@@ -1,4 +1,6 @@
 import { isValidSlot, normalizeAlias, parseThreshold } from '../model/accountPolicy';
+import { buildTickResult, parseAutoSwitchRules, type AutoSwitchRules, type AutoTickResult } from '../model/autoSwitch';
+import { AUTO_SWITCH_RULE_KEYS, autoSwitchRuleArgs, type AutoSwitchRuleKey, type AutoSwitchRuleUpdate } from './autoSwitchRules';
 import { parseErrorEnvelope, parseListOutput, parseStatusOutput, parseSwitchOutput, type ParseResult } from '../model/parsers';
 import type { ListPayload, StatusPayload, SwitchResult } from '../model/types';
 import { redactLine, redactText } from '../security/redact';
@@ -135,11 +137,13 @@ export function cliEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 /** Only a plausible exception class name from the CLI's error envelope is kept for display. */
 const ERROR_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_.]{0,63}$/;
 
-type OutputParser<T> = (stdout: string) => ParseResult<T>;
+type OutputParser<T> = (stdout: string, exitCode: number | null) => ParseResult<T>;
 
 interface ExecuteOptions {
   readonly signal?: AbortSignal;
   readonly mutating?: boolean;
+  /** Non-zero exit codes that are normal outcomes (e.g. `auto --once`: 1 error, 2 no action, 3 blocked). */
+  readonly acceptExitCodes?: readonly number[];
 }
 
 function parseVersionOutput(stdout: string): ParseResult<CliVersion> {
@@ -172,6 +176,48 @@ export class CswapCli {
       return Promise.resolve(this.fail({ command: 'switch' }, cliError('invalid-request', { command: 'switch' })));
     }
     return this.execute('switch', args, parseSwitchOutput, { mutating: true });
+  }
+
+  /**
+   * One auto-switch evaluation (`cswap auto --once --json`). A dry run never switches or writes
+   * state and is treated as read-only; a real tick may switch, so it is not cancellable.
+   */
+  autoTick(options: { readonly dryRun: boolean }): Promise<CliOutcome<AutoTickResult>> {
+    const args = options.dryRun ? ['auto', '--once', '--json', '--dry-run'] : ['auto', '--once', '--json'];
+    return this.execute('auto', args, (stdout, exitCode) => ({ ok: true, value: buildTickResult(stdout, exitCode, options.dryRun) }), {
+      mutating: !options.dryRun,
+      acceptExitCodes: [1, 2, 3],
+    });
+  }
+
+  /** Reads the `autoswitch.*` settings (`cswap config --json list`). */
+  readAutoSwitchRules(signal?: AbortSignal): Promise<CliOutcome<AutoSwitchRules>> {
+    return this.execute(
+      'config',
+      ['config', '--json', 'list'],
+      (stdout) => {
+        const rules = parseAutoSwitchRules(stdout);
+        return rules === undefined ? { ok: false, reason: 'unexpected-shape', message: 'Unrecognized config output.' } : { ok: true, value: rules };
+      },
+      { ...(signal ? { signal } : {}) },
+    );
+  }
+
+  /** `cswap config set <key> <value>` for an allow-listed auto-switch rule with a validated value. */
+  setAutoSwitchRule(rule: AutoSwitchRuleUpdate): Promise<CliOutcome<void>> {
+    const args = autoSwitchRuleArgs(rule);
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command: 'config' }, cliError('invalid-request', { command: 'config' })));
+    }
+    return this.execute('config', args, () => ({ ok: true, value: undefined }), { mutating: true });
+  }
+
+  /** `cswap config unset <key>`: back to cswap's default for an allow-listed rule. */
+  resetAutoSwitchRule(key: AutoSwitchRuleKey): Promise<CliOutcome<void>> {
+    if (!(AUTO_SWITCH_RULE_KEYS as readonly string[]).includes(key)) {
+      return Promise.resolve(this.fail({ command: 'config' }, cliError('invalid-request', { command: 'config' })));
+    }
+    return this.execute('config', ['config', 'unset', key], () => ({ ok: true, value: undefined }), { mutating: true });
   }
 
   /**
@@ -223,7 +269,8 @@ export class CswapCli {
     }
 
     const meta: CommandMeta = { ...baseMeta, exitCode: result.exitCode };
-    if (result.exitCode !== 0) {
+    const accepted = result.exitCode !== null && (options.acceptExitCodes ?? []).includes(result.exitCode);
+    if (result.exitCode !== 0 && !accepted) {
       const envelope = parseErrorEnvelope(result.stdout);
       if (envelope !== undefined) {
         const text = [envelope.type, envelope.message].filter((part): part is string => part !== undefined).join(': ');
@@ -243,7 +290,7 @@ export class CswapCli {
 
     const stderrNotice = redactLine(result.stderr, 'first', redaction);
     const successMeta: CommandMeta = stderrNotice ? { ...meta, stderrNotice } : meta;
-    const parsed = parse(result.stdout);
+    const parsed = parse(result.stdout, result.exitCode);
     if (!parsed.ok) {
       const kind = parsed.reason === 'invalid-json' ? 'invalid-output' : 'unexpected-shape';
       return this.fail(successMeta, cliError(kind, { command, exitCode: result.exitCode }));
