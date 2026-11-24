@@ -133,6 +133,7 @@
   "Copy Report": "Sao chép báo cáo",
   "Could not check for a cswap update right now.": "Lúc này không kiểm tra được bản cập nhật cswap.",
   "Could not save the file: {0}": "Không lưu được tệp: {0}",
+  "Countdown to the next refresh": "Đếm ngược tới lần làm mới",
   "cswap": "cswap",
   "Cswap — active account": "Cswap — tài khoản đang dùng",
   "cswap {0} is available (you have {1}).": "Đã có cswap {0} (bạn đang dùng {1}).",

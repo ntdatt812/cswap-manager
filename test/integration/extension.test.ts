@@ -224,7 +224,8 @@ suite('Cswap Manager (extension host)', () => {
       await config().update('statusBar.mode', 'custom', vscode.ConfigurationTarget.Global);
       await config().update('statusBar.buttons', ['refresh', 'dashboard'], vscode.ConfigurationTarget.Global);
       const state = api.statusBar.currentState();
-      assert.match(state.text ?? '', /^#\d+( · [●◐○]{8})?$/, state.text);
+      // Ends with the countdown to the next refresh while automatic refresh is scheduled.
+      assert.match(state.text ?? '', /^#\d+( · [●◐○]{8})?( · \d+:\d{2})?$/, state.text);
       assert.deepEqual(state.buttons, ['refresh', 'dashboard']);
       api.statusBar.preview({ parts: [] });
       assert.equal(api.statusBar.currentState().text, undefined, 'previewing nothing hides the item');

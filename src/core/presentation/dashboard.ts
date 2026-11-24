@@ -40,6 +40,8 @@ export interface DashboardOptions extends PresentationOptions {
   readonly autoSwitch?: { readonly mode: AutoSwitchMode; readonly strategy: string | undefined };
   /** Locale-aware number with one decimal. */
   readonly formatDecimal?: (value: number) => string;
+  /** When the next automatic refresh is due, for the header's countdown. */
+  readonly nextRefreshAt?: number;
 }
 
 const TONE_RANK: Record<Tone, number> = { ok: 0, neutral: 1, active: 2, warning: 3, error: 4 };
@@ -423,6 +425,7 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
     freshnessText: freshness.text,
     freshnessTone: freshness.tone,
     ...(autoSwitch === undefined ? {} : { autoSwitch }),
+    ...(options.nextRefreshAt === undefined ? {} : { nextRefreshAt: options.nextRefreshAt }),
     busy,
     strings,
   };

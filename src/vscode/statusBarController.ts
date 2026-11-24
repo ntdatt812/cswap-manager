@@ -15,7 +15,7 @@ import type { SwitchService } from '../core/service/switchService';
 import { renderTooltip } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
-import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
+import { CLOCK_TICK_MS, COUNTDOWN_TICK_MS, presentationOptions, t } from './presentation';
 
 export interface StatusBarDependencies {
   readonly refreshService: RefreshService;
@@ -76,6 +76,7 @@ export class StatusBarController implements vscode.Disposable {
   private readonly buttons = new Map<StatusBarButton, vscode.StatusBarItem>();
   private readonly disposables: vscode.Disposable[] = [];
   private clock: ReturnType<typeof setInterval> | undefined;
+  private clockTick = CLOCK_TICK_MS;
   private previewing: StatusBarPreview | undefined;
 
   constructor(private readonly deps: StatusBarDependencies) {
@@ -95,6 +96,7 @@ export class StatusBarController implements vscode.Disposable {
     this.disposables.push(
       this.item,
       deps.refreshService.onDidChange(() => this.render()),
+      deps.autoRefresh.onDidChangeSchedule(() => this.render()),
       deps.switchService.onDidChangeSwitching(() => this.render()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(CONFIG_SECTION)) {
@@ -145,6 +147,7 @@ export class StatusBarController implements vscode.Disposable {
     const { refreshService, switchService, configuration, describeError } = this.deps;
     const state = refreshService.getState();
     const options = presentationOptions(configuration);
+    const schedule = this.deps.autoRefresh.schedule();
     return buildStatusBarModel(state, {
       ...options,
       mode: 'custom',
@@ -153,15 +156,23 @@ export class StatusBarController implements vscode.Disposable {
       freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
       switching: switchService.isSwitching(),
       describeError,
+      ...(configuration.statusBarCountdown() && schedule.kind === 'scheduled' ? { nextRefreshAt: schedule.at } : {}),
     });
   }
 
+  /** Every second while a countdown shows, otherwise every 30 s for relative times. */
   private setClock(running: boolean): void {
-    if (running) {
-      this.clock ??= setInterval(() => this.render(), CLOCK_TICK_MS);
-    } else if (this.clock !== undefined) {
+    const tick = running && this.deps.configuration.statusBarCountdown() && this.deps.autoRefresh.schedule().kind === 'scheduled' ? COUNTDOWN_TICK_MS : CLOCK_TICK_MS;
+    if (running && this.clockTick === tick && this.clock !== undefined) {
+      return;
+    }
+    if (this.clock !== undefined) {
       clearInterval(this.clock);
       this.clock = undefined;
+    }
+    if (running) {
+      this.clock = setInterval(() => this.render(), tick);
+      this.clockTick = tick;
     }
   }
 

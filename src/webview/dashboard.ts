@@ -12,6 +12,7 @@ import type {
   TimelineItem,
   WebviewToHost,
 } from '../shared/dashboardProtocol';
+import { countdownText } from '../shared/countdown';
 import { filterRows, isTableSortKey, sortRows, type SortDirection, type TableSortKey } from '../shared/dashboardTable';
 
 interface VsCodeApi {
@@ -211,11 +212,33 @@ function post(messageToHost: WebviewToHost): void {
 
 // ---- Header, suggestions, overview ----
 
+/**
+ * While automatic refresh runs and the data is fine, the header shows only the countdown to the next
+ * refresh (`0:42`, ticking every second); its tooltip keeps the data's age. Otherwise the age, or the
+ * stale / failed warning, as before. A ticking countdown is not announced to screen readers.
+ */
+function renderFreshness(current: DashboardModel): void {
+  const counting = !current.busy && current.nextRefreshAt !== undefined && current.freshnessTone === 'ok';
+  freshness.textContent = current.busy
+    ? current.strings.busy
+    : counting && current.nextRefreshAt !== undefined
+      ? countdownText(current.nextRefreshAt - Date.now())
+      : current.freshnessText;
+  freshness.title = counting ? current.freshnessText : '';
+  freshness.setAttribute('aria-live', counting ? 'off' : 'polite');
+  freshness.className = `pill tone-${current.busy ? 'neutral' : current.freshnessTone}${current.busy ? ' busy' : ''}${counting ? ' countdown' : ''}`;
+}
+
+setInterval(() => {
+  if (model !== undefined) {
+    renderFreshness(model);
+  }
+}, 1000);
+
 function renderHeader(current: DashboardModel): void {
   const s = current.strings;
   title.textContent = s.title;
-  freshness.textContent = current.busy ? s.busy : current.freshnessText;
-  freshness.className = `pill tone-${current.busy ? 'neutral' : current.freshnessTone}${current.busy ? ' busy' : ''}`;
+  renderFreshness(current);
   actions.replaceChildren(
     button(s.refresh, () => post({ type: 'refresh' }), { disabled: current.busy, focusKey: 'action:refresh', className: 'button' }),
     button(s.settings, () => post({ type: 'openSettings' }), { focusKey: 'action:settings', className: 'button secondary' }),

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { RefreshScheduler } from '../core/service/refreshScheduler';
+import { RefreshScheduler, type RefreshSchedule } from '../core/service/refreshScheduler';
 import type { RefreshService } from '../core/service/refreshService';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 
@@ -12,6 +12,9 @@ export type RefreshConsumer = 'accountsView' | 'statusBar' | 'dashboard';
 export class AutoRefreshController implements vscode.Disposable {
   private readonly consumers = new Set<RefreshConsumer>();
   private readonly scheduler: RefreshScheduler;
+  private readonly scheduleChanged = new vscode.EventEmitter<void>();
+  /** The next automatic refresh moved (scheduled, started, paused or turned off). */
+  readonly onDidChangeSchedule = this.scheduleChanged.event;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -21,10 +24,12 @@ export class AutoRefreshController implements vscode.Disposable {
     this.scheduler = new RefreshScheduler({
       tick: () => refreshService.refresh({ trigger: 'interval' }),
       lastRefreshAt: () => refreshService.getState().lastAttemptAt,
+      onChange: () => this.scheduleChanged.fire(),
     });
     this.scheduler.configure(configuration.refreshIntervalMs());
     this.disposables.push(
       this.scheduler,
+      this.scheduleChanged,
       refreshService.onDidChange((state) => {
         if (!state.refreshing) {
           this.scheduler.reschedule();
@@ -37,6 +42,11 @@ export class AutoRefreshController implements vscode.Disposable {
         }
       }),
     );
+  }
+
+  /** For the countdown to the next automatic refresh. */
+  schedule(): RefreshSchedule {
+    return this.scheduler.schedule();
   }
 
   setConsumer(consumer: RefreshConsumer, needsData: boolean): void {

@@ -657,6 +657,12 @@
           "order": 3.3,
           "markdownDescription": "%config.statusBarColors.description%"
         },
+        "cswapManager.statusBar.countdown": {
+          "type": "boolean",
+          "default": true,
+          "order": 3.35,
+          "markdownDescription": "%config.statusBarCountdown.description%"
+        },
         "cswapManager.statusBar.buttons": {
           "type": "array",
           "items": {

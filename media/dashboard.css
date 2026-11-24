@@ -121,6 +121,11 @@ h4 {
   font-size: 0.88em;
 }
 
+/* Digits of equal width, so the ticking countdown does not jiggle. */
+.pill.countdown {
+  font-variant-numeric: tabular-nums;
+}
+
 .pill::before {
   content: '';
   width: 7px;

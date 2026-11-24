@@ -15,6 +15,7 @@ import {
 } from './accountTree';
 import { compactDuration, epochOf, formatPercent, usageAgeMs, usageBar, windowLabel, type BarStyle, type UsageLevel } from './format';
 import type { UsageWindow } from '../model/types';
+import { countdownText } from '../../shared/countdown';
 
 export type StatusBarMode = 'slot' | 'slotUsage' | 'nameUsage' | 'custom' | 'hidden';
 export const STATUS_BAR_MODES: readonly StatusBarMode[] = ['slotUsage', 'slot', 'nameUsage', 'custom', 'hidden'];
@@ -87,6 +88,8 @@ export interface StatusBarOptions extends PresentationOptions {
   readonly freshness: FreshnessAssessment;
   readonly switching: boolean;
   readonly describeError: (error: CliError) => string;
+  /** When the next automatic refresh is due: the item then ends with a countdown (`0:42`). */
+  readonly nextRefreshAt?: number;
 }
 
 const MAX_NAME_LENGTH = 24;
@@ -238,6 +241,10 @@ export function buildStatusBarModel(state: AccountsState, options: StatusBarOpti
   if (segments.length === 0 && !has('icon')) {
     // Whatever was ticked has nothing to show right now; never leave an empty item.
     segments.push(slotText);
+  }
+  // Stale data keeps its clock icon instead: a countdown would suggest all is well.
+  if (options.nextRefreshAt !== undefined && !stale) {
+    segments.push(countdownText(options.nextRefreshAt - options.now));
   }
   const icon = has('icon') ? `$(${LEVEL_ICON[level]})` : '';
   const text = `${[icon, segments.join(' · ')].filter((piece) => piece !== '').join(' ')}${stale ? ' $(history)' : ''}`;

@@ -69,6 +69,14 @@ describe('custom status bar parts', () => {
 });
 
 describe('buildStatusBarModel', () => {
+  it('ends with the countdown to the next refresh, but not on stale data', () => {
+    assert.equal(buildStatusBarModel(ready(), options({ nextRefreshAt: NOW + 42_000 }))?.text, '$(account) #2 · 7d 40% · 0:42');
+    assert.equal(
+      buildStatusBarModel(ready(), options({ nextRefreshAt: NOW + 42_000, freshness: { freshness: 'stale', reason: 'too-old' } }))?.text,
+      '$(account) #2 · 7d 40% $(history)',
+    );
+  });
+
   it('renders each mode for the active account', () => {
     assert.equal(buildStatusBarModel(ready(), options())?.text, '$(account) #2 · 7d 40%');
     assert.equal(buildStatusBarModel(ready(), options({ mode: 'slot' }))?.text, '$(account) #2');

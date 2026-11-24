@@ -22,6 +22,7 @@ import {
   type UsageThresholds,
   type BarStyle,
 } from './format';
+import { countdownText } from '../../shared/countdown';
 
 /** Localization hook: `{0}`-style placeholders, as in `vscode.l10n.t`. */
 export type Translate = (message: string, ...args: Array<string | number | boolean>) => string;
@@ -528,6 +529,8 @@ export interface ViewPresentationOptions {
   readonly filter?: string;
   readonly visibleCount: number;
   readonly describeError: (error: CliError) => string;
+  /** When the next automatic refresh is due; the description then shows a countdown (`0:42`). */
+  readonly nextRefreshAt?: number;
 }
 
 function errorViewState(error: CliError | undefined): ViewState {
@@ -561,7 +564,9 @@ export function describeView(state: AccountsState, options: ViewPresentationOpti
   const updated = state.lastSuccessAt === undefined ? undefined : relativeAge(now - state.lastSuccessAt, t);
   const activeText = snapshot.active.slot === undefined ? t('Active: unknown') : t('Active: #{0}', snapshot.active.slot);
   const stale = options.freshness.freshness === 'stale';
-  const description = [stale ? t('Stale') : undefined, activeText, updated === undefined ? undefined : t('updated {0}', updated)]
+  // While automatic refresh runs, the countdown to the next one says it all; otherwise the data's age.
+  const countdown = options.nextRefreshAt === undefined ? undefined : countdownText(options.nextRefreshAt - now);
+  const description = [stale ? t('Stale') : undefined, activeText, countdown ?? (updated === undefined ? undefined : t('updated {0}', updated))]
     .filter((part): part is string => part !== undefined)
     .join(' · ');
 

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { RefreshScheduler, normalizeIntervalMs, type TimerApi } from '../../src/core/service/refreshScheduler';
+import { countdownText } from '../../src/shared/countdown';
 import { deferred } from '../helpers/fixtures';
 
 class FakeTimers implements TimerApi {
@@ -60,6 +61,22 @@ describe('normalizeIntervalMs', () => {
 });
 
 describe('RefreshScheduler', () => {
+  it('reports its schedule for the countdown: off, paused, due at a time, refreshing', async () => {
+    const { scheduler, timers } = setup(80_000);
+    assert.deepEqual(scheduler.schedule(), { kind: 'off' });
+    scheduler.configure(60_000);
+    assert.deepEqual(scheduler.schedule(), { kind: 'paused' }, 'not active yet');
+    scheduler.setActive(true);
+    // Due one interval after the last refresh (80 s + 60 s), with the clock at 100 s.
+    assert.deepEqual(scheduler.schedule(), { kind: 'scheduled', at: 140_000 });
+    timers.runAll();
+    assert.deepEqual(scheduler.schedule(), { kind: 'refreshing' });
+    await flush();
+    assert.equal(scheduler.schedule().kind, 'scheduled');
+    scheduler.setActive(false);
+    assert.deepEqual(scheduler.schedule(), { kind: 'paused' });
+  });
+
   it('does nothing while inactive or disabled', () => {
     const { scheduler, timers } = setup(undefined);
     scheduler.configure(60_000);
@@ -132,5 +149,16 @@ describe('RefreshScheduler', () => {
     scheduler.setActive(false);
     scheduler.setActive(true);
     assert.equal(timers.pending.size, 0);
+  });
+});
+
+describe('countdownText', () => {
+  it('counts minutes and seconds, rounding up so 0:00 means time is up', () => {
+    assert.equal(countdownText(42_000), '0:42');
+    assert.equal(countdownText(41_001), '0:42');
+    assert.equal(countdownText(65_000), '1:05');
+    assert.equal(countdownText(3_600_000), '60:00');
+    assert.equal(countdownText(0), '0:00');
+    assert.equal(countdownText(-3_000), '0:00');
   });
 });

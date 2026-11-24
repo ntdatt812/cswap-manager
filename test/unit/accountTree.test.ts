@@ -169,6 +169,14 @@ describe('describeView', () => {
     });
   });
 
+  it('shows only the countdown to the next automatic refresh while one is scheduled', () => {
+    const state: AccountsState = { refreshing: false, snapshot: snapshot(), lastSuccessAt: NOW - 18_000 };
+    assert.equal(describeView(state, { ...base, freshness: { freshness: 'fresh' }, nextRefreshAt: NOW + 42_000 }).description, 'Active: #2 · 0:42');
+    assert.equal(describeView(state, { ...base, freshness: { freshness: 'fresh' }, nextRefreshAt: NOW + 61_500 }).description, 'Active: #2 · 1:02');
+    // Overdue: 0:00 until the refresh starts.
+    assert.equal(describeView(state, { ...base, freshness: { freshness: 'fresh' }, nextRefreshAt: NOW - 5_000 }).description, 'Active: #2 · 0:00');
+  });
+
   it('marks stale data and explains why', () => {
     const state: AccountsState = { refreshing: false, snapshot: snapshot(), lastSuccessAt: NOW - 600_000, lastError: cliError('timeout') };
     const view = describeView(state, { ...base, freshness: { freshness: 'stale', reason: 'refresh-failed' } });

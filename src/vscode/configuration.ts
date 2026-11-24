@@ -112,6 +112,11 @@ export class ExtensionConfiguration {
     return isBarStyle(value) ? value : 'blocks';
   }
 
+  /** The countdown to the next automatic refresh at the end of the status bar item (on by default). */
+  statusBarCountdown(): boolean {
+    return this.config.get<boolean>('statusBar.countdown', true) !== false;
+  }
+
   statusBarColors(): StatusBarColors {
     const value = this.config.get<string>('statusBar.colors', 'background');
     return isStatusBarColors(value) ? value : 'background';
@@ -235,6 +240,7 @@ export const USER_SETTING_KEYS = [
   'statusBar.parts',
   'display.barStyle',
   'statusBar.colors',
+  'statusBar.countdown',
   'statusBar.buttons',
   'display.warningThreshold',
   'display.criticalThreshold',

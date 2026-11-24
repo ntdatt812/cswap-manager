@@ -79,6 +79,7 @@ export class DashboardController implements vscode.Disposable {
       deps.switchService.onDidChangeSwitching(() => this.postState()),
       deps.gate.onDidChange(() => this.postState()),
       deps.autoSwitch.onDidChange(() => this.postState()),
+      deps.autoRefresh.onDidChangeSchedule(() => this.postState()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(CONFIG_SECTION)) {
           this.postState();
@@ -228,6 +229,7 @@ export class DashboardController implements vscode.Disposable {
     const options = presentationOptions(configuration);
     const auto = this.deps.autoSwitch.getState();
     const locale = currentLocale();
+    const schedule = this.deps.autoRefresh.schedule();
     const model = buildDashboardModel(state, {
       ...options,
       freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
@@ -235,6 +237,7 @@ export class DashboardController implements vscode.Disposable {
       describeError,
       autoSwitch: { mode: configuration.autoSwitchMode(), strategy: auto.rules?.strategy },
       formatDecimal: (value) => value.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+      ...(schedule.kind === 'scheduled' ? { nextRefreshAt: schedule.at } : {}),
     });
     // Keep the tab title in the chosen language after a language change.
     this.panel.title = t('Cswap Dashboard');

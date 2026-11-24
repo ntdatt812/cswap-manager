@@ -22,6 +22,7 @@ Click the Cswap Manager icon in the Activity Bar.
 - Accounts are listed by slot; the active account is marked and expanded.
 - Each account row reads `slot · 7d 40% · ↻ 2d 4h · name`: usage per window and the time until reset, padded so the numbers line up in columns, then the name and (dimmed) the plan. The active account has a green check. Expand an account for per-window bars, per-model scopes, plan and how old the data is.
 - **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
+- While automatic refresh runs, the view's title counts down to the next one (`Active: #3 · 0:42`); the dashboard header and the end of the status bar item do too (`#3 · 7d 40% · 0:42`; turn the status bar one off under *Quick Settings › Status bar*).
 - Toolbar: add account, refresh, switch, open dashboard, settings. Filter, sort and diagnostics are in the `…` menu (a clear-filter button appears while a filter is on).
 - Right-click an account to switch to it, show details, or manage it.
 - **Display names**: *Set Display Name…* gives an account any name (capitals, spaces, accents), shown everywhere instead of the email. It stays in VS Code and is never sent to cswap.

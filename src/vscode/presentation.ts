@@ -14,3 +14,5 @@ export function presentationOptions(configuration: ExtensionConfiguration, now =
 
 /** Re-render relative times ("updated 3m ago", countdowns) without calling the CLI. */
 export const CLOCK_TICK_MS = 30_000;
+/** The countdown to the next automatic refresh ticks every second. */
+export const COUNTDOWN_TICK_MS = 1_000;

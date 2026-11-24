@@ -10,7 +10,7 @@ import { AccountsDragAndDrop, MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndD
 import { AccountsTreeProvider } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
-import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
+import { CLOCK_TICK_MS, COUNTDOWN_TICK_MS, presentationOptions, t } from './presentation';
 import { showSaveFailed } from './settingErrors';
 
 /** How long the slot numbers a move changed stay highlighted. */
@@ -32,12 +32,15 @@ export class AccountsView implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private filter: string | undefined;
   private clock: ReturnType<typeof setInterval> | undefined;
+  /** Ticks every second while the view is visible, for the countdown to the next refresh. */
+  private countdownClock: ReturnType<typeof setInterval> | undefined;
   private progressDone: (() => void) | undefined;
   /** A dropped move cswap is still running: shown at once. */
   private pending: PendingMove | undefined;
   private moved: ReadonlySet<number> = new Set();
   private movedTimer: ReturnType<typeof setTimeout> | undefined;
   private sortHintShown = false;
+  private viewState: string | undefined;
 
   constructor(private readonly deps: AccountsViewDependencies) {
     this.treeView = vscode.window.createTreeView(ACCOUNTS_VIEW_ID, {
@@ -53,6 +56,7 @@ export class AccountsView implements vscode.Disposable {
         this.render();
       }),
       this.treeView.onDidChangeVisibility(() => this.onVisibilityChanged()),
+      deps.autoRefresh.onDidChangeSchedule(() => this.renderHeader()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration(`${CONFIG_SECTION}.sidebar.sortOrder`) ||
@@ -150,6 +154,7 @@ export class AccountsView implements vscode.Disposable {
     this.deps.autoRefresh.setConsumer('accountsView', visible);
     if (visible) {
       this.clock ??= setInterval(() => this.render(), CLOCK_TICK_MS);
+      this.countdownClock ??= setInterval(() => this.renderHeader(), COUNTDOWN_TICK_MS);
       this.render();
     } else {
       this.stopClock();
@@ -160,6 +165,10 @@ export class AccountsView implements vscode.Disposable {
     if (this.clock !== undefined) {
       clearInterval(this.clock);
       this.clock = undefined;
+    }
+    if (this.countdownClock !== undefined) {
+      clearInterval(this.countdownClock);
+      this.countdownClock = undefined;
     }
   }
 
@@ -179,25 +188,42 @@ export class AccountsView implements vscode.Disposable {
   }
 
   private render(): void {
-    const { refreshService, configuration, describeError } = this.deps;
+    const { refreshService, configuration } = this.deps;
     const state = refreshService.getState();
     const options = presentationOptions(configuration);
     const sortOrder = configuration.sortOrder();
     const snapshot = state.snapshot !== undefined && this.pending !== undefined ? previewMove(state.snapshot, this.pending) : state.snapshot;
     const filter = this.filter === undefined ? {} : { filter: this.filter };
     const nodes = snapshot ? buildAccountNodes(snapshot, { ...options, sortOrder, ...filter, highlightSlots: this.moved }) : [];
+    this.provider.setNodes(nodes);
+    this.renderHeader();
+  }
+
+  /** The view's description and message, which hold the countdown: cheap enough to run every second. */
+  private renderHeader(): void {
+    const { refreshService, configuration, describeError, autoRefresh } = this.deps;
+    const state = refreshService.getState();
+    const now = Date.now();
+    const schedule = autoRefresh.schedule();
+    const filter = this.filter === undefined ? {} : { filter: this.filter };
     const presentation = describeView(state, {
-      now: options.now,
+      now,
       t,
-      freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
-      visibleCount: snapshot ? visibleAccounts(snapshot, sortOrder, this.filter).length : 0,
+      freshness: assessFreshness(state, now, configuration.staleAfterMs()),
+      visibleCount: state.snapshot ? visibleAccounts(state.snapshot, configuration.sortOrder(), this.filter).length : 0,
       describeError,
       ...filter,
+      ...(schedule.kind === 'scheduled' ? { nextRefreshAt: schedule.at } : {}),
     });
-
-    this.provider.setNodes(nodes);
-    this.treeView.description = presentation.description;
-    this.treeView.message = presentation.message;
-    void vscode.commands.executeCommand('setContext', 'cswapManager.viewState', presentation.state);
+    if (this.treeView.description !== presentation.description) {
+      this.treeView.description = presentation.description;
+    }
+    if (this.treeView.message !== presentation.message) {
+      this.treeView.message = presentation.message;
+    }
+    if (this.viewState !== presentation.state) {
+      this.viewState = presentation.state;
+      void vscode.commands.executeCommand('setContext', 'cswapManager.viewState', presentation.state);
+    }
   }
 }

@@ -478,7 +478,7 @@ async function chooseButtons(deps: QuickSettingsDependencies): Promise<Outcome> 
   return 'list';
 }
 
-type PageAction = 'parts' | 'colors' | 'buttons' | 'visibility';
+type PageAction = 'parts' | 'colors' | 'buttons' | 'countdown' | 'visibility';
 type PageItem = vscode.QuickPickItem & { readonly look?: StatusBarLook; readonly action?: PageAction };
 
 /**
@@ -506,6 +506,7 @@ async function openStatusBarPage(deps: QuickSettingsDependencies): Promise<Outco
         action: 'parts',
       },
       { label: `$(symbol-color) ${t('Warning colours')}`, description: statusBarColorsLabel(configuration.statusBarColors(), t), action: 'colors' },
+      { label: `$(watch) ${t('Countdown to the next refresh')}`, description: configuration.statusBarCountdown() ? t('On') : t('Off'), action: 'countdown' },
       {
         label: `$(layout-statusbar) ${t('Buttons')}`,
         description: buttons.length === 0 ? t('none') : buttons.map((button) => `$(${statusBarButtonIcon(button)})`).join(' '),
@@ -545,6 +546,8 @@ async function openStatusBarPage(deps: QuickSettingsDependencies): Promise<Outco
       outcome = await chooseColors(deps);
     } else if (picked.action === 'buttons') {
       outcome = await chooseButtons(deps);
+    } else if (picked.action === 'countdown') {
+      await writeUserSetting(deps, 'statusBar.countdown', !configuration.statusBarCountdown());
     } else if (picked.action === 'visibility') {
       if (parts.length > 0) {
         // Remember the layout (even an old preset mode) so "Show" brings back exactly this.

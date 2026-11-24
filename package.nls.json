@@ -58,6 +58,7 @@
   "command.quickSettings.title": "Quick Settings…",
   "config.statusBarMode.custom": "The parts ticked in `cswapManager.statusBar.parts`.",
   "config.statusBarParts.description": "What the status bar item shows when **Status Bar › Mode** is `custom`: `icon` (usage level), `slot`, `name` (display name or email), `plan`, `bar` (progress bar), `usage` (percentages) and `reset` (time to the next reset). Easiest to change from **Cswap: Quick Settings… › Status bar**, which previews it live.",
+  "config.statusBarCountdown.description": "While automatic refresh runs, end the status bar item with the time left until the next refresh (`#3 · 7d 40% · 0:42`). Easiest to change from **Cswap: Quick Settings… › Status bar**.",
   "config.statusBarColors.description": "How the status bar item shows that an account is near or at its limit.",
   "config.statusBarColors.background": "VS Code's warning/error background.",
   "config.statusBarColors.text": "Coloured icon and text only.",
