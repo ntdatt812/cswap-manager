@@ -7,7 +7,7 @@ import type { AccountsSnapshot } from '../../src/core/model/types';
 import type { Translate } from '../../src/core/presentation/accountTree';
 import { DEFAULT_THRESHOLDS } from '../../src/core/presentation/format';
 import { buildQuickSwitchItems } from '../../src/core/presentation/quickSwitch';
-import { buildStatusBarModel, sanitizeLabel, type StatusBarOptions } from '../../src/core/presentation/statusBar';
+import { buildStatusBarModel, sanitizeLabel, statusBarParts, type StatusBarOptions, type StatusBarPart } from '../../src/core/presentation/statusBar';
 import type { AccountsState } from '../../src/core/service/refreshService';
 import { fixture } from '../helpers/fixtures';
 
@@ -33,6 +33,36 @@ const options = (overrides: Partial<StatusBarOptions> = {}): StatusBarOptions =>
 });
 
 const ready = (snap = snapshot()): AccountsState => ({ refreshing: false, snapshot: snap, lastSuccessAt: NOW - 60_000 });
+
+describe('custom status bar parts', () => {
+  const custom = (parts: StatusBarPart[], extra: Partial<StatusBarOptions> = {}) =>
+    buildStatusBarModel(ready(), options({ mode: 'custom', parts, ...extra }))?.text;
+
+  it('shows exactly the ticked parts, always in the same order', () => {
+    assert.equal(custom(['usage', 'slot', 'icon']), '$(account) #2 · 7d 40%');
+    assert.equal(custom(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), '$(account) #2 · Ultra · ███░░░░░ 7d 40% · ↻ 4d 0h');
+    assert.equal(custom(['bar', 'usage'], { barStyle: 'parallelograms' }), '▰▰▰▱▱▱▱▱ 7d 40%');
+    assert.equal(custom(['icon']), '$(account)');
+  });
+
+  it('hides the item when nothing is ticked, and never shows an empty item', () => {
+    assert.equal(custom([]), undefined);
+    const unknownActive = snapshot(fixture('list-v1.json').replace('"activeAccountNumber": 2', '"activeAccountNumber": 1'));
+    const unknown = buildStatusBarModel(ready(unknownActive), options({ mode: 'custom', parts: ['slot', 'name'] }));
+    assert.equal(unknown?.text, '#?', 'an unknown account is not named twice');
+    // The reset has passed, so the only ticked part has nothing to show: fall back to the slot.
+    assert.equal(custom(['reset'], { now: Date.parse('2026-11-29T00:00:00Z') }), '#2');
+  });
+
+  it('keeps the old modes showing what they always showed', () => {
+    assert.deepEqual(statusBarParts('slotUsage', []), ['icon', 'slot', 'usage']);
+    assert.deepEqual(statusBarParts('slot', ['plan']), ['icon', 'slot']);
+    assert.deepEqual(statusBarParts('nameUsage', []), ['icon', 'name', 'usage']);
+    assert.deepEqual(statusBarParts('hidden', ['slot']), []);
+    assert.deepEqual(statusBarParts('custom', ['reset', 'slot']), ['slot', 'reset']);
+  });
+
+});
 
 describe('buildStatusBarModel', () => {
   it('renders each mode for the active account', () => {

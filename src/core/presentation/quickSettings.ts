@@ -1,8 +1,8 @@
 import type { AutoSwitchStrategy } from '../cli/autoSwitchRules';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { Translate } from './accountTree';
-import type { SortOrder } from './format';
-import type { StatusBarMode } from './statusBar';
+import { formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThresholds } from './format';
+import { STATUS_BAR_BAR_WIDTH, STATUS_BAR_PARTS, type StatusBarButton, type StatusBarColors, type StatusBarPart } from './statusBar';
 
 export const LANGUAGE_SETTINGS = ['auto', 'en', 'vi'] as const;
 export type LanguageSetting = (typeof LANGUAGE_SETTINGS)[number];
@@ -14,7 +14,21 @@ export function isLanguageSetting(value: unknown): value is LanguageSetting {
 /** Refresh intervals offered in the picker, in seconds (0 = off). */
 export const REFRESH_CHOICES_SECONDS: readonly number[] = [0, 60, 120, 300, 600, 900, 1800, 3600];
 
-export const SETTING_KEYS = ['language', 'confirmSwitch', 'autoSwitch', 'autoStrategy', 'statusBar', 'sortOrder', 'refresh', 'allSettings'] as const;
+export const SETTING_KEYS = [
+  'language',
+  'confirmSwitch',
+  'refresh',
+  'autoSwitch',
+  'autoStrategy',
+  'autoRules',
+  'statusBar',
+  'barStyle',
+  'thresholds',
+  'sortOrder',
+  'cliPath',
+  'timeout',
+  'allSettings',
+] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
 export function isSettingKey(value: unknown): value is SettingKey {
@@ -27,10 +41,27 @@ export interface QuickSettingsValues {
   readonly autoSwitchMode: AutoSwitchMode;
   /** cswap's `autoswitch.strategy`; undefined while the rules are not loaded. */
   readonly autoSwitchStrategy: string | undefined;
-  readonly statusBarMode: StatusBarMode;
+  /** Short summary of cswap's other auto-switch rules; undefined while not loaded. */
+  readonly autoSwitchRules: string | undefined;
+  /** Parts the status bar item shows; empty when it is hidden. */
+  readonly statusBarParts: readonly StatusBarPart[];
+  readonly statusBarButtons: readonly StatusBarButton[];
+  readonly barStyle: BarStyle;
+  readonly thresholds: UsageThresholds;
   readonly sortOrder: SortOrder;
   /** Effective automatic refresh interval in seconds; 0 when off. */
   readonly refreshSeconds: number;
+  /** The configured cswap path for display (home shortened to `~`); empty when auto-detected. */
+  readonly cliPath: string;
+  readonly timeoutSeconds: number;
+}
+
+/** Time limits offered for one cswap command, in seconds. */
+export const TIMEOUT_CHOICES_SECONDS: readonly number[] = [15, 30, 60, 120, 300];
+
+/** The offered time limits, plus the current one when it was set to something else by hand. */
+export function timeoutChoices(currentSeconds: number): number[] {
+  return [...new Set([...TIMEOUT_CHOICES_SECONDS, Math.round(currentSeconds)])].sort((a, b) => a - b);
 }
 
 export type QuickSettingsRow =
@@ -90,19 +121,6 @@ export function autoSwitchStrategyDetail(strategy: AutoSwitchStrategy, t: Transl
   }
 }
 
-export function statusBarModeLabel(mode: StatusBarMode, t: Translate): string {
-  switch (mode) {
-    case 'slotUsage':
-      return t('Slot and usage');
-    case 'slot':
-      return t('Slot only');
-    case 'nameUsage':
-      return t('Name and usage');
-    case 'hidden':
-      return t('Hidden');
-  }
-}
-
 export function sortOrderLabel(order: SortOrder, t: Translate): string {
   switch (order) {
     case 'slot':
@@ -130,10 +148,119 @@ export function refreshChoices(currentSeconds: number): number[] {
   return [...choices].sort((a, b) => a - b);
 }
 
+// ---- Status bar -------------------------------------------------------------------------------
+
+export const STATUS_BAR_LOOKS = ['compact', 'bar', 'full', 'name', 'slot', 'minimal'] as const;
+export type StatusBarLook = (typeof STATUS_BAR_LOOKS)[number];
+
+/** Ready-made status bar looks; `compact` is the default. */
+export const STATUS_BAR_LOOK_PARTS: Record<StatusBarLook, readonly StatusBarPart[]> = {
+  compact: ['icon', 'slot', 'usage'],
+  bar: ['icon', 'slot', 'bar', 'usage'],
+  full: ['icon', 'slot', 'plan', 'bar', 'usage', 'reset'],
+  name: ['icon', 'name', 'usage'],
+  slot: ['icon', 'slot'],
+  minimal: ['icon', 'usage'],
+};
+
+export function statusBarLookLabel(look: StatusBarLook, t: Translate): string {
+  switch (look) {
+    case 'compact':
+      return t('Compact');
+    case 'bar':
+      return t('With progress bar');
+    case 'full':
+      return t('Full');
+    case 'name':
+      return t('Name and usage');
+    case 'slot':
+      return t('Slot only');
+    case 'minimal':
+      return t('Usage only');
+  }
+}
+
+/** The ready-made look these parts match, if any (order does not matter). */
+export function matchingLook(parts: readonly StatusBarPart[]): StatusBarLook | undefined {
+  const key = (list: readonly StatusBarPart[]) => STATUS_BAR_PARTS.filter((part) => list.includes(part)).join();
+  return STATUS_BAR_LOOKS.find((look) => key(STATUS_BAR_LOOK_PARTS[look]) === key(parts));
+}
+
+export function statusBarPartLabel(part: StatusBarPart, t: Translate): string {
+  switch (part) {
+    case 'icon':
+      return t('Usage-level icon');
+    case 'slot':
+      return t('Slot number');
+    case 'name':
+      return t('Name (alias or email)');
+    case 'plan':
+      return t('Plan');
+    case 'bar':
+      return t('Progress bar');
+    case 'usage':
+      return t('Usage percentage');
+    case 'reset':
+      return t('Time to reset');
+  }
+}
+
+export function barStyleLabel(style: BarStyle, t: Translate): string {
+  switch (style) {
+    case 'blocks':
+      return t('Blocks');
+    case 'parallelograms':
+      return t('Slanted');
+    case 'circles':
+      return t('Dots');
+    case 'squares':
+      return t('Squares');
+  }
+}
+
+/** A sample bar in the given style, for pickers. */
+export function barStyleSample(style: BarStyle): string {
+  return usageBar(60, STATUS_BAR_BAR_WIDTH, style);
+}
+
+export function statusBarColorsLabel(colors: StatusBarColors, t: Translate): string {
+  switch (colors) {
+    case 'background':
+      return t('Coloured background');
+    case 'text':
+      return t('Coloured text only');
+    case 'none':
+      return t('No colour');
+  }
+}
+
+export function statusBarButtonLabel(button: StatusBarButton, t: Translate): string {
+  switch (button) {
+    case 'refresh':
+      return t('Refresh');
+    case 'dashboard':
+      return t('Dashboard');
+    case 'settings':
+      return t('Settings');
+  }
+}
+
+export function statusBarSummary(parts: readonly StatusBarPart[], buttons: readonly StatusBarButton[], t: Translate): string {
+  const look = matchingLook(parts);
+  const item = parts.length === 0 ? t('Hidden') : look === undefined ? t('Custom') : statusBarLookLabel(look, t);
+  return buttons.length === 0 ? item : `${item} · ${t('{0} button(s)', buttons.length)}`;
+}
+
+export function thresholdsLabel(thresholds: UsageThresholds, t: Translate): string {
+  return t('yellow {0} · red {1}', formatPercent(thresholds.warning), formatPercent(thresholds.critical));
+}
+
 export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
     { key: 'language', iconId: 'globe', label: t('Language'), value: languageLabel(values.language, t) },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
+    { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
+    { separator: true, label: t('Auto-switch') },
     { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: autoSwitchModeLabel(values.autoSwitchMode, t) },
     {
       key: 'autoStrategy',
@@ -141,11 +268,15 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
       label: t('Auto-switch strategy'),
       value: values.autoSwitchStrategy === undefined ? t('rules not loaded') : autoSwitchStrategyLabel(values.autoSwitchStrategy, t),
     },
+    { key: 'autoRules', iconId: 'law', label: t('Auto-switch rules'), value: values.autoSwitchRules ?? t('rules not loaded') },
     { separator: true, label: t('Display') },
-    { key: 'statusBar', iconId: 'layout-statusbar', label: t('Status bar'), value: statusBarModeLabel(values.statusBarMode, t) },
+    { key: 'statusBar', iconId: 'layout-statusbar', label: t('Status bar'), value: statusBarSummary(values.statusBarParts, values.statusBarButtons, t) },
+    { key: 'barStyle', iconId: 'symbol-numeric', label: t('Progress bar style'), value: `${barStyleLabel(values.barStyle, t)} ${barStyleSample(values.barStyle)}` },
+    { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
     { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
-    { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
     { separator: true, label: t('Advanced') },
-    { key: 'allSettings', iconId: 'settings-gear', label: t('All settings…'), value: t('cswap path, timeouts, colours') },
+    { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
+    { key: 'timeout', iconId: 'watch', label: t('Command time limit'), value: t('{0} s', values.timeoutSeconds) },
+    { key: 'allSettings', iconId: 'settings-gear', label: t('All settings…'), value: t('VS Code settings page') },
   ];
 }

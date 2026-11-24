@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -421,16 +421,74 @@
             "slotUsage",
             "slot",
             "nameUsage",
+            "custom",
             "hidden"
           ],
           "enumDescriptions": [
             "%config.statusBarMode.slotUsage%",
             "%config.statusBarMode.slot%",
             "%config.statusBarMode.nameUsage%",
+            "%config.statusBarMode.custom%",
             "%config.statusBarMode.hidden%"
           ],
           "order": 3,
           "markdownDescription": "%config.statusBarMode.description%"
+        },
+        "cswapManager.statusBar.parts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "icon",
+              "slot",
+              "name",
+              "plan",
+              "bar",
+              "usage",
+              "reset"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "icon",
+            "slot",
+            "usage"
+          ],
+          "order": 3.1,
+          "markdownDescription": "%config.statusBarParts.description%"
+        },
+        "cswapManager.statusBar.colors": {
+          "type": "string",
+          "default": "background",
+          "enum": [
+            "background",
+            "text",
+            "none"
+          ],
+          "enumDescriptions": [
+            "%config.statusBarColors.background%",
+            "%config.statusBarColors.text%",
+            "%config.statusBarColors.none%"
+          ],
+          "order": 3.3,
+          "markdownDescription": "%config.statusBarColors.description%"
+        },
+        "cswapManager.statusBar.buttons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "refresh",
+              "dashboard",
+              "settings"
+            ]
+          },
+          "uniqueItems": true,
+          "default": [
+            "settings"
+          ],
+          "order": 3.4,
+          "markdownDescription": "%config.statusBarButtons.description%"
         },
         "cswapManager.confirmSwitch": {
           "type": "boolean",
@@ -490,6 +548,24 @@
           "maximum": 100,
           "order": 8,
           "markdownDescription": "%config.criticalThreshold.description%"
+        },
+        "cswapManager.display.barStyle": {
+          "type": "string",
+          "default": "blocks",
+          "enum": [
+            "blocks",
+            "parallelograms",
+            "circles",
+            "squares"
+          ],
+          "enumDescriptions": [
+            "█████░░░",
+            "▰▰▰▰▰▱▱▱",
+            "●●●●●○○○",
+            "■■■■■□□□"
+          ],
+          "order": 8.1,
+          "markdownDescription": "%config.barStyle.description%"
         },
         "cswapManager.commandTimeoutSeconds": {
           "type": "number",

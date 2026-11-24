@@ -16,6 +16,7 @@ import type { AccountsView } from './accountsView';
 import type { AutoSwitchController } from './autoSwitchController';
 import type { DashboardController } from './dashboardPanel';
 import type { ExtensionConfiguration } from './configuration';
+import type { StatusBarController } from './statusBarController';
 import { describeCliError } from './messages';
 import { runAccountAction } from './manageFlow';
 import { t } from './presentation';
@@ -34,6 +35,7 @@ export interface CommandDependencies {
   readonly accountsView: AccountsView;
   readonly dashboard: DashboardController;
   readonly autoSwitch: AutoSwitchController;
+  readonly statusBar: StatusBarController;
   readonly homeDir: string;
 }
 

@@ -56,5 +56,13 @@
   "config.autoSwitch.off": "Tắt.",
   "config.autoSwitch.notify": "Kiểm tra định kỳ và báo khi cswap sẽ chuyển (chạy thử, không bao giờ chuyển).",
   "config.autoSwitch.switch": "Để cswap tự chuyển tài khoản.",
-  "command.quickSettings.title": "Cài đặt nhanh…"
+  "command.quickSettings.title": "Cài đặt nhanh…",
+  "config.statusBarMode.custom": "Các phần đã tích trong `cswapManager.statusBar.parts`.",
+  "config.statusBarParts.description": "Những gì ô thanh trạng thái hiển thị khi **Status Bar › Mode** là `custom`: `icon` (mức dùng), `slot`, `name` (bí danh hoặc email), `plan` (gói), `bar` (thanh tiến trình), `usage` (phần trăm) và `reset` (thời gian tới lần reset). Đổi dễ nhất ở **Cswap: Cài đặt nhanh… › Thanh trạng thái**, có xem trước trực tiếp.",
+  "config.statusBarColors.description": "Cách ô thanh trạng thái báo tài khoản sắp hoặc đã chạm giới hạn.",
+  "config.statusBarColors.background": "Nền cảnh báo/lỗi của VS Code.",
+  "config.statusBarColors.text": "Chỉ tô màu biểu tượng và chữ.",
+  "config.statusBarColors.none": "Không tô màu.",
+  "config.statusBarButtons.description": "Các nút hiện cạnh tài khoản trên thanh trạng thái: `refresh` (làm mới), `dashboard` (bảng điều khiển) và `settings` (Cài đặt nhanh).",
+  "config.barStyle.description": "Kiểu của mọi thanh tiến trình mức dùng: ở sidebar, khung chọn tài khoản và thanh trạng thái."
 }

@@ -208,6 +208,34 @@ suite('Cswap Manager (extension host)', () => {
     }
   });
 
+  test('customizes the status bar: parts, bar style, buttons and live preview', async () => {
+    await api.refreshService.refresh({ trigger: 'manual' });
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const keys = ['statusBar.mode', 'statusBar.parts', 'display.barStyle', 'statusBar.buttons'];
+    const before = keys.map((key) => config().inspect(key)?.globalValue);
+    try {
+      await config().update('statusBar.parts', ['slot', 'bar'], vscode.ConfigurationTarget.Global);
+      await config().update('display.barStyle', 'circles', vscode.ConfigurationTarget.Global);
+      await config().update('statusBar.mode', 'custom', vscode.ConfigurationTarget.Global);
+      await config().update('statusBar.buttons', ['refresh', 'dashboard'], vscode.ConfigurationTarget.Global);
+      const state = api.statusBar.currentState();
+      assert.match(state.text ?? '', /^#\d+( · [●○]{8})?$/, state.text);
+      assert.deepEqual(state.buttons, ['refresh', 'dashboard']);
+      api.statusBar.preview({ parts: [] });
+      assert.equal(api.statusBar.currentState().text, undefined, 'previewing nothing hides the item');
+      assert.deepEqual(api.statusBar.currentState().buttons, [], 'buttons go with the account item');
+      api.statusBar.preview({ buttons: ['settings'] });
+      assert.deepEqual(api.statusBar.currentState().buttons, ['settings']);
+      api.statusBar.preview(undefined);
+      assert.deepEqual(api.statusBar.currentState().buttons, ['refresh', 'dashboard'], 'ending the preview restores the saved settings');
+    } finally {
+      api.statusBar.preview(undefined);
+      for (const [index, key] of keys.entries()) {
+        await config().update(key, before[index], vscode.ConfigurationTarget.Global);
+      }
+    }
+  });
+
   test('runs auto-switch in notify mode with real dry runs only (never switches)', async function () {
     const before = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
     if (!before.ok) {

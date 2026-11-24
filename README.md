@@ -26,7 +26,7 @@ Click the Cswap Manager icon in the Activity Bar.
 - Right-click an account to switch to it, show details, or manage it.
 
 ### Status bar
-Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near the usage limit and shows a clock icon when the data is out of date. Click it to switch accounts. Choose what it shows with **Status Bar › Mode** (or hide it).
+Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near the usage limit and shows a clock icon when the data is out of date. Click it to switch accounts; the ⚙ next to it opens **Quick Settings**. Under **Quick Settings › Status bar** you can pick a ready-made look or tick exactly what to show (usage icon, slot, name, plan, progress bar, percentage, time to reset), choose how warnings are coloured, and add Refresh / Dashboard buttons. Changes preview live on the status bar before you save them. Any item can also be hidden by right-clicking the status bar.
 
 ### Switching accounts
 **Cswap: Switch Account…** (or click the status bar) opens a picker arranged by what you most likely want:
@@ -75,18 +75,22 @@ Not available in the extension (use the CLI): adding, removing, importing and ex
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
-**Cswap: Quick Settings…** (the gear in the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, auto-switch and its strategy, status bar, account order and refresh interval. **All settings…** at the bottom opens VS Code's Settings page for the rest.
+**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, refresh interval, auto-switch with its strategy and rules, status bar, progress bar style, usage colours, account order, cswap path and command time limit. Each screen has a **← Back** button. **All settings…** opens VS Code's Settings page.
 
 | Setting | Default | Description |
 |---|---|---|
 | `cswapManager.cliPath` | empty (auto-detect) | Full path to `cswap.exe`. User settings only — a workspace cannot change it. `.cmd`/`.bat` shims are not supported. |
 | `cswapManager.language` | `auto` | Language of the extension's UI: `auto` (follow VS Code), `en` or `vi` (Tiếng Việt). Command titles and setting descriptions follow VS Code's display language. |
 | `cswapManager.refreshIntervalSeconds` | `120` | Automatic refresh while the sidebar, status bar or dashboard is shown and the window is focused. `0` turns it off; minimum 30. |
-| `cswapManager.statusBar.mode` | `slotUsage` | `slotUsage`, `slot`, `nameUsage` or `hidden`. |
+| `cswapManager.statusBar.mode` | `slotUsage` | `slotUsage`, `slot`, `nameUsage`, `custom` (see `statusBar.parts`) or `hidden`. |
+| `cswapManager.statusBar.parts` | `icon`, `slot`, `usage` | With mode `custom`: any of `icon`, `slot`, `name`, `plan`, `bar`, `usage`, `reset`. |
+| `cswapManager.statusBar.colors` | `background` | `background`, `text` (coloured icon/text only) or `none`. |
+| `cswapManager.statusBar.buttons` | `settings` | Buttons next to the account: `refresh`, `dashboard`, `settings`. |
 | `cswapManager.confirmSwitch` | `true` | Ask before switching accounts. User settings only — a workspace cannot turn it off. |
 | `cswapManager.autoSwitch.mode` | `off` | `off`, `notify` (dry runs, tell me) or `switch` (switch automatically). User settings only — a workspace cannot turn it on. |
 | `cswapManager.sidebar.sortOrder` | `slot` | `slot`, `mostUsed`, `leastUsed` or `soonestReset`. |
 | `cswapManager.display.warningThreshold` / `criticalThreshold` | `80` / `95` | Usage colours only; they do not change cswap. |
+| `cswapManager.display.barStyle` | `blocks` | Every usage bar (sidebar, switcher, status bar): `blocks` █░, `parallelograms` ▰▱, `circles` ●○, `squares` ■□. |
 | `cswapManager.commandTimeoutSeconds` | `30` | Time limit for reading commands (switching and account changes always get at least 120 s). |
 | `cswapManager.maxOutputKilobytes` | `2048` | Maximum CLI output the extension reads. |
 

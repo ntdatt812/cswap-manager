@@ -146,6 +146,13 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - A manual one-shot `cswap auto --once --strategy …` from the switch picker was considered and left out: such a tick is subject to cswap's cooldown and thresholds, so a click would often end in "no action".
 - Session impact (from cswap's source, `_print_switch_followup`): a restart is never required; Claude Code drops its cached token when the credentials file changes (next request) or after the macOS Keychain cache TTL (~30 s).
 
+## Status bar customization (0.5.0)
+- One progress bar style (`display.barStyle`) is used everywhere: sidebar rows, the switch picker and the status bar (`usageBar` in `format.ts`).
+- `statusBar.mode` keeps its preset values (`slotUsage`, `slot`, `nameUsage`, `hidden`), now defined as fixed part lists; `custom` uses `statusBar.parts`. `buildStatusBarModel` renders parts in a fixed order and never produces an empty item.
+- Buttons are separate status bar items (`cswapManager.button.*`) right of the account and auto-switch items, shown only while the account item is (so `hidden` still hides everything). Only actions the status bar cannot otherwise reach are offered: switching is the account item's own click, and filter/sort act on the Accounts view, so they are not buttons.
+- Live preview: `StatusBarController.preview()` overrides the saved look in memory while a picker is open; ending the picker (save, Back, Esc) clears it, so nothing is written until Enter.
+- Navigation: every screen opened from Quick Settings has VS Code's `QuickInputButtons.Back`; Esc (or focus moving away) closes everything, because a hidden QuickPick cannot tell Esc from focus loss.
+
 ## Auto-switch security review (0.3.1)
 An independent read-only review of the 0.3.0 auto-switch code found 1 medium, 7 low and 6 info issues (no critical/high). All are fixed, each with a regression test in `test/unit/autoSwitch.test.ts`:
 - **M1** A mode change while the lease file was being acquired could still start a real (non-dry-run) tick. The mode is now re-read inside the operation gate immediately before cswap starts, and only `switch` runs without `--dry-run`.

@@ -9,6 +9,8 @@ import {
   isLanguageSetting,
   isSettingKey,
   languageLabel,
+  matchingLook,
+  statusBarSummary,
   refreshChoices,
   refreshLabel,
   SETTING_KEYS,
@@ -22,9 +24,15 @@ const values: QuickSettingsValues = {
   confirmSwitch: false,
   autoSwitchMode: 'switch',
   autoSwitchStrategy: 'consume-first',
-  statusBarMode: 'slotUsage',
+  autoSwitchRules: 'switch at 90% · cooldown 300s · every 60s',
+  statusBarParts: ['icon', 'slot', 'bar', 'usage'],
+  statusBarButtons: ['settings'],
+  barStyle: 'parallelograms',
+  thresholds: { warning: 80, critical: 95 },
   sortOrder: 'slot',
   refreshSeconds: 120,
+  cliPath: '',
+  timeoutSeconds: 30,
 };
 
 describe('quick settings rows', () => {
@@ -40,9 +48,14 @@ describe('quick settings rows', () => {
     assert.equal(value('confirmSwitch'), 'Off');
     assert.equal(value('autoSwitch'), 'Switch automatically');
     assert.equal(value('autoStrategy'), 'Use quota that resets soonest first');
-    assert.equal(value('statusBar'), 'Slot and usage');
+    assert.equal(value('statusBar'), 'With progress bar · 1 button(s)');
+    assert.equal(value('thresholds'), 'yellow 80% · red 95%');
+    assert.equal(value('barStyle'), 'Slanted ▰▰▰▰▰▱▱▱');
+    assert.equal(value('autoRules'), 'switch at 90% · cooldown 300s · every 60s');
     assert.equal(value('sortOrder'), 'By slot number');
     assert.equal(value('refresh'), 'every 2 min');
+    assert.equal(value('cliPath'), 'auto-detect');
+    assert.equal(value('timeout'), '30 s');
     assert.ok(rows.some((row) => row.separator === true));
   });
 
@@ -55,12 +68,22 @@ describe('quick settings rows', () => {
 
   it('validates keys and language values passed from outside', () => {
     assert.equal(isSettingKey('refresh'), true);
-    assert.equal(isSettingKey('cliPath'), false);
+    assert.equal(isSettingKey('purge'), false);
     assert.equal(isSettingKey(undefined), false);
     assert.equal(isLanguageSetting('vi'), true);
     assert.equal(isLanguageSetting('fr'), false);
     assert.equal(languageLabel('auto', t), 'Automatic (follow VS Code)');
     assert.equal(languageLabel('en', t), 'English');
+  });
+});
+
+describe('status bar looks', () => {
+  it('recognises a ready-made look whatever the order, and summarises the rest', () => {
+    assert.equal(matchingLook(['usage', 'icon', 'slot']), 'compact');
+    assert.equal(matchingLook(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), 'full');
+    assert.equal(matchingLook(['icon', 'plan']), undefined);
+    assert.equal(statusBarSummary([], [], t), 'Hidden');
+    assert.equal(statusBarSummary(['icon', 'plan'], ['refresh', 'settings'], t), 'Custom · 2 button(s)');
   });
 });
 

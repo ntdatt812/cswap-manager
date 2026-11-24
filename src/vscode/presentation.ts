@@ -9,7 +9,7 @@ export function formatDateTime(epoch: number): string {
 }
 
 export function presentationOptions(configuration: ExtensionConfiguration, now = Date.now()): PresentationOptions {
-  return { now, thresholds: configuration.thresholds(), t, formatDateTime };
+  return { now, thresholds: configuration.thresholds(), t, formatDateTime, barStyle: configuration.barStyle() };
 }
 
 /** Re-render relative times ("updated 3m ago", countdowns) without calling the CLI. */

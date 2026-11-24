@@ -48,10 +48,25 @@ export function formatPercent(pct: number): string {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
 }
 
-/** Text progress bar; the CLI value is clamped to 0–100 only for drawing. */
-export function usageBar(pct: number, width = 10): string {
+export const BAR_STYLES = ['blocks', 'parallelograms', 'circles', 'squares'] as const;
+export type BarStyle = (typeof BAR_STYLES)[number];
+
+export function isBarStyle(value: unknown): value is BarStyle {
+  return typeof value === 'string' && (BAR_STYLES as readonly string[]).includes(value);
+}
+
+const BAR_GLYPHS: Record<BarStyle, readonly [filled: string, empty: string]> = {
+  blocks: ['█', '░'],
+  parallelograms: ['▰', '▱'],
+  circles: ['●', '○'],
+  squares: ['■', '□'],
+};
+
+/** Text progress bar (`cswapManager.display.barStyle`); the CLI value is clamped to 0–100 only for drawing. */
+export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks'): string {
+  const [filledGlyph, emptyGlyph] = BAR_GLYPHS[style];
   const filled = Math.round((clamp(pct, 0, 100) / 100) * width);
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
+  return filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled);
 }
 
 /** Compact duration in the CLI's own style: `4d 0h`, `1h 18m`, `12m`, `<1m`. */

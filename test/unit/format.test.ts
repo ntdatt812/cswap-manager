@@ -29,6 +29,9 @@ describe('format helpers', () => {
     assert.equal(usageBar(40), '████░░░░░░');
     assert.equal(usageBar(130), '██████████');
     assert.equal(usageBar(-5), '░░░░░░░░░░');
+    assert.equal(usageBar(50, 4, 'circles'), '●●○○');
+    assert.equal(usageBar(150, 4, 'parallelograms'), '▰▰▰▰');
+    assert.equal(usageBar(-5, 2, 'squares'), '□□');
   });
 
   it('classifies usage levels with repaired thresholds', () => {

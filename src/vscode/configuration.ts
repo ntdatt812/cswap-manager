@@ -1,8 +1,20 @@
 import * as vscode from 'vscode';
 import type { CliRunSettings } from '../core/cli/cswapCli';
-import { isSortOrder, normalizeThresholds, type SortOrder, type UsageThresholds } from '../core/presentation/format';
+import { isBarStyle, isSortOrder, normalizeThresholds, type BarStyle, type SortOrder, type UsageThresholds } from '../core/presentation/format';
 import { isLanguageSetting, type LanguageSetting } from '../core/presentation/quickSettings';
-import { isStatusBarMode, type StatusBarMode } from '../core/presentation/statusBar';
+import {
+  DEFAULT_STATUS_BAR_BUTTONS,
+  DEFAULT_STATUS_BAR_PARTS,
+  STATUS_BAR_BUTTONS,
+  isStatusBarColors,
+  isStatusBarMode,
+  isStatusBarPart,
+  statusBarParts,
+  type StatusBarButton,
+  type StatusBarColors,
+  type StatusBarMode,
+  type StatusBarPart,
+} from '../core/presentation/statusBar';
 import { isAutoSwitchMode, type AutoSwitchMode } from '../core/service/autoSwitchService';
 import { normalizeIntervalMs } from '../core/service/refreshScheduler';
 import { DEFAULT_STALE_AFTER_MS } from '../core/service/refreshService';
@@ -73,6 +85,33 @@ export class ExtensionConfiguration {
     return isStatusBarMode(value) ? value : 'slotUsage';
   }
 
+  /** Parts ticked for `statusBar.mode: custom`; unknown entries are dropped. */
+  customStatusBarParts(): StatusBarPart[] {
+    const value = this.config.get<unknown>('statusBar.parts');
+    return Array.isArray(value) ? value.filter(isStatusBarPart) : [...DEFAULT_STATUS_BAR_PARTS];
+  }
+
+  /** What the status bar item shows right now; empty when it is hidden. */
+  statusBarParts(): StatusBarPart[] {
+    return statusBarParts(this.statusBarMode(), this.customStatusBarParts());
+  }
+
+  /** Progress bar look in the sidebar, switch picker and status bar. */
+  barStyle(): BarStyle {
+    const value = this.config.get<string>('display.barStyle', 'blocks');
+    return isBarStyle(value) ? value : 'blocks';
+  }
+
+  statusBarColors(): StatusBarColors {
+    const value = this.config.get<string>('statusBar.colors', 'background');
+    return isStatusBarColors(value) ? value : 'background';
+  }
+
+  statusBarButtons(): StatusBarButton[] {
+    const value = this.config.get<unknown>('statusBar.buttons');
+    return Array.isArray(value) ? STATUS_BAR_BUTTONS.filter((button) => value.includes(button)) : [...DEFAULT_STATUS_BAR_BUTTONS];
+  }
+
   /** User scope only: a workspace must never be able to turn automatic switching on. */
   autoSwitchMode(): AutoSwitchMode {
     const value = this.config.inspect<string>('autoSwitch.mode')?.globalValue;
@@ -119,4 +158,15 @@ export class ExtensionConfiguration {
 }
 
 /** Window-scoped settings the quick settings menu writes to the user scope. */
-export type UserSettingKey = 'language' | 'statusBar.mode' | 'sidebar.sortOrder' | 'refreshIntervalSeconds';
+export type UserSettingKey =
+  | 'language'
+  | 'statusBar.mode'
+  | 'statusBar.parts'
+  | 'display.barStyle'
+  | 'statusBar.colors'
+  | 'statusBar.buttons'
+  | 'display.warningThreshold'
+  | 'display.criticalThreshold'
+  | 'sidebar.sortOrder'
+  | 'commandTimeoutSeconds'
+  | 'refreshIntervalSeconds';

@@ -26,6 +26,7 @@ export interface TestApi {
   readonly accountsView: AccountsView;
   readonly dashboard: DashboardController;
   readonly autoSwitch: AutoSwitchController;
+  readonly statusBar: StatusBarController;
 }
 
 export function activate(context: vscode.ExtensionContext): TestApi | undefined {
@@ -91,10 +92,10 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
         void refreshService.refresh({ trigger: 'configuration', requireFresh: true });
       }
     }),
-    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, homeDir }),
+    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, homeDir }),
   );
 
-  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch } : undefined;
+  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar } : undefined;
 }
 
 export function deactivate(): void {

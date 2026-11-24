@@ -56,5 +56,13 @@
   "config.autoSwitch.off": "Off.",
   "config.autoSwitch.notify": "Check regularly and notify me when cswap would switch (dry run, never switches).",
   "config.autoSwitch.switch": "Let cswap switch accounts automatically.",
-  "command.quickSettings.title": "Quick Settings…"
+  "command.quickSettings.title": "Quick Settings…",
+  "config.statusBarMode.custom": "The parts ticked in `cswapManager.statusBar.parts`.",
+  "config.statusBarParts.description": "What the status bar item shows when **Status Bar › Mode** is `custom`: `icon` (usage level), `slot`, `name` (alias or email), `plan`, `bar` (progress bar), `usage` (percentages) and `reset` (time to the next reset). Easiest to change from **Cswap: Quick Settings… › Status bar**, which previews it live.",
+  "config.statusBarColors.description": "How the status bar item shows that an account is near or at its limit.",
+  "config.statusBarColors.background": "VS Code's warning/error background.",
+  "config.statusBarColors.text": "Coloured icon and text only.",
+  "config.statusBarColors.none": "No colour.",
+  "config.statusBarButtons.description": "Buttons shown next to the account in the status bar: `refresh`, `dashboard` and `settings` (Quick Settings).",
+  "config.barStyle.description": "Look of every usage progress bar: in the sidebar, the account switcher and the status bar."
 }

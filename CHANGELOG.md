@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-11-24
+- **Status bar, your way** (*Quick Settings › Status bar*):
+  - ready-made looks (Compact, With progress bar, Full, Name and usage, Slot only, Usage only), each drawn with your own data;
+  - or tick exactly what to show: usage-level icon, slot, name, plan, progress bar, usage percentage, time to reset;
+  - warning colours: coloured background (as before), coloured text only, or none;
+  - optional buttons next to the account: Refresh, Dashboard, Settings (⚙, on by default); they hide together with the account item.
+  Every change previews live on the real status bar; Enter saves, Esc cancels.
+- **Progress bar style** (█░ ▰▱ ●○ ■□) for every usage bar: sidebar, account switcher and status bar.
+- Quick Settings gained **Auto-switch rules**, **Usage colours** (yellow/red thresholds), **cswap path** and **Command time limit**.
+- Every screen opened from Quick Settings has a **← Back** button to the list; Esc still closes everything.
+- New settings: `cswapManager.statusBar.parts`, `statusBar.colors`, `statusBar.buttons`, `display.barStyle`, and the `custom` value for `statusBar.mode`. Existing modes look exactly as before.
+
 ## 0.4.1 — 2026-11-24
 - Login expiry is flagged like cswap does it: **Re-login due** appears in the sidebar and tooltips only when an account's stored login expires within 7 days (yellow) or has lapsed (red), with how to renew it. The exact date stays in the dashboard.
 

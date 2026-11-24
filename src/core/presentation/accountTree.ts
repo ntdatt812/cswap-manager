@@ -17,6 +17,7 @@ import {
   type SortOrder,
   type UsageLevel,
   type UsageThresholds,
+  type BarStyle,
 } from './format';
 
 /** Localization hook: `{0}`-style placeholders, as in `vscode.l10n.t`. */
@@ -65,6 +66,8 @@ export interface PresentationOptions {
   readonly t: Translate;
   /** Locale-aware absolute date/time formatting. */
   readonly formatDateTime: (epoch: number) => string;
+  /** Progress bar look everywhere (`cswapManager.display.barStyle`); blocks when unset. */
+  readonly barStyle?: BarStyle;
 }
 
 export interface TreeBuildOptions extends PresentationOptions {
@@ -122,7 +125,7 @@ function percentText(pct: number | undefined, t: Translate): string {
 }
 
 export function metricsDescription(metrics: UsageMetrics, options: PresentationOptions): string {
-  const parts = [metrics.pct === undefined ? options.t('usage unknown') : `${usageBar(metrics.pct)} ${formatPercent(metrics.pct)}`];
+  const parts = [metrics.pct === undefined ? options.t('usage unknown') : `${usageBar(metrics.pct, 10, options.barStyle)} ${formatPercent(metrics.pct)}`];
   const reset = resetText(metrics.resetsAt, options);
   if (reset !== undefined) {
     parts.push(reset);
