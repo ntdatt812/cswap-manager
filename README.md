@@ -20,7 +20,8 @@ The extension finds `cswap` on `PATH` or in `~/.local/bin`. If yours lives elsew
 ### Accounts sidebar
 Click the Cswap Manager icon in the Activity Bar.
 - Accounts are listed by slot; the active account is marked and expanded.
-- Each account shows plan and usage per window (for example `7d 40%`) with the time until reset; expand it for per-window bars, per-model scopes, plan, login expiry and how old the data is.
+- Each account shows plan and usage per window (for example `7d 40%`) with the time until reset; expand it for per-window bars, per-model scopes, plan and how old the data is.
+- **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
 - Toolbar: refresh, switch, open dashboard, filter, sort, settings. Diagnostics is in the `…` menu.
 - Right-click an account to switch to it, show details, or manage it.
 
@@ -104,6 +105,7 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | "Stale" / clock icon | The last refresh failed or the data is old. Hover for the reason, then **Refresh**. Older data stays visible but is marked. |
 | "list and status disagree about the active account" | cswap reported two different active accounts; run `cswap status` in a terminal. The extension shows the active account as unknown instead of guessing. |
 | "The current Claude login is not managed by cswap" | Add it with `cswap add` in a terminal. |
+| "Re-login due" / usage `relogin_required` | The account's stored login expired. Log in to it with `/login` in Claude Code, then run `cswap add`. |
 | A switch or change "could not be confirmed" | cswap ran, but the re-read state did not show the expected result. Refresh and check with `cswap list`. |
 | Anything else | Run **Cswap: Show Diagnostics** and copy the report; it is safe to share. |
 

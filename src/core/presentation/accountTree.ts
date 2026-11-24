@@ -196,15 +196,29 @@ export function planText(account: Account, t: Translate): string | undefined {
   return parts.length === 0 ? undefined : parts.join(' · ');
 }
 
-function loginText(account: Account, options: PresentationOptions): string | undefined {
-  const expires = epochOf(account.loginExpiresAt);
-  if (expires === undefined) {
+/**
+ * How far ahead a stored login's expiry is worth showing — cswap's own `LOGIN_DUE_WITHIN_S` (7 days).
+ * Further out, the expiry is only listed in the account detail, not flagged in the sidebar.
+ */
+export const LOGIN_DUE_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface LoginDue {
+  readonly expired: boolean;
+  readonly expiresAt: number;
+}
+
+/** The stored login (refresh token) is due for a `/login` within a week, or already lapsed. */
+export function loginDue(account: Account, now: number): LoginDue | undefined {
+  const expiresAt = epochOf(account.loginExpiresAt);
+  if (expiresAt === undefined || expiresAt - now > LOGIN_DUE_WITHIN_MS) {
     return undefined;
   }
-  const when = options.formatDateTime(expires);
-  return expires <= options.now
-    ? options.t('expired ({0})', when)
-    : options.t('in {0} ({1})', compactDuration(expires - options.now), when);
+  return { expired: expiresAt <= now, expiresAt };
+}
+
+function loginDueText(due: LoginDue, options: PresentationOptions): string {
+  const when = options.formatDateTime(due.expiresAt);
+  return due.expired ? options.t('now (expired {0})', when) : options.t('in {0} ({1})', compactDuration(due.expiresAt - options.now), when);
 }
 
 function accountChildren(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions): NodeModel[] {
@@ -230,10 +244,14 @@ function accountChildren(account: Account, snapshot: AccountsSnapshot, options: 
     const expired = account.plan?.expired === true;
     children.push(detailNode(`${base}:plan`, t('Plan'), plan, expired ? { id: 'warning', color: 'charts.yellow' } : { id: 'credit-card' }));
   }
-  const login = loginText(account, options);
-  if (login !== undefined) {
-    const expired = (epochOf(account.loginExpiresAt) ?? Infinity) <= now;
-    children.push(detailNode(`${base}:login`, t('Login expires'), login, expired ? { id: 'warning', color: 'charts.yellow' } : { id: 'key' }));
+  const due = loginDue(account, now);
+  if (due !== undefined) {
+    children.push(
+      detailNode(`${base}:login`, t('Re-login due'), loginDueText(due, options), {
+        id: due.expired ? 'error' : 'warning',
+        color: due.expired ? 'charts.red' : 'charts.yellow',
+      }),
+    );
   }
   const age = usageAgeMs(account, snapshot.capturedAt, now);
   if (age !== undefined) {
@@ -319,9 +337,9 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
   for (const scope of account.usage?.scoped ?? []) {
     rows.push({ label: scope.name, value: metricsDescription(scope, options) });
   }
-  const login = loginText(account, options);
-  if (login !== undefined) {
-    rows.push({ label: t('Login expires'), value: login });
+  const due = loginDue(account, options.now);
+  if (due !== undefined) {
+    rows.push({ label: t('Re-login due'), value: loginDueText(due, options) });
   }
   const age = usageAgeMs(account, snapshot.capturedAt, options.now);
   if (age !== undefined) {
@@ -330,6 +348,9 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
   const notes: string[] = [];
   if (isActive) {
     notes.push(snapshot.active.consistency === 'consistent' ? t('Active account.') : t('Active account (sources disagreed; taken from cswap status).'));
+  }
+  if (due !== undefined) {
+    notes.push(t('To renew: log in to this account with /login in Claude Code, then run cswap add.'));
   }
   return { title: accountName(account, t), rows, ...(notes.length > 0 ? { notes } : {}) };
 }

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1 — 2026-11-24
+- Login expiry is flagged like cswap does it: **Re-login due** appears in the sidebar and tooltips only when an account's stored login expires within 7 days (yellow) or has lapsed (red), with how to renew it. The exact date stays in the dashboard.
+
 ## 0.4.0 — 2026-11-24
 - **Cswap: Quick Settings…** (gear in the Accounts view and in the switch picker): language, ask before switching, auto-switch and its strategy, status bar, account order and refresh interval, in the extension's own language, without opening VS Code's Settings page.
 - The switch confirmation has a **Switch, don't ask again** button.

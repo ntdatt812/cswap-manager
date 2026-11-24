@@ -85,11 +85,23 @@ describe('buildAccountNodes', () => {
     assert.equal(later[0]?.description?.includes('↻'), false, 'no countdown for a passed reset');
   });
 
-  it('adds plan, login, freshness and organization details', () => {
+  it('adds plan, freshness and organization details', () => {
     assert.equal(child(bob, ':plan')?.description, 'Ultra · active');
-    assert.match(child(bob, ':login')?.description ?? '', /^in 20d 1h/);
     assert.equal(child(bob, ':fetched')?.description, '4m ago');
     assert.equal(child(bob, ':org')?.description, 'Example Org B');
+  });
+
+  it('flags a login only when it is due within a week (like cswap), or already lapsed', () => {
+    const expiry = Date.parse('2026-12-14T05:07:32.000Z');
+    const loginAt = (now: number) => child(buildAccountNodes(snapshot(), options({ now }))[1], ':login');
+    assert.equal(child(bob, ':login'), undefined, '20 days out: nothing to flag');
+    const due = loginAt(expiry - 2 * 86_400_000);
+    assert.equal(due?.label, 'Re-login due');
+    assert.match(due?.description ?? '', /^in 2d/);
+    assert.equal(due?.icon?.color, 'charts.yellow');
+    const lapsed = loginAt(expiry + 60_000);
+    assert.match(lapsed?.description ?? '', /^now \(expired /);
+    assert.equal(lapsed?.icon?.color, 'charts.red');
   });
 
   it('handles accounts without usage or with an unavailable usage status', () => {
