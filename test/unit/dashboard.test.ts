@@ -69,19 +69,35 @@ describe('buildDashboardModel', () => {
   const model = buildDashboardModel(ready(), options());
   const [alice, bob, carol] = model.rows;
 
-  it('summarizes count, active account, usage levels and freshness', () => {
+  it('builds the overview: freshness, active account, quota left and suggestions', () => {
     assert.equal(model.state, 'ready');
+    assert.equal(model.freshnessTone, 'ok');
+    assert.equal(model.activeOverview?.slot, 1);
+    assert.equal(model.activeOverview?.name, 'work');
+    assert.equal(model.activeOverview?.level, 'warning');
     assert.deepEqual(
-      model.summary.map((card) => [card.label, card.value, card.tone]),
-      [
-        ['Accounts', '3', 'neutral'],
-        ['Active account', '#1', 'active'],
-        ['Usage', '1 warning', 'warning'],
-        ['Data', 'Fresh', 'ok'],
-      ],
+      model.activeOverview?.meters.map((meter) => meter.label),
+      ['5h', '7d', 'Spend', 'ModelA'],
     );
-    assert.equal(model.summary[0]?.detail, '1 disabled');
-    assert.equal(model.summary[2]?.detail, '2 without current usage');
+    // Only alice counts: bob is disabled and carol has no current usage.
+    assert.equal(model.capacity?.value, '0.2 / 1');
+    assert.equal(model.capacity?.detail, '2 not counted (disabled or usage unknown)');
+    assert.deepEqual(
+      model.insights.map((insight) => insight.id),
+      ['all-limited', 'relogin'],
+    );
+    assert.equal(model.insights[1]?.tone, 'error');
+  });
+
+  it('shows the auto-switch mode and strategy when known', () => {
+    const auto = buildDashboardModel(ready(), options({ autoSwitch: { mode: 'switch', strategy: 'consume-first' } })).autoSwitch;
+    assert.deepEqual(auto, { value: 'Switch automatically', detail: 'Use quota that resets soonest first', tone: 'ok' });
+    assert.equal(buildDashboardModel(ready(), options({ autoSwitch: { mode: 'off', strategy: undefined } })).autoSwitch?.tone, 'neutral');
+  });
+
+  it('flags only problems next to a name, never plain "Active"', () => {
+    assert.equal(model.rows[0]?.flag, undefined);
+    assert.deepEqual(model.rows[1]?.flag, { text: 'Disabled · usage unavailable', tone: 'warning' });
   });
 
   it('builds rows in slot order with dynamic usage cells and status tones', () => {
@@ -160,7 +176,8 @@ describe('buildDashboardModel', () => {
     assert.equal(error.messageTone, 'error');
     assert.equal(buildDashboardModel(ready(snapshot('{"schemaVersion":1,"accounts":[]}')), options()).state, 'empty');
     const stale = buildDashboardModel({ ...ready(), lastError: cliError('timeout') }, options({ freshness: { freshness: 'stale', reason: 'refresh-failed' } }));
-    assert.equal(stale.summary[3]?.value, 'Stale');
+    assert.ok(stale.freshnessText.startsWith('Stale'), stale.freshnessText);
+    assert.equal(stale.freshnessTone, 'warning');
     assert.equal(stale.messageTone, 'warning');
     assert.match(stale.message ?? '', /Last refresh failed/);
   });
@@ -188,6 +205,7 @@ describe('parseWebviewMessage', () => {
   it('accepts only allow-listed messages', () => {
     assert.deepEqual(parseWebviewMessage({ type: 'ready' }), { type: 'ready' });
     assert.deepEqual(parseWebviewMessage({ type: 'refresh', extra: 'ignored' }), { type: 'refresh' });
+    assert.deepEqual(parseWebviewMessage({ type: 'openAutoSwitch' }), { type: 'openAutoSwitch' });
     assert.deepEqual(parseWebviewMessage({ type: 'switchToAccount', slot: 2 }), { type: 'switchToAccount', slot: 2 });
     assert.deepEqual(parseWebviewMessage({ type: 'switchStrategy', strategy: 'next-available' }), { type: 'switchStrategy', strategy: 'next-available' });
   });

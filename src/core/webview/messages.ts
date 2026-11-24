@@ -13,6 +13,7 @@ export function parseWebviewMessage(raw: unknown): WebviewToHost | undefined {
     case 'ready':
     case 'refresh':
     case 'openSettings':
+    case 'openAutoSwitch':
     case 'showDiagnostics':
       return { type: raw['type'] };
     case 'switchToAccount': {

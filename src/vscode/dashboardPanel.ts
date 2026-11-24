@@ -4,6 +4,7 @@ import type { HostToWebview } from '../shared/dashboardProtocol';
 import type { CliError } from '../core/cli/cliErrors';
 import { buildDashboardModel } from '../core/presentation/dashboard';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
+import type { AutoSwitchService } from '../core/service/autoSwitchService';
 import type { ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { SwitchService } from '../core/service/switchService';
@@ -11,7 +12,7 @@ import { parseWebviewMessage } from '../core/webview/messages';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 import type { Logger } from './logger';
-import { currentLanguage } from './l10n';
+import { currentLanguage, currentLocale } from './l10n';
 import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
 import { runAccountAction } from './manageFlow';
 import { runSwitch } from './switchFlow';
@@ -27,6 +28,8 @@ export interface DashboardDependencies {
   readonly logger: Logger;
   readonly homeDir: string;
   readonly describeError: (error: CliError) => string;
+  /** Mode and cswap strategy for the overview card. */
+  readonly autoSwitch: AutoSwitchService;
 }
 
 function escapeAttribute(value: string): string {
@@ -75,6 +78,7 @@ export class DashboardController implements vscode.Disposable {
       deps.refreshService.onDidChange(() => this.postState()),
       deps.switchService.onDidChangeSwitching(() => this.postState()),
       deps.gate.onDidChange(() => this.postState()),
+      deps.autoSwitch.onDidChange(() => this.postState()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(CONFIG_SECTION)) {
           this.postState();
@@ -155,7 +159,10 @@ export class DashboardController implements vscode.Disposable {
         return true;
       }
       case 'openSettings':
-        await vscode.commands.executeCommand('cswapManager.openSettings');
+        await vscode.commands.executeCommand('cswapManager.quickSettings');
+        return true;
+      case 'openAutoSwitch':
+        await vscode.commands.executeCommand('cswapManager.autoSwitch');
         return true;
       case 'showDiagnostics':
         await vscode.commands.executeCommand('cswapManager.showDiagnostics');
@@ -219,11 +226,15 @@ export class DashboardController implements vscode.Disposable {
     const { refreshService, switchService, configuration, describeError } = this.deps;
     const state = refreshService.getState();
     const options = presentationOptions(configuration);
+    const auto = this.deps.autoSwitch.getState();
+    const locale = currentLocale();
     const model = buildDashboardModel(state, {
       ...options,
       freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
       switching: switchService.isSwitching() || this.deps.gate.isBusy(),
       describeError,
+      autoSwitch: { mode: configuration.autoSwitchMode(), strategy: auto.rules?.strategy },
+      formatDecimal: (value) => value.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
     });
     // Keep the tab title in the chosen language after a language change.
     this.panel.title = t('Cswap Dashboard');

@@ -29,6 +29,21 @@ describe('format helpers', () => {
     assert.equal(usageBar(40), '████░░░░░░');
     assert.equal(usageBar(130), '██████████');
     assert.equal(usageBar(-5), '░░░░░░░░░░');
+    // The last cell is drawn partly filled where the style allows it.
+    assert.equal(usageBar(94, 8), '███████▌');
+    assert.equal(usageBar(94, 8, 'circles'), '●●●●●●●◐');
+    assert.equal(usageBar(94, 8, 'squares'), '■■■■■■■◧');
+    assert.equal(usageBar(94, 10, 'squares'), '■■■■■■■■■◧');
+    // Below 100% never looks full; above 0% never looks empty.
+    assert.equal(usageBar(94, 8, 'parallelograms'), '▰▰▰▰▰▰▰▱');
+    assert.equal(usageBar(99.9, 8), '███████▉');
+    assert.equal(usageBar(1, 10), '▏░░░░░░░░░');
+    assert.equal(usageBar(1, 8, 'parallelograms'), '▰▱▱▱▱▱▱▱');
+    for (const style of ['blocks', 'parallelograms', 'circles', 'squares'] as const) {
+      for (let pct = 0; pct <= 100; pct += 0.5) {
+        assert.equal([...usageBar(pct, 8, style)].length, 8, `${style} ${pct}% keeps its width`);
+      }
+    }
     assert.equal(usageBar(50, 4, 'circles'), '●●○○');
     assert.equal(usageBar(150, 4, 'parallelograms'), '▰▰▰▰');
     assert.equal(usageBar(-5, 2, 'squares'), '□□');

@@ -9,7 +9,7 @@ export interface AccountsCli {
   status(signal?: AbortSignal): Promise<CliOutcome<StatusPayload>>;
 }
 
-export type RefreshTrigger = 'manual' | 'activation' | 'interval' | 'view-visible' | 'post-switch' | 'configuration';
+export type RefreshTrigger = 'manual' | 'activation' | 'interval' | 'view-visible' | 'post-switch' | 'configuration' | 'external';
 
 export interface RefreshRequest {
   readonly trigger: RefreshTrigger;
@@ -150,7 +150,11 @@ export class RefreshService implements Disposable {
   }
 
   private async execute(verifyActive: boolean, signal: AbortSignal): Promise<RefreshResult> {
-    const list = await this.options.cli.list(signal);
+    // When the active account must be verified (after a switch), status is needed anyway: run it
+    // alongside list instead of after it. Each cswap call costs ~0.4–0.7 s of start-up.
+    const [list, earlyStatus] = verifyActive
+      ? await Promise.all([this.options.cli.list(signal), this.options.cli.status(signal)])
+      : [await this.options.cli.list(signal), undefined];
     if (this.disposed) {
       return this.cancelledResult();
     }
@@ -160,8 +164,8 @@ export class RefreshService implements Disposable {
 
     let status: StatusPayload | undefined;
     let warning: CliError | undefined;
-    if (verifyActive || needsStatusCheck(list.value)) {
-      const statusOutcome = await this.options.cli.status(signal);
+    const statusOutcome = earlyStatus ?? (needsStatusCheck(list.value) ? await this.options.cli.status(signal) : undefined);
+    if (statusOutcome !== undefined) {
       if (this.disposed) {
         return this.cancelledResult();
       }

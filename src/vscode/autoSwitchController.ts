@@ -567,9 +567,10 @@ export class AutoSwitchController implements vscode.Disposable {
       return;
     }
     this.clock ??= setInterval(() => this.render(), CLOCK_TICK_MS);
+    // Icon only (sync = switches automatically, eye = notify only, spinning = checking now); the
+    // tooltip carries the mode, rules and last check.
     const icon = state.ticking ? 'sync~spin' : state.mode === 'switch' ? 'sync' : 'eye';
-    const threshold = state.rules?.threshold === undefined ? '' : ` ${formatPercent(state.rules.threshold)}`;
-    this.item.text = `$(${icon}) ${t('Auto')}${state.mode === 'switch' ? threshold : ''}`;
+    this.item.text = `$(${icon})`;
     const rows = [
       { label: t('Mode'), value: modeLabel(state.mode) },
       { label: t('Rules'), value: rulesSummary(state.rules) },

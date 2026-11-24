@@ -40,7 +40,7 @@ describe('custom status bar parts', () => {
 
   it('shows exactly the ticked parts, always in the same order', () => {
     assert.equal(custom(['usage', 'slot', 'icon']), '$(account) #2 · 7d 40%');
-    assert.equal(custom(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), '$(account) #2 · Ultra · ███░░░░░ 7d 40% · ↻ 4d 0h');
+    assert.equal(custom(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), '$(account) #2 · Ultra · ███▎░░░░ 7d 40% · ↻ 4d 0h');
     assert.equal(custom(['bar', 'usage'], { barStyle: 'parallelograms' }), '▰▰▰▱▱▱▱▱ 7d 40%');
     assert.equal(custom(['icon']), '$(account)');
   });
@@ -195,6 +195,6 @@ describe('buildQuickSwitchItems', () => {
       }),
     );
     const item = buildQuickSwitchItems(multi, options()).find((candidate) => candidate.action?.kind === 'account');
-    assert.equal(item?.description, '5h ███░░░ 50%   7d █░░░░░ 20%');
+    assert.equal(item?.description, '5h ███░░░ 50%   7d █▎░░░░ 20%');
   });
 });

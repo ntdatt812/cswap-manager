@@ -135,6 +135,24 @@ describe('L4: the account must not change between confirmation and execution', (
     assert.equal(calls, 0);
   });
 
+  it('trusts a snapshot under 15 s old and switches without re-reading first (speed)', async () => {
+    const refresher = refresherReturning(confirmed);
+    const fresh: AccountsSnapshot = { ...confirmed, capturedAt: 1_000_000 };
+    const service = new SwitchService(
+      { switch: () => Promise.resolve(ok('switch', { switched: true, to: { slot: 3 }, warnings: [] })) },
+      refresher,
+      new OperationGate(),
+      () => 1_000_000 + 5_000,
+    );
+    const outcome = await service.switch({ kind: 'slot', slot: 3 }, fresh);
+    assert.equal(outcome.kind, 'switched');
+    assert.deepEqual(
+      refresher.requests.map((request) => request.trigger),
+      ['post-switch'],
+      'no pre-check, only the verification',
+    );
+  });
+
   it('proceeds when nothing changed', async () => {
     const refresher = refresherReturning(confirmed);
     const service = new ManagementService({ manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());

@@ -55,18 +55,52 @@ export function isBarStyle(value: unknown): value is BarStyle {
   return typeof value === 'string' && (BAR_STYLES as readonly string[]).includes(value);
 }
 
-const BAR_GLYPHS: Record<BarStyle, readonly [filled: string, empty: string]> = {
-  blocks: ['█', '░'],
-  parallelograms: ['▰', '▱'],
-  circles: ['●', '○'],
-  squares: ['■', '□'],
+interface BarGlyphs {
+  readonly full: string;
+  readonly empty: string;
+  /** Partly filled cells, from least to most filled; empty when the style has none. */
+  readonly partial: readonly string[];
+}
+
+const BAR_GLYPHS: Record<BarStyle, BarGlyphs> = {
+  // Eighths: a cell can show 1/8 … 7/8.
+  blocks: { full: '█', empty: '░', partial: ['▏', '▎', '▍', '▌', '▋', '▊', '▉'] },
+  // Unicode has no half parallelogram.
+  parallelograms: { full: '▰', empty: '▱', partial: [] },
+  circles: { full: '●', empty: '○', partial: ['◐'] },
+  squares: { full: '■', empty: '□', partial: ['◧'] },
 };
 
-/** Text progress bar (`cswapManager.display.barStyle`); the CLI value is clamped to 0–100 only for drawing. */
+/**
+ * Text progress bar (`cswapManager.display.barStyle`); the CLI value is clamped to 0–100 only for
+ * drawing. The last cell is drawn partly filled where the style has glyphs for it (eighths for
+ * blocks, halves for dots and squares). Below 100% the bar never looks full, and above 0% it
+ * never looks empty, so a nearly used-up account is not shown as used up.
+ */
 export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks'): string {
-  const [filledGlyph, emptyGlyph] = BAR_GLYPHS[style];
-  const filled = Math.round((clamp(pct, 0, 100) / 100) * width);
-  return filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled);
+  const { full, empty, partial } = BAR_GLYPHS[style];
+  const value = clamp(pct, 0, 100);
+  const cells = (value / 100) * width;
+  const steps = partial.length + 1;
+  let whole = Math.floor(cells);
+  let step = Math.round((cells - whole) * steps);
+  if (step === steps) {
+    whole += 1;
+    step = 0;
+  }
+  if (value < 100 && whole >= width) {
+    whole = width - 1;
+    step = steps - 1;
+  }
+  if (value > 0 && whole === 0 && step === 0) {
+    if (steps > 1) {
+      step = 1;
+    } else {
+      whole = 1;
+    }
+  }
+  const partGlyph = step > 0 ? (partial[step - 1] ?? '') : '';
+  return full.repeat(whole) + partGlyph + empty.repeat(width - whole - (partGlyph === '' ? 0 : 1));
 }
 
 /** Compact duration in the CLI's own style: `4d 0h`, `1h 18m`, `12m`, `<1m`. */

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.0 — 2026-11-24
+- **Redesigned dashboard**, smarter and calmer:
+  - **Suggestions** computed from cswap's own numbers (never a forecast), each with a one-click action: switch before the active account runs out (with when it resets, so waiting can be an option), spend quota that resets soon instead of losing it, no other account can help (with the first reset), logins that need renewing.
+  - Overview cards: **Active account** (usage bars, quick switch), **Quota left** (counted in full accounts across those in rotation) and **Auto-switch** (mode and strategy, with *Set up…*).
+  - Accounts table: slot badges, name and email on one line, usage bar with percentage, problems flagged next to the name only.
+  - **Resets in the next 7 days**: a timeline showing when each account's quota comes back and how much it has left.
+  - Account details: switch button up front, usage meters, plan / account / freshness and *Manage account* folded away (open state remembered).
+  - *Settings* now opens Quick Settings.
+- Faster switching (measured ~0.6–0.9 s less per switch): the check after a switch runs `cswap list` and `cswap status` at the same time, and a switch picked from data under 15 seconds old no longer re-reads the list first. Older data is still re-checked so a slot that changed meanwhile is never switched to.
+- Fixed: after an automatic (or any) switch, other VS Code windows kept showing the old account until they were focused and their next refresh came round. A window that sees the active account change now leaves a small signal (slot number, time and window id only) in the extension's shared storage, and every other window refreshes at once. Windows must run 0.6.0 or later for this.
+- The auto-switch status bar item is icon-only: ⟳ switches automatically, 👁 notify only, spinning while checking. Mode, rules and the last check are in its tooltip.
+- Progress bars are drawn precisely: the last cell is partly filled (eighths for **Blocks**, halves for **Dots** and **Squares**), so 94% shows as `███████▌` instead of a full bar. In every style a bar below 100% never looks full and above 0% never looks empty. **Slanted** has no half glyph in Unicode, so it shows whole cells only.
+
 ## 0.5.1 — 2026-11-24
 - Fixed: right after VS Code auto-updates the extension, the new settings could not be saved and Quick Settings showed a misleading "check your user settings file". VS Code only registers an update's new settings when the window reloads; Quick Settings now detects this, says so up front and offers **Reload Window**. Other save errors show VS Code's own message.
 - All Cswap status bar items (account, auto-switch, buttons) now share one **Cswap Manager** entry in the status bar's right-click menu, which hides or shows them together. Turn single buttons on or off in *Quick Settings › Status bar › Buttons*. If you had hidden the account item from that menu before, it shows again once; hide it there or in Quick Settings.

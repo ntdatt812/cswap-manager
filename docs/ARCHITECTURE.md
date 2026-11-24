@@ -73,6 +73,12 @@ Successful resolutions are cached until the setting changes or a spawn reports `
 - Status bar (`cswapManager.statusBar.mode`: `slotUsage` default, `slot`, `nameUsage`, `hidden`): level icon + warning/error background, `$(history)` when stale, spinner while switching; at most two windows are shown, otherwise the fullest. Account text is sanitized so it cannot inject `$(icon)` syntax; the tooltip is an untrusted Markdown summary.
 - `AutoRefreshController` runs the scheduler while any consumer (Accounts view visible, status bar shown) needs data and the window is focused. The extension activates `onStartupFinished` so the status bar is available without opening the view.
 
+## Dashboard redesign (0.6.0)
+- `dashboardInsights.ts` (pure, unit-tested) builds suggestions, quota left and the reset timeline from the snapshot. Rules use only CLI facts (usage, thresholds, reset times, login expiry): switch when the active account is at the warning/critical line (to the usable account with the most left), "use before reset" for another usable account with ≥25% left resetting within 3 days and before the active one, "no other account can help" with the first reset, re-login due within cswap's 7-day window. Nothing is projected.
+- Quota left = sum of `100 − fullest window %` over accounts in rotation with known usage, shown in full accounts.
+- Collapsible detail sections carry a stable `key`; the webview remembers which are open in its state, so the 30-second re-render does not fold them back.
+- New webview message `openAutoSwitch` (allow-listed); `openSettings` now opens Quick Settings.
+
 ## Dashboard and account detail (Phase 4)
 - `Cswap: Open Dashboard` (view toolbar, palette) opens one editor-tab webview inside VS Code; `Show Account Details` on a tree row opens it focused on that slot.
 - **The host builds everything.** `core/presentation/dashboard.ts` turns the snapshot into a `DashboardModel` (localized strings, levels, tones, facts) defined in `src/shared/dashboardProtocol.ts`, which has no imports so the webview can share it. The webview (`src/webview/dashboard.ts`, bundled to `dist/webview/dashboard.js`) only renders it.
@@ -152,6 +158,10 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - Buttons are separate status bar items right of the account and auto-switch items, shown only while the account item is (so `hidden` still hides everything). All Cswap items are created without an id (0.5.1), so they share the extension's id and appear as one "Cswap Manager" entry in the status bar's context menu. Only actions the status bar cannot otherwise reach are offered: switching is the account item's own click, and filter/sort act on the Accounts view, so they are not buttons.
 - Live preview: `StatusBarController.preview()` overrides the saved look in memory while a picker is open; ending the picker (save, Back, Esc) clears it, so nothing is written until Enter.
 - Navigation: every screen opened from Quick Settings has VS Code's `QuickInputButtons.Back`; Esc (or focus moving away) closes everything, because a hidden QuickPick cannot tell Esc from focus loss.
+
+## Keeping windows in step (0.6.0)
+- Auto-switch runs in one window, and windows only poll while focused, so other windows could show an old account. `CrossWindowSync` writes `active-account.signal.json` (slot, time, `vscode.env.sessionId`; no account data) into global storage when a fresh snapshot shows a different active slot, and watches that file; a signal from another window that disagrees with this window's slot triggers one refresh (`trigger: 'external'`). The decision logic (`ActiveSlotTracker`) only writes on a real change after the first load and ignores its own echo, so windows cannot ping-pong.
+- Settings changes already reach every window through VS Code, but only windows running the same extension version understand new settings: after an update each window needs its extension host restarted.
 
 ## Auto-switch security review (0.3.1)
 An independent read-only review of the 0.3.0 auto-switch code found 1 medium, 7 low and 6 info issues (no critical/high). All are fixed, each with a regression test in `test/unit/autoSwitch.test.ts`:

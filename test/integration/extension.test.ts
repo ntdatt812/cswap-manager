@@ -3,6 +3,7 @@
  * cswap with read-only commands and are skipped when the CLI is not available.
  */
 import * as assert from 'node:assert/strict';
+import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import type { TestApi } from '../../src/extension';
 
@@ -219,7 +220,7 @@ suite('Cswap Manager (extension host)', () => {
       await config().update('statusBar.mode', 'custom', vscode.ConfigurationTarget.Global);
       await config().update('statusBar.buttons', ['refresh', 'dashboard'], vscode.ConfigurationTarget.Global);
       const state = api.statusBar.currentState();
-      assert.match(state.text ?? '', /^#\d+( · [●○]{8})?$/, state.text);
+      assert.match(state.text ?? '', /^#\d+( · [●◐○]{8})?$/, state.text);
       assert.deepEqual(state.buttons, ['refresh', 'dashboard']);
       api.statusBar.preview({ parts: [] });
       assert.equal(api.statusBar.currentState().text, undefined, 'previewing nothing hides the item');
@@ -283,6 +284,23 @@ suite('Cswap Manager (extension host)', () => {
     const missing = contributed.filter((key) => config.inspect(key)?.defaultValue === undefined);
     assert.deepEqual(missing, []);
     assert.equal(vscode.workspace.getConfiguration('cswapManager').inspect('not.a.setting')?.defaultValue, undefined);
+  });
+
+  test("refreshes when another window reports a different active account", async function () {
+    const first = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
+    if (!first.ok) {
+      this.skip();
+      return;
+    }
+    const shown = first.snapshot.active.slot ?? 0;
+    const before = api.refreshService.getState().lastAttemptAt ?? 0;
+    await fs.writeFile(api.crossWindow.file, JSON.stringify({ slot: shown + 1000, at: Date.now(), origin: 'another-window' }), 'utf8');
+    let refreshed = false;
+    for (let attempt = 0; attempt < 60 && !refreshed; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      refreshed = (api.refreshService.getState().lastAttemptAt ?? 0) > before;
+    }
+    assert.ok(refreshed, 'a signal from another window triggers a refresh');
   });
 
   test('runs auto-switch in notify mode with real dry runs only (never switches)', async function () {

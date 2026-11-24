@@ -43,7 +43,11 @@ Switches are confirmed by default; choose **Switch, don't ask again** in the dia
 Switching does not interrupt running Claude Code sessions: cswap replaces the stored login and Claude Code picks it up by itself on its next request, with no restart (per cswap; on macOS with the Keychain this can take up to ~30 seconds).
 
 ### Dashboard
-**Cswap: Open Dashboard** opens a tab inside VS Code with a summary, a searchable and sortable account table, and full details for the selected account (all usage windows, pace and forecast when cswap provides them, last known usage, plan, settings and freshness).
+**Cswap: Open Dashboard** opens a tab inside VS Code with:
+- **Suggestions** with one-click actions, computed from cswap's numbers only: switch before the active account runs out, use quota that resets soon before it is lost, renew logins.
+- **Active account**, **Quota left** (in full accounts) and **Auto-switch** cards.
+- A searchable, sortable account table and a **7-day reset timeline**.
+- Full details for the selected account (all usage windows, pace and forecast when cswap provides them, last known usage), with plan, settings, freshness and account management folded away.
 
 ### Managing accounts
 From the account's right-click menu, **Cswap: Manage Account…**, or the dashboard:

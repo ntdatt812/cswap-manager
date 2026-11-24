@@ -68,7 +68,7 @@ describe('buildAccountNodes', () => {
     assert.equal(window?.description, '████░░░░░░ 40% · resets in 4d 0h');
     const scope = child(bob, ':scope:0:ModelA');
     assert.equal(scope?.label, 'ModelA');
-    assert.equal(scope?.description, '░░░░░░░░░░ 1% · resets in 4d 0h');
+    assert.equal(scope?.description, '▏░░░░░░░░░ 1% · resets in 4d 0h');
   });
 
   it('shows pace fields only when the CLI supplies them', () => {

@@ -25,11 +25,15 @@ export interface Meter {
 }
 
 export interface DetailSection {
+  /** Stable key (e.g. "plan"), used to remember whether a collapsible section is open. */
+  readonly key: string;
   readonly title: string;
   readonly note?: string;
   readonly noteTone?: Tone;
   readonly meters: readonly Meter[];
   readonly facts: readonly Fact[];
+  /** Reference information shown folded by default. */
+  readonly collapsible?: boolean;
 }
 
 export interface Badge {
@@ -78,16 +82,58 @@ export interface DashboardRow {
   readonly resetEpoch?: number;
   readonly statusText: string;
   readonly statusTone: Tone;
+  /** Status worth flagging next to the name (disabled, re-login, …); undefined when all is well. */
+  readonly flag?: { readonly text: string; readonly tone: Tone };
   /** Lower-cased text the search box matches against. */
   readonly searchText: string;
   readonly detail: AccountDetail;
 }
 
-export interface SummaryCard {
-  readonly label: string;
+/** A suggestion computed from cswap's data (never a forecast), optionally with a one-click switch. */
+export interface Insight {
+  readonly id: 'switch-now' | 'use-before-reset' | 'all-limited' | 'relogin' | 'all-good';
+  readonly tone: Tone;
+  readonly title: string;
+  readonly text: string;
+  readonly switchSlot?: number;
+  readonly actionLabel?: string;
+}
+
+export interface ActiveOverview {
+  readonly slot: number;
+  readonly name: string;
+  readonly secondary?: string;
+  readonly plan?: string;
+  readonly meters: readonly Meter[];
+  readonly flag?: { readonly text: string; readonly tone: Tone };
+  readonly level: Level;
+}
+
+export interface CapacityOverview {
+  /** e.g. "3.1 / 5": quota left counted in full accounts, out of the accounts counted. */
+  readonly value: string;
+  readonly caption: string;
+  readonly detail?: string;
+  /** Share of all counted quota still left, 0–100. */
+  readonly pct: number;
+  readonly level: Level;
+}
+
+export interface AutoSwitchOverview {
   readonly value: string;
   readonly detail?: string;
   readonly tone: Tone;
+}
+
+export interface TimelineItem {
+  readonly slot: number;
+  readonly name: string;
+  readonly active: boolean;
+  readonly whenText: string;
+  /** Position of the reset on the timeline, 0–100. */
+  readonly position: number;
+  readonly remainingText: string;
+  readonly level: Level;
 }
 
 export interface DashboardStrings {
@@ -98,6 +144,18 @@ export interface DashboardStrings {
   readonly switchNext: string;
   readonly settings: string;
   readonly diagnostics: string;
+  readonly suggestions: string;
+  readonly activeHeading: string;
+  readonly capacityHeading: string;
+  readonly autoSwitchHeading: string;
+  readonly configureAutoSwitch: string;
+  readonly timelineHeading: string;
+  readonly timelineStart: string;
+  readonly timelineEnd: string;
+  readonly timelineEmpty: string;
+  readonly manageHeading: string;
+  readonly activeBadge: string;
+  readonly noActive: string;
   readonly searchLabel: string;
   readonly searchPlaceholder: string;
   readonly accountsHeading: string;
@@ -122,7 +180,15 @@ export interface DashboardModel {
   readonly state: DashboardState;
   readonly message?: string;
   readonly messageTone?: Tone;
-  readonly summary: readonly SummaryCard[];
+  /** "updated 2m ago", "stale", "loading…" — shown next to the title. */
+  readonly freshnessText: string;
+  readonly freshnessTone: Tone;
+  readonly insights: readonly Insight[];
+  readonly activeOverview?: ActiveOverview;
+  readonly capacity?: CapacityOverview;
+  readonly autoSwitch?: AutoSwitchOverview;
+  /** Next resets within the timeline horizon, soonest first. */
+  readonly timeline: readonly TimelineItem[];
   readonly rows: readonly DashboardRow[];
   /** A refresh or switch is running; action buttons are disabled. */
   readonly busy: boolean;
@@ -144,4 +210,5 @@ export type WebviewToHost =
   | { readonly type: 'switchStrategy'; readonly strategy: SwitchStrategyName }
   | { readonly type: 'manageAccount'; readonly action: AccountActionId; readonly slot: number }
   | { readonly type: 'openSettings' }
+  | { readonly type: 'openAutoSwitch' }
   | { readonly type: 'showDiagnostics' };

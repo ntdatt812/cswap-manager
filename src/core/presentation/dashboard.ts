@@ -1,5 +1,7 @@
 import type {
   AccountDetail,
+  ActiveOverview,
+  AutoSwitchOverview,
   Badge,
   DashboardModel,
   DashboardRow,
@@ -7,9 +9,9 @@ import type {
   DetailSection,
   Fact,
   Meter,
-  SummaryCard,
   Tone,
 } from '../../shared/dashboardProtocol';
+import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { CliError } from '../cli/cliErrors';
 import type { Account, AccountUsage, AccountsSnapshot, UsageMetrics } from '../model/types';
 import type { AccountsState, FreshnessAssessment } from '../service/refreshService';
@@ -22,14 +24,20 @@ import {
   type PresentationOptions,
   type Translate,
 } from './accountTree';
-import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageLevel, windowLabel, worstLevel, type UsageLevel } from './format';
+import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageLevel, windowLabel } from './format';
 import { accountActions } from './accountActions';
+import { buildCapacity, buildInsights, buildTimeline } from './dashboardInsights';
+import { autoSwitchModeLabel, autoSwitchStrategyLabel } from './quickSettings';
 import { usageStatusText, usageStatusTone } from './usageStatus';
 
 export interface DashboardOptions extends PresentationOptions {
   readonly freshness: FreshnessAssessment;
   readonly switching: boolean;
   readonly describeError: (error: CliError) => string;
+  /** Auto-switch mode and cswap strategy, for the overview card. */
+  readonly autoSwitch?: { readonly mode: AutoSwitchMode; readonly strategy: string | undefined };
+  /** Locale-aware number with one decimal. */
+  readonly formatDecimal?: (value: number) => string;
 }
 
 const TONE_RANK: Record<Tone, number> = { ok: 0, neutral: 1, active: 2, warning: 3, error: 4 };
@@ -38,19 +46,27 @@ function worstTone(tones: readonly Tone[], fallback: Tone): Tone {
   return tones.reduce<Tone>((worst, tone) => (TONE_RANK[tone] > TONE_RANK[worst] ? tone : worst), fallback);
 }
 
-function levelTone(level: UsageLevel): Tone {
-  return level === 'critical' ? 'error' : level === 'warning' ? 'warning' : level === 'normal' ? 'ok' : 'neutral';
-}
-
 export function dashboardStrings(t: Translate): DashboardStrings {
   return {
     title: t('Cswap Dashboard'),
     summary: t('Summary'),
     refresh: t('Refresh'),
-    switchBest: t('Switch to most headroom'),
-    switchNext: t('Switch to next available'),
+    switchBest: t('Most headroom'),
+    switchNext: t('Next available'),
     settings: t('Settings'),
     diagnostics: t('Diagnostics'),
+    suggestions: t('Suggestions'),
+    activeHeading: t('Active account'),
+    capacityHeading: t('Quota left'),
+    autoSwitchHeading: t('Auto-switch'),
+    configureAutoSwitch: t('Set up…'),
+    timelineHeading: t('Resets in the next 7 days'),
+    timelineStart: t('now'),
+    timelineEnd: t('+7 days'),
+    timelineEmpty: t('No reset in the next 7 days.'),
+    manageHeading: t('Manage account'),
+    activeBadge: t('Active'),
+    noActive: t('The active account is unknown.'),
     searchLabel: t('Search accounts'),
     searchPlaceholder: t('Slot, email, alias, plan or status'),
     accountsHeading: t('Accounts'),
@@ -185,6 +201,7 @@ function usageSection(account: Account, options: PresentationOptions): DetailSec
     notes.push(t('cswap did not report usage for this account.'));
   }
   sections.push({
+    key: 'usage',
     title: t('Usage'),
     ...(notes.length > 0 ? { note: notes.join(' '), noteTone: account.usage === undefined ? 'warning' : 'neutral' } : {}),
     meters: account.usage === undefined ? [] : usageMeters('', account.usage, options),
@@ -200,6 +217,7 @@ function usageSection(account: Account, options: PresentationOptions): DetailSec
           ? relativeAge(options.now - fetched, t)
           : t('an unknown time ago');
     sections.push({
+      key: 'lastGood',
       title: t('Last known usage'),
       note: t('Measured {0}; this is not current data.', age),
       noteTone: 'warning',
@@ -230,7 +248,7 @@ function planSection(account: Account, options: PresentationOptions): DetailSect
   add(t('Expired'), plan.expired === undefined ? undefined : plan.expired ? t('yes') : t('no'));
   const fetched = epochOf(plan.fetchedAt);
   add(t('Plan info fetched'), fetched === undefined ? undefined : dateWithAge(fetched, options));
-  return { title: t('Plan'), meters: [], facts };
+  return { key: 'plan', title: t('Plan'), meters: [], facts, collapsible: true };
 }
 
 function accountSection(account: Account, options: PresentationOptions): DetailSection {
@@ -251,7 +269,7 @@ function accountSection(account: Account, options: PresentationOptions): DetailS
   if (account.threshold !== undefined) {
     facts.push({ label: t('Switch threshold'), value: t('{0} (account override)', formatPercent(account.threshold)) });
   }
-  return { title: t('Account'), meters: [], facts };
+  return { key: 'account', title: t('Account'), meters: [], facts, collapsible: true };
 }
 
 function freshnessSection(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions): DetailSection {
@@ -272,7 +290,7 @@ function freshnessSection(account: Account, snapshot: AccountsSnapshot, options:
     });
   }
   facts.push({ label: t('Read from cswap'), value: relativeAge(options.now - snapshot.capturedAt, t) });
-  return { title: t('Freshness'), meters: [], facts };
+  return { key: 'freshness', title: t('Freshness'), meters: [], facts, collapsible: true };
 }
 
 export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot, options: DashboardOptions): AccountDetail {
@@ -316,6 +334,8 @@ function buildRow(account: Account, snapshot: AccountsSnapshot, options: Dashboa
   const { t, now } = options;
   const active = snapshot.active.slot === account.slot;
   const status = statusOf(account, active, t);
+  // The same status without "Active": only problems are flagged next to the name.
+  const problems = statusOf(account, false, t);
   const metrics: UsageMetrics[] = [...(account.usage?.windows ?? []), ...(account.usage?.scoped ?? [])];
   const futureResets = metrics.map((entry) => epochOf(entry.resetsAt)).filter((epoch): epoch is number => epoch !== undefined && epoch > now);
   const resetEpoch = futureResets.length === 0 ? undefined : Math.min(...futureResets);
@@ -343,69 +363,54 @@ function buildRow(account: Account, snapshot: AccountsSnapshot, options: Dashboa
     ...(resetEpoch === undefined ? {} : { resetEpoch, resetText: t('in {0}', compactDuration(resetEpoch - now)) }),
     statusText: status.text,
     statusTone: status.tone,
+    ...(problems.tone === 'ok' ? {} : { flag: { text: problems.text, tone: problems.tone } }),
     searchText,
     detail: buildAccountDetail(account, snapshot, options),
   };
 }
 
-function summaryCards(state: AccountsState, options: DashboardOptions): SummaryCard[] {
+function freshnessOf(state: AccountsState, options: DashboardOptions): { text: string; tone: Tone } {
   const { t } = options;
-  const snapshot = state.snapshot;
-  const dataCard = ((): SummaryCard => {
-    if (snapshot === undefined) {
-      return state.lastError
-        ? { label: t('Data'), value: t('Error'), detail: options.describeError(state.lastError), tone: 'error' }
-        : { label: t('Data'), value: t('Loading…'), tone: 'neutral' };
-    }
-    const updated = state.lastSuccessAt === undefined ? undefined : t('updated {0}', relativeAge(options.now - state.lastSuccessAt, t));
-    if (options.freshness.freshness === 'stale') {
-      const detail = state.lastError ? `${t('Last refresh failed.')} ${updated ?? ''}`.trim() : updated;
-      return { label: t('Data'), value: t('Stale'), ...(detail ? { detail } : {}), tone: 'warning' };
-    }
-    return { label: t('Data'), value: t('Fresh'), ...(updated ? { detail: updated } : {}), tone: 'ok' };
-  })();
-  if (snapshot === undefined) {
-    return [dataCard];
+  if (state.snapshot === undefined) {
+    return state.lastError ? { text: t('Error'), tone: 'error' } : { text: t('Loading…'), tone: 'neutral' };
   }
+  const updated = state.lastSuccessAt === undefined ? t('Fresh') : t('updated {0}', relativeAge(options.now - state.lastSuccessAt, t));
+  if (options.freshness.freshness === 'stale') {
+    return { text: state.lastError ? `${t('Stale')} · ${t('Last refresh failed.')}` : `${t('Stale')} · ${updated}`, tone: 'warning' };
+  }
+  return { text: updated, tone: 'ok' };
+}
 
-  const disabled = snapshot.accounts.filter((account) => account.disabled === true).length;
-  const levels = snapshot.accounts.map((account) => accountLevel(account, options.thresholds));
-  const count = (level: UsageLevel): number => levels.filter((candidate) => candidate === level).length;
-  const unavailable = snapshot.accounts.filter((account) => hasUnavailableUsage(account) || account.usage === undefined).length;
-  const usageParts = [
-    count('critical') > 0 ? t('{0} critical', count('critical')) : undefined,
-    count('warning') > 0 ? t('{0} warning', count('warning')) : undefined,
-    count('normal') > 0 ? t('{0} OK', count('normal')) : undefined,
-  ].filter((part): part is string => part !== undefined);
-  const worst = worstLevel(levels);
+function activeOverview(snapshot: AccountsSnapshot, options: DashboardOptions): ActiveOverview | undefined {
+  const { t } = options;
+  const account = snapshot.accounts.find((candidate) => candidate.slot === snapshot.active.slot);
+  if (account === undefined) {
+    return undefined;
+  }
+  const problems = statusOf(account, false, t);
+  const plan = account.plan?.displayName ?? account.plan?.label;
+  return {
+    slot: account.slot,
+    name: accountName(account, t),
+    ...(account.alias !== undefined && account.email !== undefined ? { secondary: account.email } : {}),
+    ...(plan === undefined ? {} : { plan }),
+    meters: account.usage === undefined ? [] : usageMeters('active:', account.usage, options),
+    ...(problems.tone === 'ok' ? {} : { flag: { text: problems.text, tone: problems.tone } }),
+    level: accountLevel(account, options.thresholds),
+  };
+}
 
-  const active = snapshot.accounts.find((account) => account.slot === snapshot.active.slot);
-  const activeCard: SummaryCard =
-    active === undefined
-      ? {
-          label: t('Active account'),
-          value: t('Unknown'),
-          detail: snapshot.active.activeUnmanaged ? t('The current Claude login is not managed by cswap.') : t('list and status did not agree.'),
-          tone: 'warning',
-        }
-      : { label: t('Active account'), value: `#${active.slot}`, detail: accountName(active, t), tone: 'active' };
-
-  return [
-    {
-      label: t('Accounts'),
-      value: String(snapshot.accounts.length),
-      ...(disabled > 0 ? { detail: t('{0} disabled', disabled) } : {}),
-      tone: 'neutral',
-    },
-    activeCard,
-    {
-      label: t('Usage'),
-      value: usageParts.length > 0 ? usageParts.join(' · ') : t('No data'),
-      ...(unavailable > 0 ? { detail: t('{0} without current usage', unavailable) } : {}),
-      tone: usageParts.length > 0 ? levelTone(worst) : 'neutral',
-    },
-    dataCard,
-  ];
+function autoSwitchOverview(options: DashboardOptions): AutoSwitchOverview | undefined {
+  const auto = options.autoSwitch;
+  if (auto === undefined) {
+    return undefined;
+  }
+  const { t } = options;
+  return {
+    value: autoSwitchModeLabel(auto.mode, t),
+    ...(auto.mode === 'off' ? { detail: t('Switch by hand, or let cswap do it for you.') } : { detail: autoSwitchStrategyLabel(auto.strategy, t) }),
+    tone: auto.mode === 'switch' ? 'ok' : auto.mode === 'notify' ? 'active' : 'neutral',
+  };
 }
 
 export function buildDashboardModel(state: AccountsState, options: DashboardOptions): DashboardModel {
@@ -413,12 +418,20 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
   const snapshot = state.snapshot;
   const busy = state.refreshing || options.switching;
   const strings = dashboardStrings(t);
-  const summary = summaryCards(state, options);
+  const freshness = freshnessOf(state, options);
+  const autoSwitch = autoSwitchOverview(options);
+  const common = {
+    freshnessText: freshness.text,
+    freshnessTone: freshness.tone,
+    ...(autoSwitch === undefined ? {} : { autoSwitch }),
+    busy,
+    strings,
+  };
 
   if (snapshot === undefined) {
     return state.lastError
-      ? { state: 'error', message: options.describeError(state.lastError), messageTone: 'error', summary, rows: [], busy, canSwitch: false, strings }
-      : { state: 'loading', summary, rows: [], busy, canSwitch: false, strings };
+      ? { state: 'error', message: options.describeError(state.lastError), messageTone: 'error', ...common, insights: [], timeline: [], rows: [], canSwitch: false }
+      : { state: 'loading', ...common, insights: [], timeline: [], rows: [], canSwitch: false };
   }
   const rows = [...snapshot.accounts].sort((a, b) => a.slot - b.slot).map((account) => buildRow(account, snapshot, options));
   if (rows.length === 0) {
@@ -426,22 +439,26 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
       state: 'empty',
       message: t('cswap is not managing any accounts yet. Add one with `cswap add` in a terminal, then refresh.'),
       messageTone: 'neutral',
-      summary,
+      ...common,
+      insights: [],
+      timeline: [],
       rows,
-      busy,
       canSwitch: false,
-      strings,
     };
   }
   const view = describeView(state, { now: options.now, t, freshness: options.freshness, visibleCount: rows.length, describeError: options.describeError });
   const stale = options.freshness.freshness === 'stale';
+  const active = activeOverview(snapshot, options);
+  const capacity = buildCapacity(snapshot, options);
   return {
     state: 'ready',
     ...(view.message === undefined ? {} : { message: view.message, messageTone: stale ? 'warning' : 'neutral' }),
-    summary,
+    ...common,
+    insights: buildInsights(snapshot, options),
+    ...(active === undefined ? {} : { activeOverview: active }),
+    ...(capacity === undefined ? {} : { capacity }),
+    timeline: buildTimeline(snapshot, options),
     rows,
-    busy,
     canSwitch: !options.switching,
-    strings,
   };
 }

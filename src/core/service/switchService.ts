@@ -55,6 +55,9 @@ export function verifyActive(refresh: RefreshResult, expectedSlot: number | unde
  * Runs one switch at a time and always follows it with a fresh, status-verified refresh, so the
  * UI reports what the CLI state actually is rather than what the switch command claimed.
  */
+/** A snapshot this recent is trusted as what the user confirmed, without re-reading it. */
+export const CONFIRMED_FRESH_MS = 15_000;
+
 export class SwitchService implements Disposable {
   private readonly changed = new Emitter<boolean>();
   /** Fires `true` when a switch starts and `false` when it (and its verification) finishes. */
@@ -66,6 +69,7 @@ export class SwitchService implements Disposable {
     private readonly refresher: SwitchRefresher,
     /** Shared with account-management operations so no two cswap mutations overlap. */
     private readonly gate: OperationGate = new OperationGate(),
+    private readonly now: () => number = Date.now,
   ) {}
 
   isSwitching(): boolean {
@@ -81,7 +85,9 @@ export class SwitchService implements Disposable {
       this.running = true;
       this.changed.fire(true);
       try {
-        if (confirmedWith !== undefined && target.kind === 'slot') {
+        // Re-read first only when what the user picked from is not fresh; slot contents only change
+        // through rare account management, and this check costs a full cswap list (~0.6 s).
+        if (confirmedWith !== undefined && target.kind === 'slot' && this.now() - confirmedWith.capturedAt > CONFIRMED_FRESH_MS) {
           const fresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true });
           if (fresh.ok && !sameAccountsAt(confirmedWith, fresh.snapshot, [target.slot])) {
             return { kind: 'rejected', reason: 'account-changed' };

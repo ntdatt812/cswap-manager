@@ -55,6 +55,21 @@ describe('RefreshService', () => {
     assert.equal(assessFreshness(state, 5000).freshness, 'fresh');
   });
 
+  it('verifies with list and status at the same time, not one after the other', async () => {
+    const cli = new ScriptedCli();
+    const pendingList = deferred<CliOutcome<ListPayload>>();
+    cli.listQueue.push(pendingList);
+    const service = new RefreshService({ cli });
+    const running = service.refresh({ trigger: 'post-switch', verifyActive: true });
+    await Promise.resolve();
+    assert.equal(cli.statusCalls, 1, 'status already started while list is still running');
+    pendingList.resolve(ok('list', listPayload()));
+    const result = await running;
+    assert.ok(result.ok);
+    assert.equal(cli.listCalls, 1);
+    assert.equal(cli.statusCalls, 1);
+  });
+
   it('calls status when verification is requested or the list is ambiguous', async () => {
     const cli = new ScriptedCli();
     const service = new RefreshService({ cli });

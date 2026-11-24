@@ -16,6 +16,7 @@ import { DashboardController } from './vscode/dashboardPanel';
 import { configureLocalization } from './vscode/l10n';
 import { Logger } from './vscode/logger';
 import { describeCliError } from './vscode/messages';
+import { CrossWindowSync } from './vscode/crossWindowSync';
 import { StatusBarController } from './vscode/statusBarController';
 
 /** Exposed only when running under the extension test harness. */
@@ -27,6 +28,7 @@ export interface TestApi {
   readonly dashboard: DashboardController;
   readonly autoSwitch: AutoSwitchController;
   readonly statusBar: StatusBarController;
+  readonly crossWindow: CrossWindowSync;
 }
 
 export function activate(context: vscode.ExtensionContext): TestApi | undefined {
@@ -62,8 +64,10 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const accountsView = new AccountsView({ refreshService, configuration, autoRefresh, describeError: describeCliError });
   const statusBar = new StatusBarController({ refreshService, switchService, configuration, autoRefresh, describeError: describeCliError });
   const autoSwitch = new AutoSwitchController({ context, cli, gate, refreshService, switchService, configuration, logger, homeDir });
+  const crossWindow = new CrossWindowSync(context.globalStorageUri, refreshService, logger);
   const dashboard = new DashboardController({
     extensionUri: context.extensionUri,
+    autoSwitch: autoSwitch.service,
     refreshService,
     switchService,
     managementService,
@@ -85,6 +89,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     statusBar,
     dashboard,
     autoSwitch,
+    crossWindow,
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.cliPath`)) {
         resolver.invalidate();
@@ -95,7 +100,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, homeDir }),
   );
 
-  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar } : undefined;
+  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow } : undefined;
 }
 
 export function deactivate(): void {
