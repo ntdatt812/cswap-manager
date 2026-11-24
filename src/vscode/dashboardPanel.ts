@@ -154,8 +154,8 @@ export class DashboardController implements vscode.Disposable {
           this.deps.logger.warn('Ignored a dashboard account action for an unknown slot.');
           return false;
         }
-        const { refreshService, managementService, gate, homeDir } = this.deps;
-        void runAccountAction({ refreshService, managementService, gate, homeDir }, message.action, message.slot);
+        const { refreshService, managementService, gate, configuration, homeDir } = this.deps;
+        void runAccountAction({ refreshService, managementService, gate, configuration, homeDir }, message.action, message.slot);
         return true;
       }
       case 'openSettings':

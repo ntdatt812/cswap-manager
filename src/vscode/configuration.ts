@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import type { CliRunSettings } from '../core/cli/cswapCli';
+import { cleanDisplayName, displayNameKey } from '../core/model/displayNames';
+import type { Account } from '../core/model/types';
 import { isBarStyle, isSortOrder, normalizeThresholds, type BarStyle, type SortOrder, type UsageThresholds } from '../core/presentation/format';
 import { isLanguageSetting, type LanguageSetting } from '../core/presentation/quickSettings';
 import {
@@ -146,6 +148,31 @@ export class ExtensionConfiguration {
     await this.config.update('confirmSwitch', confirm, vscode.ConfigurationTarget.Global);
   }
 
+  /** Saved display names, keyed by `displayNameKey`; anything malformed is ignored. */
+  displayNameMap(): Record<string, string> {
+    const value = this.config.get<unknown>('displayNames');
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return {};
+    }
+    return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, string] => /^[0-9a-f]{16}$/.test(entry[0]) && typeof entry[1] === 'string'));
+  }
+
+  /** Saves (or with an empty name removes) an account's display name in user settings. */
+  async setDisplayName(account: Account, name: string): Promise<void> {
+    const key = displayNameKey(account);
+    if (key === undefined) {
+      return;
+    }
+    const names = { ...this.displayNameMap() };
+    const cleaned = cleanDisplayName(name);
+    if (cleaned === '') {
+      delete names[key];
+    } else {
+      names[key] = cleaned;
+    }
+    await this.setUserSetting('displayNames', names);
+  }
+
   /**
    * Settings this window does not know. After VS Code auto-updates the extension it restarts the
    * extension host with the new code, but settings added by the update stay unregistered until the
@@ -192,5 +219,6 @@ export const USER_SETTING_KEYS = [
   'sidebar.sortOrder',
   'commandTimeoutSeconds',
   'refreshIntervalSeconds',
+  'displayNames',
 ] as const;
 export type UserSettingKey = (typeof USER_SETTING_KEYS)[number];

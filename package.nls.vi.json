@@ -64,5 +64,7 @@
   "config.statusBarColors.text": "Chỉ tô màu biểu tượng và chữ.",
   "config.statusBarColors.none": "Không tô màu.",
   "config.statusBarButtons.description": "Các nút hiện cạnh tài khoản trên thanh trạng thái: `refresh` (làm mới), `dashboard` (bảng điều khiển) và `settings` (Cài đặt nhanh).",
-  "config.barStyle.description": "Kiểu của mọi thanh tiến trình mức dùng: ở sidebar, khung chọn tài khoản và thanh trạng thái."
+  "config.barStyle.description": "Kiểu của mọi thanh tiến trình mức dùng: ở sidebar, khung chọn tài khoản và thanh trạng thái.",
+  "command.setDisplayName.title": "Đặt tên hiển thị…",
+  "config.displayNames.description": "Tên hiển thị thay cho bí danh hoặc email (cho phép chữ hoa, dấu cách, tiếng Việt). Đặt bằng thao tác **Đặt tên hiển thị…** của tài khoản; tên chỉ lưu trong VS Code, không gửi cho cswap. Khoá là mã băm ngắn để nhận ra tài khoản mà không lưu email."
 }

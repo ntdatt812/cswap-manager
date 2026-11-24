@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -181,6 +181,11 @@
         "category": "Cswap"
       },
       {
+        "command": "cswapManager.setDisplayName",
+        "title": "%command.setDisplayName.title%",
+        "category": "Cswap"
+      },
+      {
         "command": "cswapManager.setAlias",
         "title": "%command.setAlias.title%",
         "category": "Cswap"
@@ -294,6 +299,10 @@
           "when": "false"
         },
         {
+          "command": "cswapManager.setDisplayName",
+          "when": "false"
+        },
+        {
           "command": "cswapManager.setAlias",
           "when": "false"
         },
@@ -342,6 +351,11 @@
           "command": "cswapManager.showAccountDetails",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
           "group": "1_switch@2"
+        },
+        {
+          "command": "cswapManager.setDisplayName",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@0"
         },
         {
           "command": "cswapManager.setAlias",
@@ -566,6 +580,17 @@
           ],
           "order": 8.1,
           "markdownDescription": "%config.barStyle.description%"
+        },
+        "cswapManager.displayNames": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "scope": "application",
+          "order": 8.5,
+          "markdownDescription": "%config.displayNames.description%"
         },
         "cswapManager.commandTimeoutSeconds": {
           "type": "number",

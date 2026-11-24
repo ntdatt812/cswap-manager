@@ -85,6 +85,8 @@ export interface AccountFields {
 /** An account managed by cswap. `slot` (the CLI's `number`) is the identity used for ordering. */
 export interface Account extends AccountFields {
   readonly slot: number;
+  /** Name the user gave the account in VS Code (never from or sent to cswap). */
+  readonly displayName?: string;
 }
 
 /** `status.active` may describe an unmanaged login, so its slot is optional. */

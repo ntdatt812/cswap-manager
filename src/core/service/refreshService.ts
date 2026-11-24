@@ -69,6 +69,8 @@ export function assessFreshness(state: AccountsState, now: number, staleAfterMs 
 export interface RefreshServiceOptions {
   readonly cli: AccountsCli;
   readonly now?: () => number;
+  /** Adds extension-side data (display names) to every snapshot. */
+  readonly decorate?: (snapshot: AccountsSnapshot) => AccountsSnapshot;
 }
 
 interface FollowUp {
@@ -99,6 +101,22 @@ export class RefreshService implements Disposable {
 
   getState(): AccountsState {
     return this.state;
+  }
+
+  /** Re-applies `decorate` to the current snapshot (e.g. a display name changed); no CLI call. */
+  redecorate(): void {
+    const snapshot = this.state.snapshot;
+    if (snapshot === undefined) {
+      return;
+    }
+    const next = this.decorate(snapshot);
+    if (next !== snapshot) {
+      this.update({ ...this.state, snapshot: next });
+    }
+  }
+
+  private decorate(snapshot: AccountsSnapshot): AccountsSnapshot {
+    return this.options.decorate === undefined ? snapshot : this.options.decorate(snapshot);
   }
 
   refresh(request: RefreshRequest): Promise<RefreshResult> {
@@ -180,7 +198,7 @@ export class RefreshService implements Disposable {
     }
 
     const completedAt = this.now();
-    const snapshot = buildSnapshot(list.value, status, completedAt);
+    const snapshot = this.decorate(buildSnapshot(list.value, status, completedAt));
     this.update({
       snapshot,
       lastSuccessAt: completedAt,

@@ -133,6 +133,9 @@ function tooltipFor(account: Account | undefined, state: AccountsState, options:
 
   if (account !== undefined && snapshot !== undefined) {
     rows.push({ label: t('Slot'), value: String(account.slot) });
+    if (account.displayName !== undefined) {
+      rows.push({ label: t('Display name'), value: account.displayName });
+    }
     if (account.alias !== undefined) {
       rows.push({ label: t('Alias'), value: account.alias });
     }

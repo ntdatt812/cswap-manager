@@ -208,6 +208,7 @@ export function matchesFilter(account: Account, query: string): boolean {
     `#${account.slot}`,
     account.email,
     account.alias,
+    account.displayName,
     account.organizationName,
     account.plan?.label,
     account.plan?.displayName,

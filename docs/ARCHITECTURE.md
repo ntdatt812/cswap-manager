@@ -159,6 +159,10 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - Live preview: `StatusBarController.preview()` overrides the saved look in memory while a picker is open; ending the picker (save, Back, Esc) clears it, so nothing is written until Enter.
 - Navigation: every screen opened from Quick Settings has VS Code's `QuickInputButtons.Back`; Esc (or focus moving away) closes everything, because a hidden QuickPick cannot tell Esc from focus loss.
 
+## Display names (0.7.0)
+- cswap aliases are lower-case ASCII by design (`models.normalize_alias`: they are command identifiers). Free-form names live in the extension: `cswapManager.displayNames` (application scope) maps a 16-hex SHA-256 prefix of `email|organizationUuid` to a name, so names follow accounts across slot moves and settings.json holds no email.
+- `RefreshService` takes a `decorate` hook that adds `displayName` to every snapshot; a settings change calls `redecorate()`, which re-applies names without running cswap. `accountName` prefers the display name, then the alias, then the email.
+
 ## Keeping windows in step (0.6.0)
 - Auto-switch runs in one window, and windows only poll while focused, so other windows could show an old account. `CrossWindowSync` writes `active-account.signal.json` (slot, time, `vscode.env.sessionId`; no account data) into global storage when a fresh snapshot shows a different active slot, and watches that file; a signal from another window that disagrees with this window's slot triggers one refresh (`trigger: 'external'`). The decision logic (`ActiveSlotTracker`) only writes on a real change after the first load and ignores its own echo, so windows cannot ping-pong.
 - Settings changes already reach every window through VS Code, but only windows running the same extension version understand new settings: after an update each window needs its extension host restarted.

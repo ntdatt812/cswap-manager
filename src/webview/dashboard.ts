@@ -264,41 +264,39 @@ function activeCard(current: DashboardModel, active: ActiveOverview | undefined)
   ]);
 }
 
-function capacityCard(current: DashboardModel, capacity: CapacityOverview | undefined): HTMLElement | undefined {
+function capacityItem(current: DashboardModel, capacity: CapacityOverview | undefined): HTMLElement | undefined {
   if (capacity === undefined) {
     return undefined;
   }
   // The bar shows what is left, so its colour follows how little remains.
-  return el('div', { className: 'card capacity-card' }, [
-    el('div', { className: 'card-label', text: current.strings.capacityHeading }),
-    el('div', { className: 'big-value', text: capacity.value }),
-    el('div', { className: 'muted', text: capacity.caption }),
-    bar(current.strings.capacityHeading, capacity.pct, capacity.level, `${Math.round(capacity.pct)}%`, 'bar thick remaining'),
-    capacity.detail !== undefined && el('div', { className: 'muted small', text: capacity.detail }),
+  const item = el('div', { className: 'strip-item' }, [
+    el('span', { className: 'muted', text: current.strings.capacityHeading }),
+    el('strong', { className: 'tabular', text: capacity.value }),
+    bar(current.strings.capacityHeading, capacity.pct, capacity.level, `${Math.round(capacity.pct)}%`, 'bar inline'),
   ]);
+  item.title = [capacity.caption, capacity.detail].filter((part) => part !== undefined).join(' · ');
+  return item;
 }
 
-function autoSwitchCard(current: DashboardModel, auto: AutoSwitchOverview | undefined): HTMLElement | undefined {
+function autoSwitchItem(current: DashboardModel, auto: AutoSwitchOverview | undefined): HTMLElement | undefined {
   if (auto === undefined) {
     return undefined;
   }
-  return el('div', { className: `card auto-card tone-${auto.tone}` }, [
-    el('div', { className: 'card-label', text: current.strings.autoSwitchHeading }),
-    el('div', { className: 'big-value', text: auto.value }),
-    auto.detail !== undefined && el('div', { className: 'muted', text: auto.detail }),
-    el('div', { className: 'card-actions' }, [
-      button(current.strings.configureAutoSwitch, () => post({ type: 'openAutoSwitch' }), { focusKey: 'action:auto', className: 'button secondary small' }),
-    ]),
+  const item = el('div', { className: 'strip-item' }, [
+    el('span', { className: 'muted', text: current.strings.autoSwitchHeading }),
+    el('strong', { text: auto.value }),
+    button(current.strings.configureAutoSwitch, () => post({ type: 'openAutoSwitch' }), { focusKey: 'action:auto', className: 'link-action' }),
   ]);
+  if (auto.detail !== undefined) {
+    item.title = auto.detail;
+  }
+  return item;
 }
 
 function renderOverview(current: DashboardModel): void {
   overview.hidden = current.state !== 'ready';
-  overview.replaceChildren(
-    ...[activeCard(current, current.activeOverview), capacityCard(current, current.capacity), autoSwitchCard(current, current.autoSwitch)].filter(
-      (card): card is HTMLElement => card !== undefined,
-    ),
-  );
+  const items = [capacityItem(current, current.capacity), autoSwitchItem(current, current.autoSwitch)].filter((item): item is HTMLElement => item !== undefined);
+  overview.replaceChildren(activeCard(current, current.activeOverview), ...(items.length > 0 ? [el('div', { className: 'strip' }, items)] : []));
 }
 
 // ---- Accounts table ----
@@ -426,7 +424,32 @@ function renderFacts(facts: readonly Fact[]): HTMLElement | undefined {
   return el('dl', { className: 'facts' }, facts.flatMap((fact) => [el('dt', { text: fact.label }), el('dd', { text: fact.value })]));
 }
 
-function sectionContent(section: DetailSection): Child[] {
+function manageList(current: DashboardModel, slot: number, rows: NonNullable<DetailSection['manage']>): HTMLElement {
+  return el(
+    'div',
+    { className: 'manage-list' },
+    rows.map((row) =>
+      el('div', { className: 'manage-row' }, [
+        el('span', { className: 'muted', text: row.label }),
+        el('span', { className: 'manage-value ellipsis', text: row.value, attrs: { title: row.value } }),
+        el(
+          'span',
+          { className: 'manage-actions' },
+          row.actions.map((action) =>
+            button(action.label, () => post({ type: 'manageAccount', action: action.id, slot }), {
+              className: 'link-action',
+              disabled: current.busy,
+              focusKey: `action:${action.id}:${slot}`,
+              title: `${row.label}: ${action.label}`,
+            }),
+          ),
+        ),
+      ]),
+    ),
+  );
+}
+
+function sectionContent(current: DashboardModel, slot: number, section: DetailSection): Child[] {
   return [
     section.note !== undefined && el('p', { className: `note tone-${section.noteTone ?? 'neutral'}`, text: section.note }),
     section.meters.length > 0 &&
@@ -436,14 +459,16 @@ function sectionContent(section: DetailSection): Child[] {
         section.meters.map((meter) => el('div', {}, [meterBlock(meter), renderFacts(meter.facts)])),
       ),
     renderFacts(section.facts),
+    section.manage !== undefined && section.manage.length > 0 && manageList(current, slot, section.manage),
   ];
 }
 
-function renderSection(section: DetailSection): HTMLElement {
+function renderSection(current: DashboardModel, slot: number, section: DetailSection): HTMLElement {
+  const content = sectionContent(current, slot, section);
   if (section.collapsible === true) {
-    return foldable(`section:${section.key}`, section.title, sectionContent(section));
+    return foldable(`section:${section.key}`, section.title, content);
   }
-  return el('section', { className: 'detail-section' }, [el('h4', { text: section.title }), ...sectionContent(section)]);
+  return el('section', { className: 'detail-section' }, [el('h4', { text: section.title }), ...content]);
 }
 
 function renderAccountDetail(current: DashboardModel, account: AccountDetail, active: boolean): HTMLElement[] {
@@ -465,27 +490,8 @@ function renderAccountDetail(current: DashboardModel, account: AccountDetail, ac
           className: 'button wide',
         }),
     ]),
-    ...account.sections.map(renderSection),
-    account.actions.length > 0 &&
-      foldable(
-        'manage',
-        s.manageHeading,
-        [
-          el(
-            'div',
-            { className: 'account-actions' },
-            account.actions.map((action) =>
-              button(action.label, () => post({ type: 'manageAccount', action: action.id, slot: account.slot }), {
-                className: 'button secondary small',
-                disabled: current.busy,
-                focusKey: `action:${action.id}:${account.slot}`,
-              }),
-            ),
-          ),
-        ],
-        'fold manage',
-      ),
-  ].filter((node): node is HTMLElement => node !== false);
+    ...account.sections.map((section) => renderSection(current, account.slot, section)),
+  ];
 }
 
 function renderDetail(): void {

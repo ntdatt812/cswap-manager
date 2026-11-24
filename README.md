@@ -24,6 +24,7 @@ Click the Cswap Manager icon in the Activity Bar.
 - **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
 - Toolbar: refresh, switch, open dashboard, filter, sort, settings. Diagnostics is in the `…` menu.
 - Right-click an account to switch to it, show details, or manage it.
+- **Display names**: *Set Display Name…* gives an account any name (capitals, spaces, accents), shown everywhere instead of the alias or email. It stays in VS Code and is never sent to cswap; cswap's own alias keeps working in commands.
 
 ### Status bar
 Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near the usage limit and shows a clock icon when the data is out of date. Click it to switch accounts; the ⚙ next to it opens **Quick Settings**. Under **Quick Settings › Status bar** you can pick a ready-made look or tick exactly what to show (usage icon, slot, name, plan, progress bar, percentage, time to reset), choose how warnings are coloured, and add Refresh / Dashboard buttons. Changes preview live on the status bar before you save them. Right-clicking the status bar shows one **Cswap Manager** entry that hides or shows all Cswap items together.
@@ -51,7 +52,7 @@ Switching does not interrupt running Claude Code sessions: cswap replaces the st
 
 ### Managing accounts
 From the account's right-click menu, **Cswap: Manage Account…**, or the dashboard:
-- **Set / remove alias** — a short name for the account.
+- **Set / remove alias** — a short name for commands such as `cswap switch work`. cswap stores it in lower case (a–z, 0–9, `-`, `_`, `.`); use a display name for anything else.
 - **Disable / enable in rotation** — cswap's automatic switching skips disabled accounts; you can still switch to them directly.
 - **Set / clear switch threshold** — the usage percentage (50–99.9) at which cswap auto-switch leaves this account. This changes cswap's behaviour.
 - **Move to slot** — renumber an account; if the slot is taken, the two accounts trade places.

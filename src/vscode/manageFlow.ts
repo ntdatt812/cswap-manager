@@ -11,13 +11,17 @@ import { neutralizeLinks, redactText } from '../core/security/redact';
 import type { ManageOutcome, ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
+import { DISPLAY_NAME_MAX, cleanDisplayName, displayNameKey } from '../core/model/displayNames';
+import type { ExtensionConfiguration } from './configuration';
 import { describeCliError } from './messages';
 import { t } from './presentation';
+import { showSaveFailed } from './settingErrors';
 
 export interface ManageFlowDependencies {
   readonly refreshService: RefreshService;
   readonly managementService: ManagementService;
   readonly gate: OperationGate;
+  readonly configuration: ExtensionConfiguration;
   readonly homeDir: string;
 }
 
@@ -64,14 +68,47 @@ async function pickAccount(snapshot: AccountsSnapshot, title: string): Promise<A
   return picked?.account;
 }
 
+async function promptDisplayName(deps: ManageFlowDependencies, account: Account): Promise<void> {
+  if (displayNameKey(account) === undefined) {
+    void vscode.window.showWarningMessage(t('This account has no email in cswap, so a display name cannot be attached to it.'));
+    return;
+  }
+  const value = await vscode.window.showInputBox({
+    title: t('Display name for {0}', label(account)),
+    prompt: t('Shown instead of the alias or email in the sidebar, status bar and dashboard. Any text up to {0} characters; kept in VS Code only, never sent to cswap. Leave empty to remove.', DISPLAY_NAME_MAX),
+    value: account.displayName ?? '',
+    validateInput: (input) => (input.trim().length > DISPLAY_NAME_MAX ? t('Use at most {0} characters.', DISPLAY_NAME_MAX) : undefined),
+  });
+  if (value === undefined) {
+    return;
+  }
+  try {
+    await deps.configuration.setDisplayName(account, value);
+  } catch (error) {
+    showSaveFailed(error);
+    return;
+  }
+  const cleaned = cleanDisplayName(value);
+  vscode.window.setStatusBarMessage(
+    neutralizeLinks(sanitizeLabel(cleaned === '' ? t('Display name of slot {0} removed.', account.slot) : t('Slot {0} is now shown as "{1}".', account.slot, cleaned))),
+    5000,
+  );
+}
+
 async function promptAlias(account: Account): Promise<ManageOperation | undefined> {
   const value = await vscode.window.showInputBox({
     title: t('Set alias for {0}', label(account)),
-    prompt: t('A short name you can use instead of the slot number. Stored by cswap in lower case.'),
+    prompt: t('A short name for commands such as "cswap switch work". cswap stores it in lower case, using only a–z, 0–9, "-", "_" and ".". For capitals, spaces or accents, use "Set display name…".'),
     value: account.alias ?? '',
-    validateInput: (input) => {
+    validateInput: (input): string | vscode.InputBoxValidationMessage | undefined => {
       const result = normalizeAlias(input);
-      return result.ok ? undefined : aliasProblemText(result.problem);
+      if (!result.ok) {
+        return aliasProblemText(result.problem);
+      }
+      // Say up front what cswap will actually store.
+      return result.value === input.trim()
+        ? undefined
+        : { message: t('Will be saved as "{0}".', result.value), severity: vscode.InputBoxValidationSeverity.Info };
     },
   });
   if (value === undefined) {
@@ -174,6 +211,9 @@ async function operationFor(action: AccountActionId, account: Account, snapshot:
       return { kind: 'clearThreshold', slot: account.slot };
     case 'move':
       return promptMove(account, snapshot);
+    case 'setDisplayName':
+      // Handled before this point: a display name is a VS Code setting, not a cswap change.
+      return undefined;
   }
 }
 
@@ -255,6 +295,11 @@ export async function runAccountAction(deps: ManageFlowDependencies, action: Acc
     chosen = picked?.id;
   }
   if (chosen === undefined || !availableActions(account).includes(chosen)) {
+    return undefined;
+  }
+  if (chosen === 'setDisplayName') {
+    // Not a cswap change: stored in VS Code settings only.
+    await promptDisplayName(deps, account);
     return undefined;
   }
   const operation = await operationFor(chosen, account, snapshot);

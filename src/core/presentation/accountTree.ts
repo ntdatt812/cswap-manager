@@ -98,7 +98,12 @@ export function relativeAge(ms: number, t: Translate): string {
 }
 
 export function accountName(account: Account, t: Translate): string {
-  return account.alias ?? account.email ?? t('Account {0}', account.slot);
+  return account.displayName ?? account.alias ?? account.email ?? t('Account {0}', account.slot);
+}
+
+/** The account is shown under a name the user chose, so its email belongs on a second line. */
+export function hasCustomName(account: Account): boolean {
+  return account.displayName !== undefined || account.alias !== undefined;
 }
 
 export function hasUnavailableUsage(account: Account): boolean {
@@ -315,6 +320,9 @@ function accountDescription(account: Account, isActive: boolean, options: Presen
 function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsSnapshot, options: PresentationOptions): TooltipModel {
   const { t } = options;
   const rows: TooltipRow[] = [{ label: t('Slot'), value: String(account.slot) }];
+  if (account.displayName !== undefined) {
+    rows.push({ label: t('Display name'), value: account.displayName });
+  }
   if (account.alias !== undefined) {
     rows.push({ label: t('Alias'), value: account.alias });
   }

@@ -1,6 +1,6 @@
 import type { SwitchStrategy } from '../cli/cswapCli';
 import type { Account, AccountsSnapshot } from '../model/types';
-import { accountLevel, accountName, hasUnavailableUsage, relativeAge, type PresentationOptions } from './accountTree';
+import { accountLevel, accountName, hasCustomName, hasUnavailableUsage, relativeAge, type PresentationOptions } from './accountTree';
 import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageBar, windowLabel } from './format';
 import { usageStatusText } from './usageStatus';
 
@@ -45,7 +45,7 @@ function detailLine(account: Account, active: boolean, snapshot: AccountsSnapsho
   if (account.disabled === true) {
     parts.push(t('Disabled'));
   }
-  if (account.alias !== undefined && account.email !== undefined) {
+  if (hasCustomName(account) && account.email !== undefined) {
     parts.push(account.email);
   }
   const plan = account.plan?.displayName ?? account.plan?.label;

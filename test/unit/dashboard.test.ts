@@ -154,9 +154,21 @@ describe('buildDashboardModel', () => {
     assert.equal(alice?.detail.subtitle, 'Slot 1 · alice@example.com · Example Org A');
     assert.equal(alice?.detail.canSwitch, false, 'already active');
     assert.equal(bob?.detail.canSwitch, true);
-    const account = section(alice, 'Account')?.facts.map((fact) => `${fact.label}=${fact.value}`);
-    assert.ok(account?.includes('Switch threshold=85% (account override)'));
-    assert.ok(section(bob, 'Account')?.facts.some((fact) => fact.value === 'disabled'));
+    const manage = section(alice, 'Manage account');
+    assert.deepEqual(
+      manage?.facts.map((fact) => fact.label),
+      ['Email', 'Organization'],
+    );
+    assert.deepEqual(
+      manage?.manage?.map((row) => `${row.label}=${row.value}:${row.actions.map((action) => action.id).join('+')}`),
+      ['Display name=not set:setDisplayName', 'Alias=work:setAlias+removeAlias', 'Auto-rotation=included:disable', 'Switch threshold=85%:setThreshold+clearThreshold', 'Slot=1:move'],
+    );
+    assert.equal(section(bob, 'Manage account')?.manage?.find((row) => row.label === 'Auto-rotation')?.value, 'held out');
+    // Every action offered in the list is one the manage flow accepts for that account.
+    for (const row of [alice, bob]) {
+      const offered = (section(row, 'Manage account')?.manage ?? []).flatMap((entry) => entry.actions.map((action) => action.id));
+      assert.deepEqual([...offered].sort(), row?.detail.actions.map((action) => action.id).sort());
+    }
     assert.ok(section(alice, 'Plan')?.facts.some((fact) => fact.label === 'Tier' && fact.value === 'max_5x'));
     const freshness = section(alice, 'Freshness')?.facts.map((fact) => fact.label);
     assert.deepEqual(freshness, ['Usage fetched', 'Login expires', 'Read from cswap']);

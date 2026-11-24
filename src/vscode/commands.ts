@@ -124,6 +124,7 @@ async function sortCommand(deps: CommandDependencies): Promise<void> {
 
 /** Tree-row commands for each management action; without a row they ask for the account. */
 const ACTION_COMMANDS: ReadonlyArray<[string, AccountActionId]> = [
+  ['cswapManager.setDisplayName', 'setDisplayName'],
   ['cswapManager.setAlias', 'setAlias'],
   ['cswapManager.removeAlias', 'removeAlias'],
   ['cswapManager.disableAccount', 'disable'],

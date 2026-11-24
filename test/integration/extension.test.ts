@@ -5,6 +5,7 @@
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { displayNameKey } from '../../src/core/model/displayNames';
 import type { TestApi } from '../../src/extension';
 
 const EXTENSION_ID = 'nguyenthanhdat.cswap-manager';
@@ -301,6 +302,33 @@ suite('Cswap Manager (extension host)', () => {
       refreshed = (api.refreshService.getState().lastAttemptAt ?? 0) > before;
     }
     assert.ok(refreshed, 'a signal from another window triggers a refresh');
+  });
+
+  test('shows a display name in the sidebar as soon as it is saved, without calling cswap', async function () {
+    const refreshed = await api.refreshService.refresh({ trigger: 'manual' });
+    const target = refreshed.ok ? refreshed.snapshot.accounts.find((candidate) => displayNameKey(candidate) !== undefined) : undefined;
+    const key = target === undefined ? undefined : displayNameKey(target);
+    if (target === undefined || key === undefined) {
+      this.skip();
+      return;
+    }
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const before = config().inspect('displayNames')?.globalValue;
+    const label = () => {
+      const node = api.accountsView.provider.getChildren().find((candidate) => candidate.id === `account:${target.slot}`);
+      return typeof node?.label === 'string' ? node.label : '';
+    };
+    try {
+      await config().update('displayNames', { [key]: 'Tên Thử Nghiệm' }, vscode.ConfigurationTarget.Global);
+      let shown = false;
+      for (let attempt = 0; attempt < 40 && !shown; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        shown = label().includes('Tên Thử Nghiệm');
+      }
+      assert.ok(shown, label());
+    } finally {
+      await config().update('displayNames', before, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test('runs auto-switch in notify mode with real dry runs only (never switches)', async function () {

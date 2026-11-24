@@ -18,6 +18,7 @@ import type { AccountsState, FreshnessAssessment } from '../service/refreshServi
 import {
   accountLevel,
   accountName,
+  hasCustomName,
   describeView,
   hasUnavailableUsage,
   relativeAge,
@@ -25,7 +26,7 @@ import {
   type Translate,
 } from './accountTree';
 import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageLevel, windowLabel } from './format';
-import { accountActions } from './accountActions';
+import { accountActions, manageRows } from './accountActions';
 import { buildCapacity, buildInsights, buildTimeline } from './dashboardInsights';
 import { autoSwitchModeLabel, autoSwitchStrategyLabel } from './quickSettings';
 import { usageStatusText, usageStatusTone } from './usageStatus';
@@ -251,25 +252,17 @@ function planSection(account: Account, options: PresentationOptions): DetailSect
   return { key: 'plan', title: t('Plan'), meters: [], facts, collapsible: true };
 }
 
+/** Read-only identity, then every editable property with its actions (one place, no repeats). */
 function accountSection(account: Account, options: PresentationOptions): DetailSection {
   const { t } = options;
-  const facts: Fact[] = [{ label: t('Slot'), value: String(account.slot) }];
+  const facts: Fact[] = [];
   if (account.email !== undefined) {
     facts.push({ label: t('Email'), value: account.email });
-  }
-  if (account.alias !== undefined) {
-    facts.push({ label: t('Alias'), value: account.alias });
   }
   if (account.organizationName !== undefined) {
     facts.push({ label: t('Organization'), value: account.organizationName });
   }
-  if (account.disabled !== undefined) {
-    facts.push({ label: t('Auto-rotation'), value: account.disabled ? t('disabled') : t('included') });
-  }
-  if (account.threshold !== undefined) {
-    facts.push({ label: t('Switch threshold'), value: t('{0} (account override)', formatPercent(account.threshold)) });
-  }
-  return { key: 'account', title: t('Account'), meters: [], facts, collapsible: true };
+  return { key: 'account', title: t('Manage account'), meters: [], facts, manage: manageRows(account, t), collapsible: true };
 }
 
 function freshnessSection(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions): DetailSection {
@@ -310,7 +303,7 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
   if (account.usageStatus !== undefined && hasUnavailableUsage(account)) {
     badges.push({ text: usageStatusText(account.usageStatus, t), tone: usageStatusTone(account.usageStatus) });
   }
-  const subtitle = [t('Slot {0}', account.slot), account.alias !== undefined ? account.email : undefined, account.organizationName]
+  const subtitle = [t('Slot {0}', account.slot), hasCustomName(account) ? account.email : undefined, account.organizationName]
     .filter((part): part is string => part !== undefined)
     .join(' · ');
   const plan = planSection(account, options);
@@ -342,7 +335,7 @@ function buildRow(account: Account, snapshot: AccountsSnapshot, options: Dashboa
   const maxPct = maxUsagePct(account);
   const plan = account.plan?.displayName ?? account.plan?.label;
   const name = accountName(account, t);
-  const secondary = account.alias !== undefined ? account.email : undefined;
+  const secondary = hasCustomName(account) ? account.email : undefined;
   const searchText = [String(account.slot), `#${account.slot}`, name, account.email, account.alias, account.organizationName, plan, account.plan?.tier, status.text]
     .filter((part): part is string => part !== undefined)
     .join(' ')
@@ -392,7 +385,7 @@ function activeOverview(snapshot: AccountsSnapshot, options: DashboardOptions): 
   return {
     slot: account.slot,
     name: accountName(account, t),
-    ...(account.alias !== undefined && account.email !== undefined ? { secondary: account.email } : {}),
+    ...(hasCustomName(account) && account.email !== undefined ? { secondary: account.email } : {}),
     ...(plan === undefined ? {} : { plan }),
     meters: account.usage === undefined ? [] : usageMeters('active:', account.usage, options),
     ...(problems.tone === 'ok' ? {} : { flag: { text: problems.text, tone: problems.tone } }),

@@ -24,6 +24,13 @@ export interface Meter {
   readonly facts: readonly Fact[];
 }
 
+/** An editable account property: its current value and the actions that change it. */
+export interface ManageRow {
+  readonly label: string;
+  readonly value: string;
+  readonly actions: readonly AccountAction[];
+}
+
 export interface DetailSection {
   /** Stable key (e.g. "plan"), used to remember whether a collapsible section is open. */
   readonly key: string;
@@ -32,6 +39,8 @@ export interface DetailSection {
   readonly noteTone?: Tone;
   readonly meters: readonly Meter[];
   readonly facts: readonly Fact[];
+  /** Editable properties, shown after the facts. */
+  readonly manage?: readonly ManageRow[];
   /** Reference information shown folded by default. */
   readonly collapsible?: boolean;
 }
@@ -42,8 +51,8 @@ export interface Badge {
 }
 
 /** Account-management actions verified against the CLI (Phase 5). */
-export type AccountActionId = 'setAlias' | 'removeAlias' | 'disable' | 'enable' | 'setThreshold' | 'clearThreshold' | 'move';
-export const ACCOUNT_ACTION_IDS: readonly AccountActionId[] = ['setAlias', 'removeAlias', 'disable', 'enable', 'setThreshold', 'clearThreshold', 'move'];
+export type AccountActionId = 'setDisplayName' | 'setAlias' | 'removeAlias' | 'disable' | 'enable' | 'setThreshold' | 'clearThreshold' | 'move';
+export const ACCOUNT_ACTION_IDS: readonly AccountActionId[] = ['setDisplayName', 'setAlias', 'removeAlias', 'disable', 'enable', 'setThreshold', 'clearThreshold', 'move'];
 
 export interface AccountAction {
   readonly id: AccountActionId;

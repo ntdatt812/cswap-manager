@@ -16,6 +16,7 @@ import { DashboardController } from './vscode/dashboardPanel';
 import { configureLocalization } from './vscode/l10n';
 import { Logger } from './vscode/logger';
 import { describeCliError } from './vscode/messages';
+import { applyDisplayNames } from './core/model/displayNames';
 import { CrossWindowSync } from './vscode/crossWindowSync';
 import { StatusBarController } from './vscode/statusBarController';
 
@@ -56,7 +57,8 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     homeDir,
     onCommandFinished: (meta, error) => logger.commandFinished(meta, error),
   });
-  const refreshService = new RefreshService({ cli });
+  // Display names are the user's own, kept in VS Code settings and added to every snapshot.
+  const refreshService = new RefreshService({ cli, decorate: (snapshot) => applyDisplayNames(snapshot, configuration.displayNameMap()) });
   const gate = new OperationGate();
   const switchService = new SwitchService(cli, refreshService, gate);
   const managementService = new ManagementService(cli, refreshService, gate);
@@ -91,6 +93,9 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     autoSwitch,
     crossWindow,
     vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration(`${CONFIG_SECTION}.displayNames`)) {
+        refreshService.redecorate();
+      }
       if (event.affectsConfiguration(`${CONFIG_SECTION}.cliPath`)) {
         resolver.invalidate();
         logger.info('cliPath setting changed; executable will be re-resolved.');

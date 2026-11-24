@@ -32,10 +32,10 @@ import {
   type StatusBarPart,
 } from '../core/presentation/statusBar';
 import type { AutoSwitchController, MenuResult } from './autoSwitchController';
-import { neutralizeLinks, redactText } from '../core/security/redact';
-import { SettingNotLoadedError, type ExtensionConfiguration, type UserSettingKey } from './configuration';
+import type { ExtensionConfiguration, UserSettingKey } from './configuration';
 import { t } from './presentation';
 import { askWithBack, BACK, pickMany, pickOne, type Back } from './quickPick';
+import { offerReload, showSaveFailed } from './settingErrors';
 import { statusBarButtonIcon, type StatusBarController } from './statusBarController';
 
 export interface QuickSettingsDependencies {
@@ -527,25 +527,4 @@ export async function openQuickSettings(deps: QuickSettingsDependencies, focus?:
       showSaveFailed(error);
     }
   }
-}
-
-async function offerReload(): Promise<void> {
-  const reload = t('Reload Window');
-  const choice = await vscode.window.showWarningMessage(
-    t('Cswap Manager was just updated, but this window has not loaded its new settings yet, so they cannot be saved. Reload the window, then try again.'),
-    reload,
-  );
-  if (choice === reload) {
-    await vscode.commands.executeCommand('workbench.action.reloadWindow');
-  }
-}
-
-/** Shows why a setting was not saved, in VS Code's own words (redacted), never a guess. */
-function showSaveFailed(error: unknown): void {
-  if (error instanceof SettingNotLoadedError) {
-    void offerReload();
-    return;
-  }
-  const reason = error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir: os.homedir(), maxLength: 300 }) : t('unknown');
-  void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', reason)));
 }

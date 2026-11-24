@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-11-24
+- **Display names**: give any account a name with capitals, spaces or accents (*Set Display Name…* in the account's right-click menu, *Manage Account…* or the dashboard). It is shown instead of the alias or email in the sidebar, status bar, switcher and dashboard, kept in VS Code only (never sent to cswap), follows the account when it moves slot, and updates every window at once.
+- Setting an alias now says what cswap will store as you type (e.g. *Will be saved as "work"*). cswap keeps aliases in lower case with a–z, 0–9, `-`, `_` and `.` because commands use them.
+- Calmer dashboard: no coloured card stripes or tinted panels, small corners; colour only where it means something (usage bars, limits, warnings).
+- Quota left and auto-switch now sit in one slim line instead of two tall cards.
+- *Manage account* is a tidy list of each property with its current value and short actions (Change…, Remove, Move…), merged with the account's email and organization.
+- The accounts table no longer scrolls sideways in a narrow panel: the plan column hides when there is no room.
+
 ## 0.6.1 — 2026-11-24
 Fixes from an independent review of 0.6.0:
 - Suggestions never propose an account with less quota left than the active one.
