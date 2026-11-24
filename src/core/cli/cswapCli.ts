@@ -90,6 +90,9 @@ export function manageArgs(operation: ManageOperation): readonly string[] | unde
  */
 export const MUTATION_MIN_TIMEOUT_MS = 120_000;
 
+/** Safety timeout for an unattended real auto-switch tick. */
+export const AUTO_TICK_MIN_TIMEOUT_MS = 600_000;
+
 export interface CliRunSettings {
   readonly timeoutMs: number;
   readonly maxOutputBytes: number;
@@ -144,6 +147,8 @@ interface ExecuteOptions {
   readonly mutating?: boolean;
   /** Non-zero exit codes that are normal outcomes (e.g. `auto --once`: 1 error, 2 no action, 3 blocked). */
   readonly acceptExitCodes?: readonly number[];
+  /** Lower bound for the timeout (a real auto-switch tick may legitimately take long). */
+  readonly minTimeoutMs?: number;
 }
 
 function parseVersionOutput(stdout: string): ParseResult<CliVersion> {
@@ -186,6 +191,8 @@ export class CswapCli {
     const args = options.dryRun ? ['auto', '--once', '--json', '--dry-run'] : ['auto', '--once', '--json'];
     return this.execute('auto', args, (stdout, exitCode) => ({ ok: true, value: buildTickResult(stdout, exitCode, options.dryRun) }), {
       mutating: !options.dryRun,
+      // A real tick may switch credentials: only a long safety timeout may stop it.
+      ...(options.dryRun ? {} : { minTimeoutMs: AUTO_TICK_MIN_TIMEOUT_MS }),
       acceptExitCodes: [1, 2, 3],
     });
   }
@@ -245,7 +252,7 @@ export class CswapCli {
 
     const settings = this.deps.settings();
     const result = await this.deps.runner.run(resolution.path, args, {
-      timeoutMs: options.mutating ? Math.max(settings.timeoutMs, MUTATION_MIN_TIMEOUT_MS) : settings.timeoutMs,
+      timeoutMs: Math.max(settings.timeoutMs, options.minTimeoutMs ?? (options.mutating ? MUTATION_MIN_TIMEOUT_MS : 0)),
       maxOutputBytes: settings.maxOutputBytes,
       cwd: this.deps.workingDirectory,
       env: cliEnvironment(this.deps.baseEnv),

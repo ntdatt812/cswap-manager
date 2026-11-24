@@ -144,6 +144,18 @@ export interface AutoSwitchRules {
   readonly customized: readonly string[];
 }
 
+/** Expected JSON type of each rule; values of any other type are ignored. */
+const RULE_TYPES: Readonly<Record<keyof Omit<AutoSwitchRules, 'customized'>, 'number' | 'string' | 'boolean'>> = {
+  threshold: 'number',
+  weeklyThreshold: 'number',
+  intervalSeconds: 'number',
+  cooldownSeconds: 'number',
+  hysteresisPct: 'number',
+  strategy: 'string',
+  model: 'string',
+  includeApiKeyAccounts: 'boolean',
+};
+
 const RULE_KEYS: Readonly<Record<string, keyof Omit<AutoSwitchRules, 'customized'>>> = {
   'autoswitch.threshold': 'threshold',
   'autoswitch.weeklyThreshold': 'weeklyThreshold',
@@ -180,7 +192,8 @@ export function parseAutoSwitchRules(stdout: string): AutoSwitchRules | undefine
       continue;
     }
     const value = entry['value'];
-    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+    const typeMatches = typeof value === RULE_TYPES[field] && (typeof value !== 'number' || Number.isFinite(value));
+    if (typeMatches) {
       rules[field] = value;
     }
     if (entry['isSet'] === true) {

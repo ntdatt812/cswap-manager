@@ -61,7 +61,11 @@ export class FileLease implements LeaderLease {
 
   async tryAcquire(now: number): Promise<boolean> {
     const holder = await this.current();
-    if (holder !== undefined && holder.owner !== this.ownerId && now - holder.heartbeat < this.staleAfterMs()) {
+    const staleAfter = this.staleAfterMs();
+    // A heartbeat too far in the future (clock change, corrupted file) counts as stale, so a lost
+    // holder can always be replaced.
+    const fresh = holder !== undefined && now - holder.heartbeat < staleAfter && holder.heartbeat - now < staleAfter;
+    if (holder !== undefined && holder.owner !== this.ownerId && fresh) {
       return false;
     }
     await this.store.write(JSON.stringify({ owner: this.ownerId, heartbeat: now }));
@@ -76,7 +80,15 @@ export class FileLease implements LeaderLease {
 }
 
 export type AutoSwitchNotice =
-  | { readonly kind: 'switched'; readonly fromSlot?: number; readonly toSlot?: number; readonly trigger?: string; readonly verification: VerificationStatus }
+  | {
+      readonly kind: 'switched';
+      readonly fromSlot?: number;
+      readonly toSlot?: number;
+      readonly trigger?: string;
+      readonly verification: VerificationStatus;
+      /** Active slot according to the post-switch refresh, when known. */
+      readonly activeSlot?: number;
+    }
   | { readonly kind: 'would-switch'; readonly fromSlot?: number; readonly toSlot?: number; readonly trigger?: string }
   | { readonly kind: 'blocked'; readonly earliestResetAt?: string }
   | { readonly kind: 'failing'; readonly error?: CliError; readonly message?: string };
@@ -97,6 +109,9 @@ export interface AutoSwitchState {
 
 export const DEFAULT_TICK_INTERVAL_SECONDS = 60;
 export const MIN_TICK_INTERVAL_SECONDS = 15;
+export const MAX_TICK_INTERVAL_SECONDS = 3_600;
+/** Message for a tick that could not run because the shared lease file could not be written. */
+export const LEASE_UNAVAILABLE = 'lease-unavailable';
 /** Delay before the first tick after enabling, so startup is not slowed down. */
 export const FIRST_TICK_DELAY_MS = 5_000;
 /** Consecutive failed ticks before the user is told. */
@@ -119,8 +134,10 @@ const defaultTimers: TimerApi = {
 
 /**
  * Runs `cswap auto --once` on a schedule while enabled. Each tick is a short process that exits by
- * itself, so stopping never kills cswap in the middle of a credential switch. Ticks share the
- * operation gate with manual switching and account changes.
+ * itself, so turning auto-switch off never kills cswap in the middle of a credential switch (a real
+ * tick is only stopped by a long safety timeout). The mode is re-read inside the operation gate
+ * right before cswap starts, and only `switch` mode runs without `--dry-run`. Ticks share the gate
+ * with manual switching and account changes.
  */
 export class AutoSwitchService implements Disposable {
   private readonly changed = new Emitter<AutoSwitchState>();
@@ -141,9 +158,11 @@ export class AutoSwitchService implements Disposable {
     return this.state;
   }
 
+  /** Always a finite interval within [15 s, 1 h], whatever cswap's config contains. */
   intervalMs(): number {
-    const seconds = this.state.rules?.intervalSeconds ?? DEFAULT_TICK_INTERVAL_SECONDS;
-    return Math.max(MIN_TICK_INTERVAL_SECONDS, seconds) * 1000;
+    const seconds = this.state.rules?.intervalSeconds;
+    const valid = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : DEFAULT_TICK_INTERVAL_SECONDS;
+    return Math.min(MAX_TICK_INTERVAL_SECONDS, Math.max(MIN_TICK_INTERVAL_SECONDS, valid)) * 1000;
   }
 
   async setMode(mode: AutoSwitchMode): Promise<void> {
@@ -154,7 +173,7 @@ export class AutoSwitchService implements Disposable {
     this.lastNoticeKey = undefined;
     if (mode === 'off') {
       this.update({ ...this.state, mode, role: 'idle' });
-      await this.options.lease.release();
+      await this.options.lease.release().catch(() => undefined);
       return;
     }
     this.update({ ...this.state, mode, consecutiveErrors: 0 });
@@ -179,18 +198,31 @@ export class AutoSwitchService implements Disposable {
 
   /** Runs one scheduled tick now (also used by tests). Returns false when skipped. */
   async tick(): Promise<boolean> {
-    const mode = this.state.mode;
-    if (mode === 'off' || this.disposed || this.state.ticking) {
+    if (this.state.mode === 'off' || this.disposed || this.state.ticking) {
       return false;
     }
-    if (!(await this.options.lease.tryAcquire(this.now()))) {
+    let leader: boolean;
+    try {
+      leader = await this.options.lease.tryAcquire(this.now());
+    } catch {
+      // The shared lease file cannot be written (antivirus lock, disk full, permissions).
+      this.recordError(this.now(), undefined, LEASE_UNAVAILABLE);
+      return false;
+    }
+    if (!leader) {
       this.update({ ...this.state, role: 'standby' });
       return false;
     }
     const ran = await this.options.gate.run(async () => {
+      // Re-read the mode right before starting cswap: it may have changed while the lease was being
+      // acquired. Only `switch` runs without --dry-run; anything else is a dry run or nothing.
+      const mode = this.state.mode;
+      if (mode === 'off' || this.disposed) {
+        return false;
+      }
       this.update({ ...this.state, role: 'leader', ticking: true });
       try {
-        await this.runTick(mode === 'notify');
+        await this.runTick(mode !== 'switch');
       } finally {
         this.update({ ...this.state, ticking: false });
       }
@@ -202,8 +234,13 @@ export class AutoSwitchService implements Disposable {
   dispose(): void {
     this.disposed = true;
     this.clearTimer();
-    void this.options.lease.release();
+    void this.options.lease.release().catch(() => undefined);
     this.changed.dispose();
+  }
+
+  /** After a real tick that did not end cleanly, re-read state so no view keeps showing a stale account. */
+  private async refreshAfterRealTick(): Promise<RefreshResult> {
+    return this.options.refresher.refresh({ trigger: 'post-switch', verifyActive: true, requireFresh: true });
   }
 
   private async runTick(dryRun: boolean): Promise<void> {
@@ -211,6 +248,9 @@ export class AutoSwitchService implements Disposable {
     const at = this.now();
     if (!outcome.ok) {
       this.recordError(at, outcome.error, undefined);
+      if (!dryRun) {
+        await this.refreshAfterRealTick();
+      }
       return;
     }
     const result = outcome.value;
@@ -221,6 +261,19 @@ export class AutoSwitchService implements Disposable {
 
     if (result.outcome === 'error') {
       this.recordError(at, undefined, errorEvent?.message);
+      if (!dryRun) {
+        await this.refreshAfterRealTick();
+      }
+      return;
+    }
+    if (!dryRun && result.outcome === 'switched' && switchEvent === undefined) {
+      // cswap says it switched but no switch event could be read (format change, broken line).
+      // Still verify and tell the user: every real switch must produce a notification.
+      this.lastNoticeKey = undefined;
+      const verification = verifyActive(await this.refreshAfterRealTick(), undefined);
+      const active = verification.activeSlot === undefined ? {} : { toSlot: verification.activeSlot, activeSlot: verification.activeSlot };
+      this.update({ ...this.state, lastTickAt: at, lastOutcome: 'switched', consecutiveErrors: 0, lastSwitch: { at, dryRun: false, ...active } });
+      this.options.onNotice({ kind: 'switched', verification: verification.status, ...active });
       return;
     }
     const base: AutoSwitchState = {
@@ -250,8 +303,13 @@ export class AutoSwitchService implements Disposable {
         return;
       }
       this.lastNoticeKey = undefined;
-      const refresh = await this.options.refresher.refresh({ trigger: 'post-switch', verifyActive: true, requireFresh: true });
-      this.options.onNotice({ kind: 'switched', ...slots, verification: verifyActive(refresh, switchEvent.toSlot).status });
+      const verification = verifyActive(await this.refreshAfterRealTick(), switchEvent.toSlot);
+      this.options.onNotice({
+        kind: 'switched',
+        ...slots,
+        verification: verification.status,
+        ...(verification.activeSlot === undefined ? {} : { activeSlot: verification.activeSlot }),
+      });
       return;
     }
 
@@ -286,7 +344,9 @@ export class AutoSwitchService implements Disposable {
     }
     this.handle = this.timers.setTimeout(() => {
       this.handle = undefined;
-      void this.tick().finally(() => this.schedule(this.intervalMs()));
+      void this.tick()
+        .catch(() => false)
+        .finally(() => this.schedule(this.intervalMs()));
     }, delayMs);
   }
 

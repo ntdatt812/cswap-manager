@@ -118,7 +118,7 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - The `spend` amounts are shown exactly as the CLI reports them (`used / limit currency`); their unit has not been verified.
 - A real move/swap between two occupied slots has not been executed during development (fixture-tested only).
 - The opt-in end-to-end test (`CSWAP_E2E_MUTATE=1 npm run test:integration`) sets and removes an alias on an inactive slot without one; it is skipped by default.
-- Not implemented on purpose: priority, directory mappings, `cswap run`, auto-switch/config changes, add/remove/import/export, purge (reasons in docs/CLI-CONTRACT.md).
+- Not implemented on purpose: priority, directory mappings, `cswap run`, add/remove/import/export, purge, and the auto-switch `--model`/API-key options (reasons in docs/CLI-CONTRACT.md). Auto-switch itself and its main rules are supported since 0.3.0.
 - The webview DOM itself has no automated tests (host-side model, protocol validation and table logic are unit-tested; the panel/message bridge is covered by extension-host tests).
 - The filter is not persisted across window reloads.
 - Killing a timed-out process is best-effort (`child.kill()`); a process tree is not killed explicitly.
@@ -138,3 +138,15 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - Notices are de-duplicated: a would-be switch or "all accounts at limit" is reported once until the situation changes; errors only after 3 failed ticks in a row. Tick outcomes are logged without emails.
 - Rules editor: only `autoswitch.threshold`, `weeklyThreshold`, `cooldownSeconds`, `intervalSeconds` and `strategy`, validated like cswap before `cswap config set/unset`, then re-read to confirm.
 - Limitation: auto-switch only runs while VS Code is open (Windows has no cswap background service; the macOS menu bar app is out of scope).
+
+## Auto-switch security review (0.3.1)
+An independent read-only review of the 0.3.0 auto-switch code found 1 medium, 7 low and 6 info issues (no critical/high). All are fixed, each with a regression test in `test/unit/autoSwitch.test.ts`:
+- **M1** A mode change while the lease file was being acquired could still start a real (non-dry-run) tick. The mode is now re-read inside the operation gate immediately before cswap starts, and only `switch` runs without `--dry-run`.
+- **L1** Wrongly typed values from `cswap config` (e.g. a string interval) could produce a NaN interval: back-to-back ticks and a lease that every window treated as stale. Rule values are type-checked and the interval is clamped to 15 s – 1 h.
+- **L2** An unwritable lease file caused an unhandled rejection every interval and no user-visible state. It now counts as a failed tick (reported after 3 in a row); lease release errors are ignored.
+- **L3** A real switch (exit 0) without a readable `switch` event produced no notification. It is now verified and notified.
+- **L4/L5** CLI error text in notifications is redacted and length-capped; the rules summary is link-neutralised and only shows cswap-style strategy codes.
+- **L6** A real tick has a 10-minute safety timeout (manual switch: 2 minutes); after any real tick that does not end cleanly the state is refreshed.
+- **L7** `cswapManager.autoSwitch.mode` has `ignoreSync: true`, so Settings Sync cannot turn automatic switching on on another machine.
+- Info: a lease heartbeat far in the future counts as stale; a `mismatch` verification names the slot that is actually active; the rules editor compares the value it wrote with what cswap reports; the rules summary includes the check interval.
+- Accepted: two windows starting at the same instant can both run one tick (write-then-verify is not a mutex); cswap's own state lock and cooldown prevent a double switch, so the cost is a duplicate poll. If VS Code exits during a real tick, the cswap process is left to finish on its own.

@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -443,7 +443,8 @@
           ],
           "scope": "application",
           "markdownDescription": "%config.autoSwitch.description%",
-          "order": 5
+          "order": 5,
+          "ignoreSync": true
         },
         "cswapManager.sidebar.sortOrder": {
           "type": "string",

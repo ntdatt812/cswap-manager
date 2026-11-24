@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.1 — 2026-11-24
+- Auto-switch hardening after an independent security review: a mode change can no longer let a real tick through, cswap config values are type-checked, lease-file failures are reported, every real switch is notified, CLI error text is redacted, real ticks get a 10-minute safety timeout, and the mode is not synced across machines.
+
 ## 0.3.0 — 2026-11-24
 - Automatic switching with cswap's own `cswap auto`: **Cswap: Auto-Switch…** with modes off / notify only (dry runs) / switch automatically, a status bar indicator, notifications, a dry-run preview and an editor for cswap's auto-switch rules. Off by default; user settings only; one window runs it; ticks never overlap with other cswap changes.
 - Includes the 0.2.0 changes below (not published separately).

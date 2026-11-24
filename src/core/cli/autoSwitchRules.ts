@@ -1,3 +1,5 @@
+import type { AutoSwitchRules } from '../model/autoSwitch';
+
 /**
  * Auto-switch rules the extension may change through `cswap config set/unset`, with the same
  * validation cswap 1.2.0 applies (verified with live probes). Anything else stays CLI-only.
@@ -62,4 +64,20 @@ export function autoSwitchRuleArgs(rule: AutoSwitchRuleUpdate): readonly string[
   }
   const validated = validateRuleInput(rule.key, String(rule.value));
   return validated.ok ? ['config', 'set', rule.key, validated.value] : undefined;
+}
+
+/** Whether the settings read back from cswap hold the value the rules editor just wrote. */
+export function ruleMatches(rules: AutoSwitchRules, key: AutoSwitchRuleKey, written: string): boolean {
+  const fields = {
+    'autoswitch.threshold': 'threshold',
+    'autoswitch.weeklyThreshold': 'weeklyThreshold',
+    'autoswitch.cooldownSeconds': 'cooldownSeconds',
+    'autoswitch.intervalSeconds': 'intervalSeconds',
+    'autoswitch.strategy': 'strategy',
+  } as const;
+  if (written === '') {
+    return !rules.customized.includes(key);
+  }
+  const actual = rules[fields[key]];
+  return key === 'autoswitch.strategy' ? actual === written : typeof actual === 'number' && Math.abs(actual - Number(written)) < 1e-9;
 }

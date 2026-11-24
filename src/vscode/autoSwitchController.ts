@@ -1,15 +1,16 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { AUTO_SWITCH_STRATEGIES, validateRuleInput, type AutoSwitchRuleKey } from '../core/cli/autoSwitchRules';
+import { AUTO_SWITCH_STRATEGIES, ruleMatches, validateRuleInput, type AutoSwitchRuleKey } from '../core/cli/autoSwitchRules';
 import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
-import { neutralizeLinks } from '../core/security/redact';
+import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
   AutoSwitchService,
   ERROR_NOTICE_AFTER,
+  LEASE_UNAVAILABLE,
   FileLease,
   type AutoSwitchMode,
   type AutoSwitchNotice,
@@ -94,7 +95,8 @@ function strategyLabel(strategy: string | undefined): string {
     case 'priority-consume-first':
       return t('highest priority first');
     default:
-      return strategy ?? t('unknown');
+      // Only cswap-style strategy codes are shown; anything else in the config file is not echoed.
+      return strategy !== undefined && /^[a-z0-9-]{1,40}$/.test(strategy) ? strategy : t('unknown');
   }
 }
 
@@ -106,7 +108,7 @@ function rulesSummary(rules: AutoSwitchRules | undefined): string {
   if (rules.weeklyThreshold !== undefined) {
     parts.push(t('weekly at {0}', formatPercent(rules.weeklyThreshold)));
   }
-  parts.push(t('cooldown {0}s', rules.cooldownSeconds ?? '?'), strategyLabel(rules.strategy));
+  parts.push(t('cooldown {0}s', rules.cooldownSeconds ?? '?'), t('every {0}s', rules.intervalSeconds ?? '?'), strategyLabel(rules.strategy));
   return parts.join(' · ');
 }
 
@@ -343,7 +345,11 @@ export class AutoSwitchController implements vscode.Disposable {
       return;
     }
     this.render();
-    void vscode.window.showInformationMessage(t('Cswap auto-switch rules: {0}.', rulesSummary(rules)));
+    if (!ruleMatches(rules, key, value)) {
+      void vscode.window.showWarningMessage(t('cswap accepted the change, but reading the settings back shows a different value.'));
+      return;
+    }
+    void vscode.window.showInformationMessage(neutralizeLinks(t('Cswap auto-switch rules: {0}.', rulesSummary(rules))));
   }
 
   private switchDeps() {
@@ -364,6 +370,10 @@ export class AutoSwitchController implements vscode.Disposable {
         const text = t('Cswap auto-switch moved from slot {0} to slot {1}.', notice.fromSlot ?? '?', notice.toSlot ?? '?');
         if (notice.verification === 'confirmed') {
           void vscode.window.showInformationMessage(text);
+        } else if (notice.verification === 'mismatch' && notice.activeSlot !== undefined) {
+          void vscode.window.showWarningMessage(
+            t('Cswap auto-switch reported a move to slot {0}, but slot {1} is now active.', notice.toSlot ?? '?', notice.activeSlot),
+          );
         } else {
           void vscode.window.showWarningMessage(`${text} ${t('The new active account could not be confirmed yet.')}`);
         }
@@ -388,7 +398,13 @@ export class AutoSwitchController implements vscode.Disposable {
         void vscode.window.showWarningMessage(this.blockedText(notice.earliestResetAt));
         return;
       case 'failing': {
-        const reason = notice.error ? describeCliError(notice.error) : (notice.message ?? t('unknown'));
+        const reason = notice.error
+          ? describeCliError(notice.error)
+          : notice.message === LEASE_UNAVAILABLE
+            ? t('the coordination file between VS Code windows could not be written')
+            : notice.message === undefined
+              ? t('unknown')
+              : redactText(notice.message, { homeDir: this.deps.homeDir, maxLength: 200 });
         const log = t('Show log');
         const choice = await vscode.window.showWarningMessage(
           neutralizeLinks(t('Cswap auto-switch failed {0} times in a row: {1}', ERROR_NOTICE_AFTER, reason)),

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { autoSwitchRuleArgs, validateRuleInput } from '../../src/core/cli/autoSwitchRules';
+import { autoSwitchRuleArgs, ruleMatches, validateRuleInput } from '../../src/core/cli/autoSwitchRules';
 import { cliError } from '../../src/core/cli/cliErrors';
 import { CswapCli, type CliOutcome } from '../../src/core/cli/cswapCli';
 import type { ProcessResult, ProcessRunOptions, ProcessRunner } from '../../src/core/cli/processRunner';
@@ -11,6 +11,7 @@ import {
   AutoSwitchService,
   ERROR_NOTICE_AFTER,
   FileLease,
+  LEASE_UNAVAILABLE,
   type AutoSwitchNotice,
   type LeaderLease,
 } from '../../src/core/service/autoSwitchService';
@@ -148,7 +149,7 @@ describe('CswapCli auto commands', () => {
     assert.ok(outcome.ok);
     assert.equal(outcome.value.outcome, 'switched');
     assert.deepEqual(runner.calls[0]?.args, ['auto', '--once', '--json']);
-    assert.ok((runner.calls[0]?.options.timeoutMs ?? 0) >= 120_000);
+    assert.ok((runner.calls[0]?.options.timeoutMs ?? 0) >= 600_000, 'long safety timeout for a real tick');
     const blocked = await cliWith(exited('{"event":"all-exhausted"}', 3)).cli.autoTick({ dryRun: false });
     assert.equal(blocked.ok && blocked.value.outcome, 'blocked');
   });
@@ -270,7 +271,7 @@ describe('AutoSwitchService', () => {
     await service.tick();
     assert.deepEqual(cli.ticks, [false]);
     assert.deepEqual(refreshes, [{ trigger: 'post-switch', verifyActive: true, requireFresh: true }]);
-    assert.deepEqual(notices, [{ kind: 'switched', fromSlot: 5, toSlot: 4, trigger: 'proactive', verification: 'unverified' }]);
+    assert.deepEqual(notices, [{ kind: 'switched', fromSlot: 5, toSlot: 4, trigger: 'proactive', verification: 'unverified', activeSlot: 4 }]);
     assert.equal(service.getState().lastSwitch?.toSlot, 4);
   });
 
@@ -313,5 +314,100 @@ describe('AutoSwitchService', () => {
     await service.setMode('off');
     assert.equal(released, 1);
     assert.equal(service.getState().role, 'idle');
+  });
+});
+
+describe('security review regressions', () => {
+  it('M1: a mode change while the lease is being acquired never leads to a real tick', async () => {
+    for (const next of ['notify', 'off'] as const) {
+      let grant: (value: boolean) => void = () => undefined;
+      const { cli, service } = setup({ tryAcquire: () => new Promise<boolean>((resolve) => (grant = resolve)), release: () => Promise.resolve() });
+      await service.setMode('switch');
+      const ticking = service.tick();
+      await service.setMode(next);
+      grant(true);
+      await ticking;
+      assert.equal(cli.ticks.includes(false), false, `no real tick after switching to ${next}`);
+      assert.deepEqual(cli.ticks, next === 'notify' ? [true] : []);
+    }
+  });
+
+  it('L1: ignores wrongly typed rule values and keeps the interval finite and bounded', async () => {
+    const parsed = parseAutoSwitchRules(
+      JSON.stringify({
+        settings: [
+          { key: 'autoswitch.intervalSeconds', value: 'abc' },
+          { key: 'autoswitch.threshold', value: true },
+          { key: 'autoswitch.strategy', value: 5 },
+        ],
+      }),
+    );
+    assert.deepEqual(parsed, { customized: [] });
+    const { cli, service } = setup();
+    for (const [value, expected] of [
+      [Number.NaN, 60_000],
+      [1e9, 3_600_000],
+      [1, 15_000],
+      [90, 90_000],
+    ] as const) {
+      cli.rules = { intervalSeconds: value, customized: [] };
+      await service.reloadRules();
+      assert.equal(service.intervalMs(), expected, String(value));
+    }
+  });
+
+  it('L2: an unwritable lease is reported as an error instead of an unhandled rejection', async () => {
+    const { notices, service } = setup({ tryAcquire: () => Promise.reject(new Error('EPERM')), release: () => Promise.reject(new Error('EPERM')) });
+    await service.setMode('switch');
+    for (let i = 0; i < ERROR_NOTICE_AFTER; i++) {
+      assert.equal(await service.tick(), false);
+    }
+    assert.equal(service.getState().lastOutcome, 'error');
+    assert.deepEqual(notices, [{ kind: 'failing', message: LEASE_UNAVAILABLE }]);
+    await service.setMode('off');
+    assert.equal(service.getState().mode, 'off');
+  });
+
+  it('L3: a real switch without a readable switch event is still verified and notified', async () => {
+    const { cli, notices, refreshes, service } = setup();
+    await service.setMode('switch');
+    cli.next = cli.tick('{"event":"renamed-switch"}', 0, false);
+    await service.tick();
+    assert.equal(refreshes.length, 1);
+    assert.deepEqual(notices, [{ kind: 'switched', verification: 'unverified', toSlot: 4, activeSlot: 4 }]);
+    assert.equal(service.getState().lastSwitch?.dryRun, false);
+  });
+
+  it('L6: a failed real tick refreshes the state; a failed dry run does not', async () => {
+    const real = setup();
+    await real.service.setMode('switch');
+    real.cli.next = { ok: false, error: cliError('timeout'), meta: { command: 'auto' } };
+    await real.service.tick();
+    assert.equal(real.refreshes.length, 1);
+
+    const dry = setup();
+    await dry.service.setMode('notify');
+    dry.cli.next = { ok: false, error: cliError('timeout'), meta: { command: 'auto' } };
+    await dry.service.tick();
+    assert.equal(dry.refreshes.length, 0);
+  });
+
+  it('treats a lease heartbeat far in the future as stale', async () => {
+    let content: string | undefined = JSON.stringify({ owner: 'other', heartbeat: 10_000_000 });
+    const lease = new FileLease(
+      { read: () => Promise.resolve(content), write: (value) => Promise.resolve(void (content = value)), remove: () => Promise.resolve(void (content = undefined)) },
+      'me',
+      () => 1_000,
+    );
+    assert.equal(await lease.tryAcquire(0), true);
+  });
+
+  it('verifies the value the rules editor wrote', () => {
+    const rules: AutoSwitchRules = { threshold: 85, strategy: 'best', intervalSeconds: 60, customized: ['autoswitch.threshold'] };
+    assert.equal(ruleMatches(rules, 'autoswitch.threshold', '85'), true);
+    assert.equal(ruleMatches(rules, 'autoswitch.threshold', '80'), false);
+    assert.equal(ruleMatches(rules, 'autoswitch.strategy', 'best'), true);
+    assert.equal(ruleMatches(rules, 'autoswitch.intervalSeconds', ''), true, 'reset: no longer customized');
+    assert.equal(ruleMatches(rules, 'autoswitch.threshold', ''), false, 'reset did not take effect');
   });
 });
