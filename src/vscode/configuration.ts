@@ -147,26 +147,50 @@ export class ExtensionConfiguration {
   }
 
   /**
+   * Settings this window does not know. After VS Code auto-updates the extension it restarts the
+   * extension host with the new code, but settings added by the update stay unregistered until the
+   * window reloads, and VS Code refuses to write them. Every contributed setting has a default, so a
+   * missing default means "not registered".
+   */
+  unregisteredSettings(keys: readonly UserSettingKey[] = USER_SETTING_KEYS): UserSettingKey[] {
+    return keys.filter((key) => this.config.inspect(key)?.defaultValue === undefined);
+  }
+
+  /**
    * Writes a user setting. Returns true when a workspace value still overrides it in this window,
    * so the caller can say why nothing seems to change.
    */
   async setUserSetting(key: UserSettingKey, value: unknown): Promise<boolean> {
-    await this.config.update(key, value, vscode.ConfigurationTarget.Global);
+    try {
+      await this.config.update(key, value, vscode.ConfigurationTarget.Global);
+    } catch (error) {
+      throw this.unregisteredSettings([key]).length > 0 ? new SettingNotLoadedError(key) : error;
+    }
     const inspected = this.config.inspect(key);
     return inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
   }
 }
 
+/** VS Code has the new extension code but not its new settings yet: a window reload fixes it. */
+export class SettingNotLoadedError extends Error {
+  constructor(readonly key: string) {
+    super(`${CONFIG_SECTION}.${key} is not registered in this window yet`);
+    this.name = 'SettingNotLoadedError';
+  }
+}
+
 /** Window-scoped settings the quick settings menu writes to the user scope. */
-export type UserSettingKey =
-  | 'language'
-  | 'statusBar.mode'
-  | 'statusBar.parts'
-  | 'display.barStyle'
-  | 'statusBar.colors'
-  | 'statusBar.buttons'
-  | 'display.warningThreshold'
-  | 'display.criticalThreshold'
-  | 'sidebar.sortOrder'
-  | 'commandTimeoutSeconds'
-  | 'refreshIntervalSeconds';
+export const USER_SETTING_KEYS = [
+  'language',
+  'statusBar.mode',
+  'statusBar.parts',
+  'display.barStyle',
+  'statusBar.colors',
+  'statusBar.buttons',
+  'display.warningThreshold',
+  'display.criticalThreshold',
+  'sidebar.sortOrder',
+  'commandTimeoutSeconds',
+  'refreshIntervalSeconds',
+] as const;
+export type UserSettingKey = (typeof USER_SETTING_KEYS)[number];

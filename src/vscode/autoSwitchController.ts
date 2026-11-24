@@ -26,6 +26,7 @@ import type { Logger } from './logger';
 import { describeCliError } from './messages';
 import { CLOCK_TICK_MS, formatDateTime, t } from './presentation';
 import { askWithBack, BACK, pickOne } from './quickPick';
+import { STATUS_BAR_ENTRY_NAME } from './statusBarController';
 import { runSwitch } from './switchFlow';
 
 export interface AutoSwitchDependencies {
@@ -144,8 +145,9 @@ export class AutoSwitchController implements vscode.Disposable {
       lease,
       onNotice: (notice) => void this.notify(notice),
     });
-    this.item = vscode.window.createStatusBarItem('cswapManager.autoSwitch', vscode.StatusBarAlignment.Right, 99);
-    this.item.name = t('Cswap Auto-Switch');
+    // No id: grouped with the other Cswap items as one entry in the status bar's context menu.
+    this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    this.item.name = STATUS_BAR_ENTRY_NAME;
     this.item.command = 'cswapManager.autoSwitch';
     this.disposables.push(
       this.item,
@@ -159,7 +161,6 @@ export class AutoSwitchController implements vscode.Disposable {
           void this.service.setMode(deps.configuration.autoSwitchMode());
         }
         if (event.affectsConfiguration(`${CONFIG_SECTION}.language`)) {
-          this.item.name = t('Cswap Auto-Switch');
           this.render();
         }
       }),

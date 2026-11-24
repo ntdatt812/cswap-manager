@@ -54,9 +54,10 @@ async function confirm(deps: SwitchFlowDependencies, target: SwitchTarget): Prom
     try {
       await deps.configuration.setConfirmSwitch(false);
       vscode.window.setStatusBarMessage(t('Cswap: switching without asking from now on. Turn it back on in Cswap Settings.'), 10_000);
-    } catch {
+    } catch (error) {
       // The switch the user asked for still goes ahead; only the preference was not saved.
-      void vscode.window.showWarningMessage(t('The setting could not be saved. Check your VS Code user settings file.'));
+      const reason = error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir: deps.homeDir, maxLength: 300 }) : t('unknown');
+      void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', reason)));
     }
   }
   return choice === proceed || choice === always;

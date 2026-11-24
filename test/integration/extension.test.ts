@@ -236,6 +236,55 @@ suite('Cswap Manager (extension host)', () => {
     }
   });
 
+  test('saves a new value picked in Quick Settings (refresh interval and bar style)', async () => {
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const warnings: string[] = [];
+    const window = vscode.window as unknown as { showWarningMessage: (...args: unknown[]) => Thenable<unknown> };
+    const original = window.showWarningMessage;
+    window.showWarningMessage = (...args: unknown[]) => {
+      warnings.push(String(args[0]));
+      return Promise.resolve(undefined);
+    };
+    const before = ['refreshIntervalSeconds', 'display.barStyle'].map((key) => config().inspect(key)?.globalValue);
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const pickNext = async (row: string) => {
+      const opened = vscode.commands.executeCommand('cswapManager.quickSettings', row);
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+      await pause(200);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await pause(800);
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await opened;
+    };
+    try {
+      await config().update('refreshIntervalSeconds', 120, vscode.ConfigurationTarget.Global);
+      await config().update('display.barStyle', 'blocks', vscode.ConfigurationTarget.Global);
+      await pickNext('refresh');
+      await pickNext('barStyle');
+      assert.deepEqual(warnings, []);
+      assert.equal(config().inspect('refreshIntervalSeconds')?.globalValue, 300);
+      assert.equal(config().inspect('display.barStyle')?.globalValue, 'parallelograms');
+    } finally {
+      window.showWarningMessage = original;
+      await config().update('refreshIntervalSeconds', before[0], vscode.ConfigurationTarget.Global);
+      await config().update('display.barStyle', before[1], vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('knows every contributed setting (a missing default would mean "not loaded yet")', () => {
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    const contributed = Object.keys(
+      (extension?.packageJSON as { contributes: { configuration: { properties: Record<string, unknown> } } }).contributes.configuration.properties,
+    );
+    const config = vscode.workspace.getConfiguration();
+    const missing = contributed.filter((key) => config.inspect(key)?.defaultValue === undefined);
+    assert.deepEqual(missing, []);
+    assert.equal(vscode.workspace.getConfiguration('cswapManager').inspect('not.a.setting')?.defaultValue, undefined);
+  });
+
   test('runs auto-switch in notify mode with real dry runs only (never switches)', async function () {
     const before = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
     if (!before.ok) {

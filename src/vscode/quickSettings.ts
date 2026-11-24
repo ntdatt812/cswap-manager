@@ -32,7 +32,8 @@ import {
   type StatusBarPart,
 } from '../core/presentation/statusBar';
 import type { AutoSwitchController, MenuResult } from './autoSwitchController';
-import type { ExtensionConfiguration, UserSettingKey } from './configuration';
+import { neutralizeLinks, redactText } from '../core/security/redact';
+import { SettingNotLoadedError, type ExtensionConfiguration, type UserSettingKey } from './configuration';
 import { t } from './presentation';
 import { askWithBack, BACK, pickMany, pickOne, type Back } from './quickPick';
 import { statusBarButtonIcon, type StatusBarController } from './statusBarController';
@@ -118,8 +119,8 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined)
       picker.busy = true;
       try {
         await deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch());
-      } catch {
-        showSaveFailed();
+      } catch (error) {
+        showSaveFailed(error);
       } finally {
         picker.busy = false;
       }
@@ -506,6 +507,10 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
 
 /** **Cswap: Quick Settings…** — the common settings in the extension's own language. */
 export async function openQuickSettings(deps: QuickSettingsDependencies, focus?: SettingKey): Promise<void> {
+  if (deps.configuration.unregisteredSettings().length > 0) {
+    // Say it up front instead of failing on the first save.
+    void offerReload();
+  }
   let active = focus;
   for (;;) {
     const key = await pickRow(deps, active);
@@ -517,13 +522,30 @@ export async function openQuickSettings(deps: QuickSettingsDependencies, focus?:
       if ((await editRow(deps, key)) === 'close') {
         return;
       }
-    } catch {
+    } catch (error) {
       deps.statusBar.preview(undefined);
-      showSaveFailed();
+      showSaveFailed(error);
     }
   }
 }
 
-function showSaveFailed(): void {
-  void vscode.window.showWarningMessage(t('The setting could not be saved. Check your VS Code user settings file.'));
+async function offerReload(): Promise<void> {
+  const reload = t('Reload Window');
+  const choice = await vscode.window.showWarningMessage(
+    t('Cswap Manager was just updated, but this window has not loaded its new settings yet, so they cannot be saved. Reload the window, then try again.'),
+    reload,
+  );
+  if (choice === reload) {
+    await vscode.commands.executeCommand('workbench.action.reloadWindow');
+  }
+}
+
+/** Shows why a setting was not saved, in VS Code's own words (redacted), never a guess. */
+function showSaveFailed(error: unknown): void {
+  if (error instanceof SettingNotLoadedError) {
+    void offerReload();
+    return;
+  }
+  const reason = error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir: os.homedir(), maxLength: 300 }) : t('unknown');
+  void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', reason)));
 }

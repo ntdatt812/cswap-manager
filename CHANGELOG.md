@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1 — 2026-11-24
+- Fixed: right after VS Code auto-updates the extension, the new settings could not be saved and Quick Settings showed a misleading "check your user settings file". VS Code only registers an update's new settings when the window reloads; Quick Settings now detects this, says so up front and offers **Reload Window**. Other save errors show VS Code's own message.
+- All Cswap status bar items (account, auto-switch, buttons) now share one **Cswap Manager** entry in the status bar's right-click menu, which hides or shows them together. Turn single buttons on or off in *Quick Settings › Status bar › Buttons*. If you had hidden the account item from that menu before, it shows again once; hide it there or in Quick Settings.
+
 ## 0.5.0 — 2026-11-24
 - **Status bar, your way** (*Quick Settings › Status bar*):
   - ready-made looks (Compact, With progress bar, Full, Name and usage, Slot only, Usage only), each drawn with your own data;

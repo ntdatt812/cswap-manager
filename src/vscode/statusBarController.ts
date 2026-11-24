@@ -62,8 +62,14 @@ export function statusBarButtonIcon(button: StatusBarButton): string {
 }
 
 /**
- * The active-account status bar item (click: quick switch) and the optional buttons right next to
- * it. Every item has its own id, so each can also be hidden from the status bar's context menu.
+ * Every Cswap status bar item is created without an id, so all of them share the extension's id:
+ * the status bar's context menu then lists them as one "Cswap Manager" entry that hides or shows
+ * them together. Single buttons are turned on and off in Quick Settings instead.
+ */
+export const STATUS_BAR_ENTRY_NAME = 'Cswap Manager';
+
+/**
+ * The active-account status bar item (click: quick switch) and the optional buttons right next to it.
  */
 export class StatusBarController implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -73,13 +79,14 @@ export class StatusBarController implements vscode.Disposable {
   private previewing: StatusBarPreview | undefined;
 
   constructor(private readonly deps: StatusBarDependencies) {
-    this.item = vscode.window.createStatusBarItem('cswapManager.status', vscode.StatusBarAlignment.Right, 100);
-    this.item.name = 'Cswap Manager';
+    this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    this.item.name = STATUS_BAR_ENTRY_NAME;
     this.item.command = 'cswapManager.quickSwitch';
     // Right-aligned items with a higher priority sit further left. Account (100) and auto-switch (99)
     // stay together; the buttons follow them.
     STATUS_BAR_BUTTONS.forEach((button, index) => {
-      const item = vscode.window.createStatusBarItem(`cswapManager.button.${button}`, vscode.StatusBarAlignment.Right, 98.9 - index * 0.1);
+      const item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 98.9 - index * 0.1);
+      item.name = STATUS_BAR_ENTRY_NAME;
       item.text = `$(${BUTTON_COMMANDS[button].icon})`;
       item.command = BUTTON_COMMANDS[button].command;
       this.buttons.set(button, item);
@@ -166,7 +173,6 @@ export class StatusBarController implements vscode.Disposable {
       if (model !== undefined && look.buttons.includes(button)) {
         // Re-labelled on every render so a language change applies at once.
         const label = `Cswap: ${statusBarButtonLabel(button, t)}`;
-        item.name = label;
         item.tooltip = label;
         item.accessibilityInformation = { label };
         item.show();

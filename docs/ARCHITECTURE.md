@@ -149,7 +149,7 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 ## Status bar customization (0.5.0)
 - One progress bar style (`display.barStyle`) is used everywhere: sidebar rows, the switch picker and the status bar (`usageBar` in `format.ts`).
 - `statusBar.mode` keeps its preset values (`slotUsage`, `slot`, `nameUsage`, `hidden`), now defined as fixed part lists; `custom` uses `statusBar.parts`. `buildStatusBarModel` renders parts in a fixed order and never produces an empty item.
-- Buttons are separate status bar items (`cswapManager.button.*`) right of the account and auto-switch items, shown only while the account item is (so `hidden` still hides everything). Only actions the status bar cannot otherwise reach are offered: switching is the account item's own click, and filter/sort act on the Accounts view, so they are not buttons.
+- Buttons are separate status bar items right of the account and auto-switch items, shown only while the account item is (so `hidden` still hides everything). All Cswap items are created without an id (0.5.1), so they share the extension's id and appear as one "Cswap Manager" entry in the status bar's context menu. Only actions the status bar cannot otherwise reach are offered: switching is the account item's own click, and filter/sort act on the Accounts view, so they are not buttons.
 - Live preview: `StatusBarController.preview()` overrides the saved look in memory while a picker is open; ending the picker (save, Back, Esc) clears it, so nothing is written until Enter.
 - Navigation: every screen opened from Quick Settings has VS Code's `QuickInputButtons.Back`; Esc (or focus moving away) closes everything, because a hidden QuickPick cannot tell Esc from focus loss.
 
