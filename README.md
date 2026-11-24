@@ -3,7 +3,7 @@
 Manage your [Claude Swap](https://github.com/realiti4/claude-swap) (`cswap`) accounts without leaving VS Code: see every account's usage, switch the active Claude Code account, and adjust account settings. The `cswap` CLI does all the work; this extension is a GUI on top of it.
 
 ## Requirements
-- `cswap` installed and managing at least one account (verified with cswap 1.1.0).
+- `cswap` installed and managing at least one account (verified with cswap 1.1.0 and 1.2.0).
 - VS Code 1.90 or newer.
 - Windows is the primary platform; macOS/Linux should work but are untested.
 

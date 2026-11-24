@@ -100,7 +100,7 @@ An independent read-only review covered process execution, executable resolution
 Accepted: reversible actions (remove alias, enable, clear threshold) run without a modal; absolute PATH entries are trusted as the user's shell trusts them. Dev-only dependencies (mocha, @vscode/test-cli, vsce) have 9 audit advisories (1 high in `serialize-javascript` via mocha) with no fix available; none of them ship in the VSIX, whose runtime dependency count is zero.
 
 ## Release validation (Phase 6)
-`npm run package:vsix` produces `cswap-manager-0.1.0.vsix` (10 files, ~42 KB: bundled `dist/`, `media/`, `resources/`, README, CHANGELOG, manifest). The archive was scanned for usernames, local paths, emails and source maps (none), installed into an isolated VS Code profile, and the extension-host suite was run against the minified production bundle.
+`npm run package:vsix` produces `cswap-manager-<version>.vsix` (10 files, ~42 KB: bundled `dist/`, `media/`, `resources/`, README, CHANGELOG, manifest). The archive was scanned for usernames, local paths, emails and source maps (none), installed into an isolated VS Code profile, and the extension-host suite was run against the minified production bundle.
 
 ## Diagnostics
 `Cswap: Show Diagnostics` runs only the three read-only probes and renders counts, keys, codes, exit codes and timings into an untitled Markdown document, with an optional copy-to-clipboard. Paths are shown relative to `~`; emails, organization names, UUIDs, scope names and raw output are never included, and the final text is redacted again.

@@ -7,7 +7,7 @@ The work was done phase by phase (see `IMPLEMENTATION-PLAN.md`), starting with t
 
 ## Environment the extension was verified on
 - Windows 11, PowerShell 5.1
-- `cswap` 1.1.0 installed with `uv tool` at `%USERPROFILE%\.local\bin\cswap.exe`
+- `cswap` 1.1.0 (development baseline), re-verified on 1.2.0, installed with `uv tool` at `%USERPROFILE%\.local\bin\cswap.exe`
 - Node.js 24, VS Code 1.147
 - Verified CLI commands and outputs: `docs/CLI-CONTRACT.md`
 

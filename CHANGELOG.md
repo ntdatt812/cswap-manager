@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.1 — 2026-11-24
+- Verified against cswap 1.2.0 (source diff + live probes + full test suite); the 1.2 line is now reported as tested in diagnostics.
+
 ## 0.1.0 — 2026-11-24
 
 First release, built in phases:

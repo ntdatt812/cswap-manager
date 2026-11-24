@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { CliOutcome } from '../../src/core/cli/cswapCli';
-import { parseCliVersion, type CliVersion } from '../../src/core/cli/version';
+import { assessCompatibility, parseCliVersion, type CliVersion } from '../../src/core/cli/version';
 import { collectDiagnostics, formatDiagnosticsReport, type DiagnosticsDependencies } from '../../src/core/diagnostics/diagnostics';
 import { parseListOutput, parseStatusOutput } from '../../src/core/model/parsers';
 import type { ListPayload, StatusPayload } from '../../src/core/model/types';
@@ -72,6 +72,17 @@ describe('diagnostics', () => {
     const text = formatDiagnosticsReport(report, HOME);
     assert.match(text, /Not resolved: not-found/);
     assert.match(text, /compatibility: unknown/);
+  });
+});
+
+describe('compatibility', () => {
+  it('treats the verified 1.1 and 1.2 lines as tested and others as untested', () => {
+    assert.equal(assessCompatibility(parseCliVersion('cswap 1.1.0')).level, 'tested');
+    assert.equal(assessCompatibility(parseCliVersion('cswap 1.2.0')).level, 'tested');
+    assert.equal(assessCompatibility(parseCliVersion('cswap 1.2.7')).level, 'tested');
+    assert.equal(assessCompatibility(parseCliVersion('cswap 1.3.0')).level, 'untested');
+    assert.equal(assessCompatibility(parseCliVersion('cswap 2.0.0')).level, 'untested');
+    assert.equal(assessCompatibility(undefined).level, 'unknown');
   });
 });
 

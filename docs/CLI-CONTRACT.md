@@ -110,5 +110,13 @@ Sources: `claude_swap/cli.py` (`_alias_command`, `_threshold_command`, `_swap_co
 - A swap/move between two different occupied slots was **not** executed live (it renames per-slot credential backups); per source it runs under the account file lock, and aliases, backups and session history move with the account; directory mappings key on email/org and are unaffected.
 - Deferred (not implemented): `priority` (not visible in JSON; only used by `auto --strategy priority-consume-first`), `map`/`unmap` (text-only output), `run` (marked `[EXPERIMENTAL]` by cswap and interactive), `auto`/`config` (daemon/settings; must not be changed implicitly), `add`/`add-token`/`remove`/`import`/`export` (per plan), `purge` (never).
 
+## cswap 1.2.0 re-verification (2026-11-24)
+Upgraded with `uv tool upgrade claude-swap` (1.1.0 → 1.2.0; `platformdirs` 4.14.5 → 4.14.8). The account roster and policy state were identical before and after the upgrade.
+- **Source diff 1.1.0 → 1.2.0:** `json_output.py` unchanged and `SCHEMA_VERSION` still 1. Changes are in `cli.py` (`cswap run` now writes its notices to stderr; a new `interactive` flag used only by the macOS Keychain migration and always off with `--json`), `models.py`/`switcher.py` `list`/`status` **text** output (org-tag display; the `--json` paths are untouched), usage/credential internals (`oauth.py`, `migrations.py`, `session.py`, `autoswitch.py`, a new usage error reason `live-login`), `settings.py` and the TUI.
+- **Help text:** identical.
+- **Live probes:** `list --json` and `status --json` key shapes identical to 1.1.0; argparse error → exit 2; `switch <active> --json` → `switched:false`, `reason:"already-active"`, same key set; `switch 99 --json` → exit 1 with the same `AccountNotFoundError` envelope; the full reversible alias/threshold/disable/enable/move/swap probe set behaved exactly as on 1.1.0 and restored the state.
+- The "newer version available" stderr notice no longer appears (1.2.0 is the latest release at the time of testing).
+- Result: the 1.2 line is marked **tested** in `core/cli/version.ts`; 1.3+ and 2.x are reported as untested (still parsed tolerantly).
+
 ## Safety
 Do not invoke purge. Do not use add-token with a raw token in a process argument. Avoid exposing token diagnostics. For risky commands, require explicit confirmation and preview.

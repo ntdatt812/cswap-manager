@@ -13,8 +13,14 @@ export interface CompatibilityAssessment {
   readonly version?: CliVersion;
 }
 
-/** The CLI version this extension was developed and verified against. */
-export const TESTED_CLI_VERSION: CliVersion = { major: 1, minor: 1, patch: 0, text: '1.1.0' };
+/**
+ * CLI release lines verified against this extension (source review + live probes, see
+ * docs/CLI-CONTRACT.md): 1.1.x was the development baseline, 1.2.0 was re-verified on upgrade.
+ */
+export const TESTED_CLI_LINES: ReadonlyArray<{ readonly major: number; readonly minor: number }> = [
+  { major: 1, minor: 1 },
+  { major: 1, minor: 2 },
+];
 
 /** Parses the output of `cswap --version` (observed: `cswap 1.1.0`). */
 export function parseCliVersion(stdout: string): CliVersion | undefined {
@@ -31,13 +37,12 @@ export function parseCliVersion(stdout: string): CliVersion | undefined {
 
 /**
  * Compatibility is advisory: parsing is tolerant, so an untested version is still used, but the UI
- * and diagnostics should say so. Only the 1.x line with minor >= 1 has been observed.
+ * and diagnostics should say so.
  */
 export function assessCompatibility(version: CliVersion | undefined): CompatibilityAssessment {
   if (version === undefined) {
     return { level: 'unknown' };
   }
-  const tested =
-    version.major === TESTED_CLI_VERSION.major && version.minor === TESTED_CLI_VERSION.minor;
+  const tested = TESTED_CLI_LINES.some((line) => line.major === version.major && line.minor === version.minor);
   return { level: tested ? 'tested' : 'untested', version };
 }
