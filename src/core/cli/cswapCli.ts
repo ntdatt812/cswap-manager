@@ -223,6 +223,19 @@ const ERROR_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_.]{0,63}$/;
 /** `stderr` is for commands that report only there (export/import); it is never logged raw. */
 type OutputParser<T> = (stdout: string, exitCode: number | null, stderr: string) => ParseResult<T>;
 
+/** For commands whose success is the exit code: their human text is not read. */
+const IGNORE_OUTPUT: OutputParser<void> = () => ({ ok: true, value: undefined });
+
+/** For commands that report on stderr only (export/import). */
+function fromStderr<T>(parse: (stderr: string) => ParseResult<T>): OutputParser<T> {
+  return (_stdout, _exitCode, stderr) => parse(stderr);
+}
+
+/** A text parser's result, or `unexpected-shape` when the output was not recognised. */
+function recognised<T>(value: T | undefined, command: string): ParseResult<T> {
+  return value === undefined ? { ok: false, reason: 'unexpected-shape', message: `${command} output was not recognised.` } : { ok: true, value };
+}
+
 interface ExecuteOptions {
   readonly signal?: AbortSignal;
   readonly mutating?: boolean;
@@ -259,11 +272,7 @@ export class CswapCli {
 
   /** Switches the active Claude Code account. Not cancellable once started. */
   switch(target: SwitchTarget): Promise<CliOutcome<SwitchResult>> {
-    const args = switchArgs(target);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'switch' }, cliError('invalid-request', { command: 'switch' })));
-    }
-    return this.execute('switch', args, parseSwitchOutput, { mutating: true });
+    return this.mutate('switch', switchArgs(target), parseSwitchOutput);
   }
 
   /**
@@ -295,108 +304,58 @@ export class CswapCli {
 
   /** `cswap config set <key> <value>` for an allow-listed auto-switch rule with a validated value. */
   setAutoSwitchRule(rule: AutoSwitchRuleUpdate): Promise<CliOutcome<void>> {
-    const args = autoSwitchRuleArgs(rule);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'config' }, cliError('invalid-request', { command: 'config' })));
-    }
-    return this.execute('config', args, () => ({ ok: true, value: undefined }), { mutating: true });
+    return this.mutate('config', autoSwitchRuleArgs(rule), IGNORE_OUTPUT);
   }
 
   /** `cswap config unset <key>`: back to cswap's default for an allow-listed rule. */
   resetAutoSwitchRule(key: AutoSwitchRuleKey): Promise<CliOutcome<void>> {
-    if (!(AUTO_SWITCH_RULE_KEYS as readonly string[]).includes(key)) {
-      return Promise.resolve(this.fail({ command: 'config' }, cliError('invalid-request', { command: 'config' })));
-    }
-    return this.execute('config', ['config', 'unset', key], () => ({ ok: true, value: undefined }), { mutating: true });
+    return this.mutate('config', (AUTO_SWITCH_RULE_KEYS as readonly string[]).includes(key) ? ['config', 'unset', key] : undefined, IGNORE_OUTPUT);
+  }
+
+  /** `cswap priority` (text only; no JSON exists in cswap 1.2.0). */
+  priorities(): Promise<CliOutcome<PriorityEntry[]>> {
+    return this.execute('priority', ['priority'], (stdout) => recognised(parsePriorityList(stdout), 'cswap priority'), {});
   }
 
   /**
    * Runs an account-policy command. These commands print human text only, so success is the exit
    * code; callers verify the effect with a fresh `list --json`.
    */
-  /** `cswap priority` (text only; no JSON exists in cswap 1.2.0). */
-  priorities(): Promise<CliOutcome<PriorityEntry[]>> {
-    return this.execute(
-      'priority',
-      ['priority'],
-      (stdout) => {
-        const entries = parsePriorityList(stdout);
-        return entries === undefined
-          ? { ok: false, reason: 'unexpected-shape', message: 'cswap priority output did not have the expected header.' }
-          : { ok: true, value: entries };
-      },
-      {},
-    );
-  }
-
   manage(operation: ManageOperation): Promise<CliOutcome<void>> {
     const args = manageArgs(operation);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'manage' }, cliError('invalid-request', { command: 'manage' })));
-    }
-    if (operation.kind === 'remove') {
-      // cswap always asks "[y/N]" and has no flag to skip it; the user already confirmed in VS Code.
-      return this.execute('manage', args, (stdout) => parseRemoveOutput(stdout), { mutating: true, input: 'y\n' });
-    }
-    return this.execute('manage', args, () => ({ ok: true, value: undefined }), { mutating: true });
+    // cswap always asks "[y/N]" before removing and has no flag to skip it; the user already confirmed in VS Code.
+    return operation.kind === 'remove' ? this.mutate('manage', args, parseRemoveOutput, 'y\n') : this.mutate('manage', args, IGNORE_OUTPUT);
   }
 
   /** `cswap map` (list; text only). */
   mappings(): Promise<CliOutcome<MappingEntry[]>> {
-    return this.execute(
-      'map',
-      ['map'],
-      (stdout) => {
-        const entries = parseMappingList(stdout);
-        return entries === undefined ? { ok: false, reason: 'unexpected-shape', message: 'cswap map output was not recognised.' } : { ok: true, value: entries };
-      },
-      {},
-    );
+    return this.execute('map', ['map'], (stdout) => recognised(parseMappingList(stdout), 'cswap map'), {});
   }
 
   /** `cswap map <slot> <folder>` / `cswap unmap <folder>`: which account a bare `cswap run` uses there. */
   setMapping(folder: string, slot: number | undefined): Promise<CliOutcome<void>> {
-    if (!isSafePathArgument(folder) || (slot !== undefined && !isValidSlot(slot))) {
-      return Promise.resolve(this.fail({ command: 'map' }, cliError('invalid-request', { command: 'map' })));
-    }
-    const args = slot === undefined ? ['unmap', folder] : ['map', String(slot), folder];
-    return this.execute('map', args, () => ({ ok: true, value: undefined }), { mutating: true });
+    const valid = isSafePathArgument(folder) && (slot === undefined || isValidSlot(slot));
+    return this.mutate('map', !valid ? undefined : slot === undefined ? ['unmap', folder] : ['map', String(slot), folder], IGNORE_OUTPUT);
   }
 
   /** `cswap add`: stores the current Claude Code login (or refreshes it when already managed). */
   addAccount(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>> {
-    const args = addArgs(options);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'manage' }, cliError('invalid-request', { command: 'manage' })));
-    }
-    return this.execute('manage', args, (stdout) => parseAddOutput(stdout), { mutating: true });
+    return this.mutate('manage', addArgs(options), parseAddOutput);
   }
 
   /** `cswap export <file> [--account N]`: cswap writes the file (owner-only); the extension never reads it. */
   exportAccounts(path: string, slot?: number): Promise<CliOutcome<ExportResult>> {
-    const args = exportArgs(path, slot);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
-    }
-    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseExportOutput(stderr), { mutating: true });
+    return this.mutate('transfer', exportArgs(path, slot), fromStderr(parseExportOutput));
   }
 
   /** `cswap import <file> [--force]`. */
   importAccounts(path: string, replaceExisting: boolean): Promise<CliOutcome<ImportResult>> {
-    const args = importArgs(path, replaceExisting);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
-    }
-    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseImportOutput(stderr), { mutating: true });
+    return this.mutate('transfer', importArgs(path, replaceExisting), fromStderr(parseImportOutput));
   }
 
   /** `cswap import-usage <file> [--hold S]`: adopts another machine's `list --json` readings. */
   importUsage(path: string, holdSeconds?: number): Promise<CliOutcome<UsageImportResult>> {
-    const args = importUsageArgs(path, holdSeconds);
-    if (args === undefined) {
-      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
-    }
-    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseImportUsageOutput(stderr), { mutating: true });
+    return this.mutate('transfer', importUsageArgs(path, holdSeconds), fromStderr(parseImportUsageOutput));
   }
 
   /**
@@ -408,6 +367,17 @@ export class CswapCli {
       const parsed = parseListOutput(stdout);
       return parsed.ok ? { ok: true, value: stdout } : parsed;
     }, {});
+  }
+
+  /**
+   * A state-changing command built from validated values only: `args` is undefined when a value was
+   * refused, and then nothing reaches cswap. Not cancellable once started.
+   */
+  private mutate<T>(command: CliCommandId, args: readonly string[] | undefined, parse: OutputParser<T>, input?: string): Promise<CliOutcome<T>> {
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command }, cliError('invalid-request', { command })));
+    }
+    return this.execute(command, args, parse, { mutating: true, ...(input === undefined ? {} : { input }) });
   }
 
   private async execute<T>(

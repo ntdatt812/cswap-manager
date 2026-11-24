@@ -3,12 +3,12 @@ import type { SwitchTarget } from '../core/cli/cswapCli';
 import type { Account } from '../core/model/types';
 import { accountName } from '../core/presentation/accountTree';
 import { buildQuickSwitchItems, type QuickSwitchAction } from '../core/presentation/quickSwitch';
-import { sanitizeLabel, sanitizeLabelKeepingBars } from '../core/presentation/statusBar';
+import { sanitizeLabel } from '../core/presentation/statusBar';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
 import type { SwitchOutcome, SwitchService } from '../core/service/switchService';
 import type { ExtensionConfiguration } from './configuration';
-import { describeCliError, describeNoSwitchReason } from './messages';
+import { describeCliError, describeNoSwitchReason, errorReason } from './messages';
 import { presentationOptions, t } from './presentation';
 import { pickOne } from './quickPick';
 
@@ -56,8 +56,7 @@ async function confirm(deps: SwitchFlowDependencies, target: SwitchTarget): Prom
       vscode.window.setStatusBarMessage(t('Cswap: switching without asking from now on. Turn it back on in Cswap Settings.'), 10_000);
     } catch (error) {
       // The switch the user asked for still goes ahead; only the preference was not saved.
-      const reason = error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir: deps.homeDir, maxLength: 300 }) : t('unknown');
-      void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', reason)));
+      void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', errorReason(error, deps.homeDir))));
     }
   }
   return choice === proceed || choice === always;
@@ -164,7 +163,7 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
       ? { label: model.label, kind: vscode.QuickPickItemKind.Separator }
       : {
           label: `${model.iconId ? `$(${model.iconId}) ` : ''}${sanitizeLabel(model.label)}`,
-          ...(model.description === undefined ? {} : { description: sanitizeLabelKeepingBars(model.description) }),
+          ...(model.description === undefined ? {} : { description: model.description }),
           ...(model.detail === undefined ? {} : { detail: sanitizeLabel(model.detail) }),
           ...(model.action === undefined ? {} : { action: model.action }),
         },

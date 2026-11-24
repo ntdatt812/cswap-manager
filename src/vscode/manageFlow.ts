@@ -7,14 +7,14 @@ import { actionLabel, availableActions } from '../core/presentation/accountActio
 import { accountName } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
 import { sanitizeLabel } from '../core/presentation/statusBar';
-import { neutralizeLinks, redactText } from '../core/security/redact';
+import { neutralizeLinks } from '../core/security/redact';
 import type { ManageOutcome, ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
 import { DISPLAY_NAME_MAX, cleanDisplayName, displayNameKey } from '../core/model/displayNames';
 import { PRIORITY_MAX, PRIORITY_MIN, parsePriority } from '../core/model/priorities';
 import type { ExtensionConfiguration } from './configuration';
-import { describeCliError } from './messages';
+import { describeCliError, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
 import { showSaveFailed } from './settingErrors';
 import { ACCOUNTS_VIEW_ID } from './accountsView';
@@ -32,7 +32,7 @@ function label(account: Account): string {
   return neutralizeLinks(sanitizeLabel(t('slot {0} ({1})', account.slot, accountName(account, t))));
 }
 
-function aliasProblemText(problem: AliasProblem): string {
+export function aliasProblemText(problem: AliasProblem): string {
   switch (problem) {
     case 'empty':
       return t('Enter an alias, or use "Remove alias" to clear it.');
@@ -58,14 +58,15 @@ async function snapshotOrRefresh(deps: ManageFlowDependencies): Promise<Accounts
   return deps.refreshService.getState().snapshot;
 }
 
-async function pickAccount(snapshot: AccountsSnapshot, title: string): Promise<Account | undefined> {
+/** Picks one of cswap's accounts; the active one is marked. */
+export async function pickAccount(snapshot: AccountsSnapshot, title: string, placeHolder = t('Choose an account')): Promise<Account | undefined> {
   const picked = await vscode.window.showQuickPick(
     snapshot.accounts.map((account) => ({
       label: sanitizeLabel(`${account.slot} · ${accountName(account, t)}`),
       description: snapshot.active.slot === account.slot ? t('current') : undefined,
       account,
     })),
-    { title, placeHolder: t('Choose an account') },
+    { title, placeHolder },
   );
   return picked?.account;
 }
@@ -177,7 +178,7 @@ async function promptMove(account: Account, snapshot: AccountsSnapshot): Promise
   return picked === undefined ? undefined : confirmMove(account, picked.slot, snapshot);
 }
 
-/** The move confirmation shared by "Move to slot…" and drag and drop in the Accounts view. */
+/** "Move to slot…" confirms in a modal; drag and drop offers Undo instead (`runDropMove`). */
 async function confirmMove(account: Account, targetSlot: number, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
   const occupant = snapshot.accounts.find((candidate) => candidate.slot === targetSlot);
   const consequence =
@@ -282,14 +283,11 @@ function successText(operation: ManageOperation, account: Account): string {
   }
 }
 
-function reportBusy(): void {
-  void vscode.window.showInformationMessage(t('Another cswap operation is in progress. Try again when it finishes.'));
-}
-
-function report(deps: ManageFlowDependencies, operation: ManageOperation, account: Account, outcome: ManageOutcome): void {
+/** Reports a management outcome; a confirmed result can offer an Undo action. */
+function report(deps: ManageFlowDependencies, operation: ManageOperation, account: Account, outcome: ManageOutcome, undo?: () => void): void {
   switch (outcome.kind) {
     case 'busy':
-      reportBusy();
+      showBusy();
       return;
     case 'rejected':
       void vscode.window.showErrorMessage(
@@ -298,14 +296,22 @@ function report(deps: ManageFlowDependencies, operation: ManageOperation, accoun
           : t('That account is no longer listed by cswap. Refresh and try again.'),
       );
       return;
-    case 'failed': {
-      const detail = outcome.error.detail ? ` ${redactText(outcome.error.detail, { homeDir: deps.homeDir })}` : '';
-      void vscode.window.showErrorMessage(neutralizeLinks(`${describeCliError(outcome.error)}${detail}`));
+    case 'failed':
+      showCliFailure(outcome.error, deps.homeDir);
       return;
-    }
     case 'applied':
       if (outcome.verification === 'confirmed') {
-        void vscode.window.showInformationMessage(neutralizeLinks(sanitizeLabel(`Cswap: ${successText(operation, account)}`)));
+        const text = neutralizeLinks(sanitizeLabel(`Cswap: ${successText(operation, account)}`));
+        if (undo === undefined) {
+          void vscode.window.showInformationMessage(text);
+        } else {
+          const undoLabel = t('Undo');
+          void vscode.window.showInformationMessage(text, undoLabel).then((choice) => {
+            if (choice === undoLabel) {
+              undo();
+            }
+          });
+        }
       } else if (outcome.verification === 'mismatch') {
         void vscode.window.showWarningMessage(t('cswap reported success, but the refreshed account list does not show the change.'));
       } else {
@@ -320,7 +326,7 @@ function report(deps: ManageFlowDependencies, operation: ManageOperation, accoun
 /** Prompts for an action's input/confirmation, applies it through cswap and reports the verified result. */
 export async function runAccountAction(deps: ManageFlowDependencies, action: AccountActionId | undefined, slot?: number): Promise<ManageOutcome | undefined> {
   if (deps.gate.isBusy()) {
-    reportBusy();
+    showBusy();
     return { kind: 'busy' };
   }
   const snapshot = await snapshotOrRefresh(deps);
@@ -374,34 +380,21 @@ export async function runDropMove(deps: ManageFlowDependencies, slot: number, ta
     return;
   }
   if (deps.gate.isBusy()) {
-    reportBusy();
+    showBusy();
     return;
   }
   const snapshot = await snapshotOrRefresh(deps);
-  const account = snapshot?.accounts.find((candidate) => candidate.slot === slot);
-  const occupant = snapshot?.accounts.find((candidate) => candidate.slot === targetSlot);
-  if (snapshot === undefined || account === undefined || occupant === undefined) {
+  if (snapshot === undefined) {
+    return;
+  }
+  const account = snapshot.accounts.find((candidate) => candidate.slot === slot);
+  if (account === undefined || !snapshot.accounts.some((candidate) => candidate.slot === targetSlot)) {
+    void vscode.window.showErrorMessage(t('That account is no longer listed by cswap. Refresh and try again.'));
     return;
   }
   const operation: ManageOperation = { kind: 'move', slot, targetSlot };
   const outcome = await vscode.window.withProgress({ location: { viewId: ACCOUNTS_VIEW_ID } }, () => deps.managementService.apply(operation, snapshot));
-  if (outcome.kind !== 'applied' || outcome.verification !== 'confirmed') {
-    report(deps, operation, account, outcome);
-    return;
-  }
-  const text = neutralizeLinks(
-    sanitizeLabel(t('{0} is now slot {1}, {2} is now slot {3}.', accountName(account, t), targetSlot, accountName(occupant, t), slot)),
-  );
-  if (undoing) {
-    void vscode.window.showInformationMessage(text);
-    return;
-  }
-  const undo = t('Undo');
-  void vscode.window.showInformationMessage(text, undo).then((choice) => {
-    if (choice === undo) {
-      // The dragged account now sits in targetSlot; moving it back swaps the two again. The re-check
-      // against the state after this move refuses if anything changed in between.
-      void runDropMove(deps, targetSlot, slot, true);
-    }
-  });
+  // The dragged account now sits in targetSlot; moving it back swaps the two again, and the re-check
+  // against the state after this move refuses if anything changed in between.
+  report(deps, operation, account, outcome, undoing ? undefined : () => void runDropMove(deps, targetSlot, slot, true));
 }

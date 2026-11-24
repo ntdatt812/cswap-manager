@@ -35,9 +35,9 @@ import {
 import type { AutoSwitchController, MenuResult } from './autoSwitchController';
 import type { ExtensionConfiguration, UserSettingKey } from './configuration';
 import type { AccountsSnapshot } from '../core/model/types';
-import { accountName } from '../core/presentation/accountTree';
+import { slotLabel } from '../core/presentation/accountTree';
 import { t } from './presentation';
-import type { ProjectMapping } from './projectAccounts';
+import type { ProjectAccounts } from './projectAccounts';
 import { askWithBack, BACK, pickMany, pickOne, type Back } from './quickPick';
 import { offerReload, showSaveFailed } from './settingErrors';
 import { statusBarButtonIcon, type StatusBarController } from './statusBarController';
@@ -49,7 +49,7 @@ export interface QuickSettingsDependencies {
   /** For names of mapped accounts. */
   readonly refreshService?: { getState(): { readonly snapshot?: AccountsSnapshot } };
   /** Account mapped to the open project folder (`cswap map`). */
-  readonly projectAccounts?: { currentMapping(): ProjectMapping | undefined; assign(): Promise<void> };
+  readonly projectAccounts?: Pick<ProjectAccounts, 'currentMapping' | 'assign' | 'load'>;
   /** Known cswap version / newer release, for the Advanced row. */
   readonly updateCheck?: { getState(): { readonly current?: { readonly text: string }; readonly latest?: { readonly text: string } } };
 }
@@ -73,7 +73,7 @@ function projectAccountText(deps: QuickSettingsDependencies): string | undefined
     text = t('not assigned');
   } else {
     const account = deps.refreshService?.getState().snapshot?.accounts.find((candidate) => candidate.slot === mapping.slot);
-    text = `#${mapping.slot} ${account === undefined ? '' : accountName(account, t)}`.trim();
+    text = account === undefined ? `#${mapping.slot}` : slotLabel(account, t);
   }
   return (vscode.workspace.workspaceFolders?.length ?? 0) > 1 ? `${text} (${mapping.folderName})` : text;
 }
@@ -90,12 +90,15 @@ function displayPath(path: string): string {
 
 function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
   const { configuration } = deps;
+  const rules = deps.autoSwitch.service.getState().rules;
+  const projectAccount = projectAccountText(deps);
+  const update = deps.updateCheck?.getState();
   return {
     language: configuration.languageSetting(),
     confirmSwitch: configuration.confirmSwitch(),
     autoSwitchMode: configuration.autoSwitchMode(),
-    autoSwitchStrategy: deps.autoSwitch.service.getState().rules?.strategy,
-    autoSwitchModel: ((rules) => (rules === undefined ? undefined : (rules.model ?? null)))(deps.autoSwitch.service.getState().rules),
+    autoSwitchStrategy: rules?.strategy,
+    autoSwitchModel: rules === undefined ? undefined : (rules.model ?? null),
     autoSwitchRules: deps.autoSwitch.rulesText(),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
@@ -105,11 +108,9 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     refreshSeconds: configuration.refreshIntervalSeconds(),
     cliPath: displayPath(configuration.cliPath()),
     timeoutSeconds: Math.round(configuration.cliRunSettings().timeoutMs / 1000),
-    ...((text) => (text === undefined ? {} : { projectAccount: text }))(projectAccountText(deps)),
-    ...((update) => ({
-      ...(update?.current === undefined ? {} : { cswapVersion: update.current.text }),
-      ...(update?.latest === undefined ? {} : { cswapLatest: update.latest.text }),
-    }))(deps.updateCheck?.getState()),
+    ...(projectAccount === undefined ? {} : { projectAccount }),
+    ...(update?.current === undefined ? {} : { cswapVersion: update.current.text }),
+    ...(update?.latest === undefined ? {} : { cswapLatest: update.latest.text }),
   };
 }
 
@@ -141,9 +142,16 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined)
     render(focus);
     let result: SettingKey | undefined;
     let open = true;
+    // Data read on demand: auto-switch rules (loaded once auto-switch runs) and the project mapping.
+    const loads: Array<Promise<unknown>> = [];
     if (deps.autoSwitch.service.getState().rules === undefined) {
-      // Rules are only loaded once auto-switch runs; fetch them so the auto-switch rows show real values.
-      void deps.autoSwitch.service.reloadRules().then(() => {
+      loads.push(deps.autoSwitch.service.reloadRules());
+    }
+    if (deps.projectAccounts?.currentMapping()?.unknown === true) {
+      loads.push(deps.projectAccounts.load());
+    }
+    for (const load of loads) {
+      void load.then(() => {
         if (open && !picker.busy) {
           render(picker.activeItems[0]?.key ?? focus);
         }

@@ -9,6 +9,7 @@ import type { CachedExecutableResolver } from '../core/cli/executableResolver';
 import type { CliVersion } from '../core/cli/version';
 import type { Logger } from './logger';
 import { t } from './presentation';
+import { createGuardedTerminal } from './terminals';
 
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const LAST_CHECK_KEY = 'cswapManager.cswapUpdate.lastCheck';
@@ -101,9 +102,9 @@ export class CswapUpdateCheck {
     if (!force && Date.now() - last < CHECK_INTERVAL_MS) {
       return this.state;
     }
-    const version = await this.cli.version();
-    const body = await fetchText(PYPI_URL, 5000);
+    // Recorded first, so windows that start together do not all check; the two reads run side by side.
     await this.context.globalState.update(LAST_CHECK_KEY, Date.now());
+    const [version, body] = await Promise.all([this.cli.version(), fetchText(PYPI_URL, 5000)]);
     const current = version.ok ? version.value : undefined;
     const latest = body === undefined ? undefined : latestFromPypi(body);
     this.state = { ...(current === undefined ? {} : { current }), ...(latest === undefined ? {} : { latest }) };
@@ -126,13 +127,8 @@ export class CswapUpdateCheck {
       return;
     }
     // A visible terminal: the user sees the upgrade and its result. The command is a fixed string. It
-    // starts in the home folder, and on Windows without the current folder in the program search, so
-    // a `uv.bat` or `pipx.cmd` in the open project can never run in place of the real tool.
-    const terminal = vscode.window.createTerminal({
-      name: t('Cswap: update cswap'),
-      cwd: os.homedir(),
-      ...(process.platform === 'win32' ? { env: { NoDefaultCurrentDirectoryInExePath: '1' } } : {}),
-    });
+    // starts in the home folder, and the guarded terminal never runs a `uv`/`pipx` from the project.
+    const terminal = createGuardedTerminal({ name: t('Cswap: update cswap'), cwd: os.homedir() });
     terminal.show();
     terminal.sendText(command, true);
     void vscode.window.showInformationMessage(t('When the update finishes in the terminal, refresh Cswap to use the new version.'));

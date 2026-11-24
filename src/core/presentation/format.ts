@@ -75,7 +75,7 @@ const BAR_GLYPHS: Record<BarStyle, BarGlyphs> = {
  * Slanted cells drawn by `media/usage-bars.woff` (contributed as icons): `$(cswap-slant-0)` is empty,
  * `$(cswap-slant-8)` full, 1–7 that many eighths. Unicode has no partly filled parallelogram.
  */
-export function slantIcon(eighths: number): string {
+function slantIcon(eighths: number): string {
   return `$(cswap-slant-${eighths})`;
 }
 

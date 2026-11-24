@@ -109,9 +109,9 @@ function bar(
   pct: number | undefined,
   level: string,
   valueText: string,
-  className = 'bar',
-  pace?: { readonly pct: number; readonly text: string },
+  options: { readonly className?: string; readonly pace?: { readonly pct: number; readonly text: string } } = {},
 ): HTMLElement {
+  const { className = 'bar', pace } = options;
   const fill = el('span', { className: 'bar-fill' });
   const clamped = pct === undefined ? 0 : Math.max(0, Math.min(100, pct));
   fill.style.width = `${clamped}%`;
@@ -255,7 +255,7 @@ function renderInsights(current: DashboardModel): void {
 function meterBlock(meter: Meter, compact = false): HTMLElement {
   return el('div', { className: `meter level-${meter.level}${compact ? ' compact' : ''}` }, [
     el('div', { className: 'meter-head' }, [el('span', { className: 'meter-label', text: meter.label }), el('span', { className: 'meter-value', text: meter.pctText })]),
-    bar(meter.label, meter.pct, meter.level, meter.caption ? `${meter.pctText}, ${meter.caption}` : meter.pctText, 'bar', meter.pace),
+    bar(meter.label, meter.pct, meter.level, meter.caption ? `${meter.pctText}, ${meter.caption}` : meter.pctText, meter.pace === undefined ? {} : { pace: meter.pace }),
     meter.caption !== undefined && el('div', { className: 'meter-caption', text: meter.caption }),
   ]);
 }
@@ -299,7 +299,7 @@ function capacityItem(current: DashboardModel, capacity: CapacityOverview | unde
   const item = el('div', { className: 'strip-item' }, [
     el('span', { className: 'muted', text: current.strings.capacityHeading }),
     el('strong', { className: 'tabular', text: capacity.value }),
-    bar(current.strings.capacityHeading, capacity.pct, capacity.level, `${Math.round(capacity.pct)}%`, 'bar inline'),
+    bar(current.strings.capacityHeading, capacity.pct, capacity.level, `${Math.round(capacity.pct)}%`, { className: 'bar inline' }),
   ]);
   item.title = [capacity.caption, capacity.detail].filter((part) => part !== undefined).join(' · ');
   return item;
@@ -353,11 +353,18 @@ function selectRow(slot: number): void {
   saveUiState();
   preservingFocus(() => {
     renderTable();
-    if (model !== undefined) {
-      renderTimeline(model);
-    }
     renderDetail();
   });
+  markTimelineSelection(slot);
+}
+
+/** Moves the timeline's selected mark without rebuilding it. */
+function markTimelineSelection(slot: number): void {
+  for (const row of timeline.querySelectorAll<HTMLButtonElement>('button.timeline-row')) {
+    const selected = row.dataset['focusKey'] === `timeline:${slot}`;
+    row.classList.toggle('selected', selected);
+    row.setAttribute('aria-pressed', String(selected));
+  }
 }
 
 function usageCell(row: DashboardRow): HTMLTableCellElement {

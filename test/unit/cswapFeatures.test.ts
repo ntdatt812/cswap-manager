@@ -20,14 +20,14 @@ import { applyPriorities, parsePriority, parsePriorityList, priorityOf, type Pri
 import { parseListOutput } from '../../src/core/model/parsers';
 import { buildSnapshot } from '../../src/core/model/reconcile';
 import type { AccountsSnapshot } from '../../src/core/model/types';
-import { ManagementService } from '../../src/core/service/managementService';
+import { ManagementService, type ManageApplied } from '../../src/core/service/managementService';
+import { PriorityStore } from '../../src/core/service/priorityStore';
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { draggedSlot, dropMove } from '../../src/core/presentation/accountDrag';
 import type { NodeModel } from '../../src/core/presentation/accountTree';
 import { SLANT_BAR_PATTERN, usageBar } from '../../src/core/presentation/format';
-import { sanitizeLabelKeepingBars } from '../../src/core/presentation/statusBar';
-import { ok } from '../helpers/fixtures';
+import { manageCliStubs, ok } from '../helpers/fixtures';
 
 const version = (text: string): CliVersion => {
   const parsed = parseCliVersion(text);
@@ -147,7 +147,7 @@ describe('management of priorities, removal and adding', () => {
       cli: {
         manage: (_: ManageOperation) => Promise.resolve(ok('manage', undefined)),
         priorities: () => Promise.resolve(read),
-        ...(add === undefined ? {} : { addAccount: () => Promise.resolve(add) }),
+        addAccount: () => Promise.resolve(add ?? ok('manage', { kind: 'cancelled' as const })),
       },
       refresher: {
         getState: () => ({ snapshot: BEFORE }),
@@ -213,7 +213,11 @@ describe('re-reading before a change', () => {
     const requests: RefreshRequest[] = [];
     return {
       requests,
-      cli: { manage: (_: ManageOperation) => Promise.resolve(ok('manage', undefined)) },
+      cli: {
+        manage: (_: ManageOperation) => Promise.resolve(ok('manage', undefined)),
+        priorities: () => Promise.resolve(ok('priority', [])),
+        addAccount: () => Promise.resolve(ok('manage', { kind: 'cancelled' as const })),
+      },
       refresher: {
         getState: () => ({ snapshot: BEFORE, ...(lastError === undefined ? {} : { lastError }) }),
         refresh: (request: RefreshRequest): Promise<RefreshResult> => {
@@ -369,10 +373,10 @@ describe('slanted bars drawn with the extension icons', () => {
     assert.equal(usageBar(54, 10, 'blocks', { icons: true }), '█████▍░░░░');
   });
 
-  it('lets only the bar icons through a sanitised label', () => {
-    assert.equal(sanitizeLabelKeepingBars(`7d ${icons(8, 3, 0)} 54%`), `7d ${icons(8, 3, 0)} 54%`);
-    assert.equal(sanitizeLabelKeepingBars('$(gear) $(cswap-slant-9) $(cswap-slant-1x)'), '$\u200b(gear) $\u200b(cswap-slant-9) $\u200b(cswap-slant-1x)');
+  it('recognises a bar made only of slant icons (what a tooltip may render as Markdown)', () => {
+    assert.equal(SLANT_BAR_PATTERN.test(icons(8, 3, 0)), true);
     assert.equal(SLANT_BAR_PATTERN.test(`${icons(8)} $(gear)`), false);
+    assert.equal(SLANT_BAR_PATTERN.test('$(cswap-slant-9)'), false);
   });
 });
 
@@ -399,5 +403,53 @@ describe('drag and drop in the Accounts view', () => {
     assert.equal(dropMove(3, node('window', 1)), undefined, 'onto a usage row');
     assert.equal(dropMove(3, undefined), undefined, 'onto empty space');
     assert.equal(dropMove(0, node('account', 1)), undefined);
+  });
+});
+
+describe('priorities kept in step with account changes', () => {
+  const SNAPSHOT = snapshotOf([
+    { number: 1, email: 'a@example.com' },
+    { number: 2, email: 'b@example.com' },
+  ]);
+
+  it('reuses the read that verified a priority change and re-reads only after changes that can move tiers', async () => {
+    let reads = 0;
+    let changes = 0;
+    const store = new PriorityStore(
+      () => {
+        reads++;
+        return Promise.resolve(ok('priority', [{ slot: 2, email: 'b@example.com', tier: 7 }]));
+      },
+      () => changes++,
+      () => undefined,
+    );
+    store.onApplied({ prioritiesChanged: true, priorities: [{ slot: 1, email: 'a@example.com', tier: 3 }] });
+    assert.equal(reads, 0, 'the verifying read is reused');
+    assert.equal(store.apply(SNAPSHOT).accounts[0]?.priority, 3);
+    store.onApplied({ prioritiesChanged: false });
+    assert.equal(reads, 0, 'an alias or threshold change cannot move tiers');
+    store.onApplied({ prioritiesChanged: true });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(reads, 1, 'a move, removal or add re-reads');
+    assert.equal(store.apply(SNAPSHOT).accounts[1]?.priority, 7);
+    assert.equal(changes, 2);
+  });
+
+  it('tells listeners what a change means for priorities', async () => {
+    const events: ManageApplied[] = [];
+    const cli = {
+      ...manageCliStubs,
+      manage: () => Promise.resolve(ok('manage', undefined)),
+      priorities: () => Promise.resolve(ok('priority', [{ slot: 2, email: 'b@example.com', tier: 5 }])),
+    };
+    const refresher = { getState: () => ({ snapshot: SNAPSHOT }), refresh: (): Promise<RefreshResult> => Promise.resolve({ ok: true, snapshot: SNAPSHOT }) };
+    const service = new ManagementService(cli, refresher, new OperationGate());
+    service.onDidApply((event) => events.push(event));
+    await service.apply({ kind: 'setPriority', slot: 2, priority: 5 });
+    await service.apply({ kind: 'setThreshold', slot: 2, threshold: 80 });
+    assert.deepEqual(events, [
+      { prioritiesChanged: true, priorities: [{ slot: 2, email: 'b@example.com', tier: 5 }] },
+      { prioritiesChanged: false },
+    ]);
   });
 });

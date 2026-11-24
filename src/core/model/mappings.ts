@@ -38,6 +38,12 @@ export function comparablePath(path: string, platform: NodeJS.Platform = process
   return platform === 'win32' ? trimmed.replace(/\//g, '\\').toLowerCase() : trimmed;
 }
 
+/** The folder's own entry, not a parent's: what `cswap unmap <folder>` removes. */
+export function ownMapping(folder: string, entries: readonly MappingEntry[], platform: NodeJS.Platform = process.platform): MappingEntry | undefined {
+  const target = comparablePath(folder, platform);
+  return entries.find((entry) => comparablePath(entry.path, platform) === target);
+}
+
 /** The mapping that applies to a folder: the longest mapped parent wins, like cswap's lookup. */
 export function mappingFor(folder: string, entries: readonly MappingEntry[], platform: NodeJS.Platform = process.platform): MappingEntry | undefined {
   const target = comparablePath(folder, platform);

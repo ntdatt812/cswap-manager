@@ -1,7 +1,8 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
-import { neutralizeLinks, redactText } from '../core/security/redact';
+import { neutralizeLinks } from '../core/security/redact';
 import { SettingNotLoadedError } from './configuration';
+import { errorReason } from './messages';
 import { t } from './presentation';
 
 /** After an auto-update, settings the update added are unknown until the window reloads. */
@@ -22,6 +23,5 @@ export function showSaveFailed(error: unknown): void {
     void offerReload();
     return;
   }
-  const reason = error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir: os.homedir(), maxLength: 300 }) : t('unknown');
-  void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', reason)));
+  void vscode.window.showWarningMessage(neutralizeLinks(t('The setting could not be saved: {0}', errorReason(error, os.homedir()))));
 }

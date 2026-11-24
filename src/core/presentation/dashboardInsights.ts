@@ -1,6 +1,6 @@
 import type { CapacityOverview, Insight, TimelineItem } from '../../shared/dashboardProtocol';
 import type { Account, AccountsSnapshot } from '../model/types';
-import { accountLevel, accountName, hasUnavailableUsage, loginDue, type PresentationOptions } from './accountTree';
+import { accountLevel, accountName, hasUnavailableUsage, loginDue, slotLabel, type PresentationOptions } from './accountTree';
 import { compactDuration, epochOf, formatPercent, usageLevel } from './format';
 
 /** How far ahead the reset timeline looks. */
@@ -54,7 +54,7 @@ function usable(account: Account, options: PresentationOptions): boolean {
   );
 }
 
-const label = (account: Account, options: PresentationOptions) => `#${account.slot} ${accountName(account, options.t)}`;
+const label = (account: Account, options: PresentationOptions) => slotLabel(account, options.t);
 
 function reloginInsight(snapshot: AccountsSnapshot, options: PresentationOptions): Insight | undefined {
   const { t, now } = options;

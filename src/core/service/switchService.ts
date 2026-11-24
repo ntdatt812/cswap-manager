@@ -2,9 +2,7 @@ import type { CliError } from '../cli/cliErrors';
 import type { CliOutcome, SwitchTarget } from '../cli/cswapCli';
 import type { AccountsSnapshot, SwitchResult } from '../model/types';
 import { Emitter, type Disposable } from './emitter';
-import { CONFIRMED_FRESH_MS, sameAccountsAt } from './managementService';
-
-export { CONFIRMED_FRESH_MS };
+import { canTrustConfirmed, sameAccountsAt } from './managementService';
 import { OperationGate } from './operationGate';
 import type { AccountsState, RefreshRequest, RefreshResult } from './refreshService';
 
@@ -110,14 +108,9 @@ export class SwitchService implements Disposable {
     return outcome ?? { kind: 'busy' };
   }
 
-  /**
-   * Skips the pre-switch re-read (a full cswap list, ~0.6 s) only when what the user confirmed is
-   * recent, is still the latest read, and no later refresh failed. A failed refresh after an account
-   * change leaves an old snapshot in place, so it always forces the re-read.
-   */
+  /** The pre-switch re-read is skipped under the rule shared with account changes. */
   private canTrust(confirmedWith: AccountsSnapshot): boolean {
-    const state = this.refresher.getState();
-    return this.now() - confirmedWith.capturedAt <= CONFIRMED_FRESH_MS && state.snapshot === confirmedWith && state.lastError === undefined;
+    return canTrustConfirmed(this.refresher.getState(), confirmedWith, this.now());
   }
 
   dispose(): void {

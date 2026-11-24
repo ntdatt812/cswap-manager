@@ -13,7 +13,7 @@ import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { SwitchService } from '../../src/core/service/switchService';
 import { parseWebviewMessage } from '../../src/core/webview/messages';
-import { deferred, ok } from '../helpers/fixtures';
+import { deferred, manageCliStubs, ok } from '../helpers/fixtures';
 
 type Row = { number: number; email: string; alias?: string; disabled?: boolean; threshold?: number; active?: boolean };
 
@@ -183,6 +183,7 @@ describe('ManagementService', () => {
     gate = Promise.resolve();
     calls = 0;
     readonly cli = {
+      ...manageCliStubs,
       manage: async () => {
         this.calls++;
         await this.gate;

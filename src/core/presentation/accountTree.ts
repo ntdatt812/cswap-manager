@@ -131,7 +131,12 @@ function percentText(pct: number | undefined, t: Translate): string {
   return pct === undefined ? t('unknown') : formatPercent(pct);
 }
 
-export function metricsDescription(metrics: UsageMetrics, options: PresentationOptions): string {
+/** `#3 Name`: how an account is named in messages and pickers. */
+export function slotLabel(account: Account, t: Translate): string {
+  return `#${account.slot} ${accountName(account, t)}`;
+}
+
+function metricsDescription(metrics: UsageMetrics, options: PresentationOptions): string {
   const parts = [metrics.pct === undefined ? options.t('usage unknown') : `${usageBar(metrics.pct, 10, options.barStyle)} ${formatPercent(metrics.pct)}`];
   const reset = resetText(metrics.resetsAt, options);
   if (reset !== undefined) {

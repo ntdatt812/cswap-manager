@@ -4,9 +4,9 @@ import * as vscode from 'vscode';
 import {
   AUTO_SWITCH_STRATEGIES,
   ruleMatches,
+  ruleUpdate,
   validateRuleInput,
   type AutoSwitchRuleKey,
-  type AutoSwitchRuleUpdate,
   type AutoSwitchStrategy,
 } from '../core/cli/autoSwitchRules';
 import type { CswapCli } from '../core/cli/cswapCli';
@@ -297,9 +297,6 @@ export class AutoSwitchController implements vscode.Disposable {
   }
 
   /**
-   * Picks one of cswap's auto-switch strategies (or cswap's default) and saves it in cswap's config.
-   */
-  /**
    * `autoswitch.model`: whether per-model weekly limits (e.g. Fable) count when cswap picks an
    * account. Used by manual "most headroom" / "next available" switches and by auto-switch alike.
    */
@@ -335,6 +332,9 @@ export class AutoSwitchController implements vscode.Disposable {
     return 'done';
   }
 
+  /**
+   * Picks one of cswap's auto-switch strategies (or cswap's default) and saves it in cswap's config.
+   */
   async chooseStrategy(options: MenuOptions = {}): Promise<MenuResult> {
     const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
     const current = rules?.strategy;
@@ -493,13 +493,7 @@ export class AutoSwitchController implements vscode.Disposable {
       if (!validated.ok) {
         return undefined;
       }
-      const update: AutoSwitchRuleUpdate =
-        key === 'autoswitch.strategy'
-          ? { key, value: validated.value as (typeof AUTO_SWITCH_STRATEGIES)[number] }
-          : key === 'autoswitch.model'
-            ? { key, value: validated.value }
-            : { key, value: Number(validated.value) };
-      return this.deps.cli.setAutoSwitchRule(update);
+      return this.deps.cli.setAutoSwitchRule(ruleUpdate(key, validated.value));
     });
     if (outcome === undefined) {
       void vscode.window.showInformationMessage(t('Another cswap operation is in progress. Try again when it finishes.'));

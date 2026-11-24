@@ -15,7 +15,7 @@ import { ManagementService, sameAccountsAt } from '../../src/core/service/manage
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { SwitchService } from '../../src/core/service/switchService';
-import { ok } from '../helpers/fixtures';
+import { manageCliStubs, ok } from '../helpers/fixtures';
 
 function snapshot(rows: Array<{ number: number; email: string }>, active = 1): AccountsSnapshot {
   const list = parseListOutput(JSON.stringify({ schemaVersion: 1, activeAccountNumber: active, accounts: rows.map((row) => ({ ...row, active: row.number === active })) }));
@@ -112,7 +112,7 @@ describe('L4: the account must not change between confirmation and execution', (
   it('refuses a management change when the slot now holds another account', async () => {
     let calls = 0;
     const refresher = refresherReturning(swapped);
-    const service = new ManagementService({ manage: () => ((calls++), Promise.resolve(ok('manage', undefined) as CliOutcome<void>)) }, refresher, new OperationGate());
+    const service = new ManagementService({ ...manageCliStubs, manage: () => ((calls++), Promise.resolve(ok('manage', undefined) as CliOutcome<void>)) }, refresher, new OperationGate());
     const outcome = await service.apply({ kind: 'setDisabled', slot: 3, disabled: true }, confirmed);
     assert.deepEqual(outcome, { kind: 'rejected', reason: 'account-changed' });
     assert.equal(calls, 0, 'cswap was not run');
@@ -120,7 +120,7 @@ describe('L4: the account must not change between confirmation and execution', (
 
   it('checks both slots of a move', async () => {
     const refresher = refresherReturning(swapped);
-    const service = new ManagementService({ manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());
+    const service = new ManagementService({ ...manageCliStubs, manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());
     assert.deepEqual(await service.apply({ kind: 'move', slot: 1, targetSlot: 3 }, confirmed), { kind: 'rejected', reason: 'account-changed' });
   });
 
@@ -170,7 +170,7 @@ describe('L4: the account must not change between confirmation and execution', (
 
   it('proceeds when nothing changed', async () => {
     const refresher = refresherReturning(confirmed);
-    const service = new ManagementService({ manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());
+    const service = new ManagementService({ ...manageCliStubs, manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());
     const outcome = await service.apply({ kind: 'removeAlias', slot: 3 }, confirmed);
     assert.equal(outcome.kind, 'applied');
     assert.equal(refresher.requests.length, 2, 'pre-check refresh + verification refresh');

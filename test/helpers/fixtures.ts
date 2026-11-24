@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { CliOutcome } from '../../src/core/cli/cswapCli';
+import type { AddResult, CliOutcome } from '../../src/core/cli/cswapCli';
+import type { PriorityEntry } from '../../src/core/model/priorities';
 import { cliError, type CliCommandId, type CliErrorKind } from '../../src/core/cli/cliErrors';
 
 /** Compiled tests live in out/test/**, fixtures stay in test/fixtures. */
@@ -9,6 +10,12 @@ const FIXTURE_DIR = path.resolve(__dirname, '..', '..', '..', 'test', 'fixtures'
 export function fixture(name: string): string {
   return fs.readFileSync(path.join(FIXTURE_DIR, name), 'utf8');
 }
+
+/** The parts of ManagementService's CLI a test does not exercise. */
+export const manageCliStubs = {
+  priorities: (): Promise<CliOutcome<PriorityEntry[]>> => Promise.resolve(ok('priority', [])),
+  addAccount: (): Promise<CliOutcome<AddResult>> => Promise.resolve(ok('manage', { kind: 'cancelled' })),
+};
 
 export function ok<T>(command: CliCommandId, value: T): CliOutcome<T> {
   return { ok: true, value, meta: { command, exitCode: 0, durationMs: 1 } };

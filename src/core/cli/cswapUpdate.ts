@@ -1,3 +1,4 @@
+import { isRecord } from '../model/json';
 import { parseCliVersion, type CliVersion } from './version';
 
 /** PyPI JSON API for the package cswap is published as (the same source cswap's own check uses). */
@@ -11,8 +12,8 @@ export function latestFromPypi(body: string): CliVersion | undefined {
   } catch {
     return undefined;
   }
-  const info = typeof root === 'object' && root !== null ? (root as Record<string, unknown>)['info'] : undefined;
-  const version = typeof info === 'object' && info !== null ? (info as Record<string, unknown>)['version'] : undefined;
+  const info = isRecord(root) ? root['info'] : undefined;
+  const version = isRecord(info) ? info['version'] : undefined;
   if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version.trim())) {
     return undefined;
   }

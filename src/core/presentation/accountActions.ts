@@ -1,4 +1,4 @@
-import type { AccountAction, AccountActionId, ManageRow } from '../../shared/dashboardProtocol';
+import { ACCOUNT_ACTION_IDS, type AccountAction, type AccountActionId, type ManageRow } from '../../shared/dashboardProtocol';
 import type { Account } from '../model/types';
 import type { Translate } from './accountTree';
 import { formatPercent } from './format';
@@ -84,19 +84,16 @@ export function manageRows(account: Account, t: Translate): ManageRow[] {
     {
       label: t('Priority'),
       value: account.priority === undefined ? t('unknown') : account.priority === 0 ? t('0 (default)') : String(account.priority),
-      actions: [
-        action('setPriority', (account.priority ?? 0) > 0 ? t('Change…') : t('Set…')),
-        ...((account.priority ?? 0) > 0 ? [action('clearPriority', t('Reset'))] : []),
-      ],
+      actions: (account.priority ?? 0) > 0 ? [action('setPriority', t('Change…')), action('clearPriority', t('Reset'))] : [action('setPriority', t('Set…'))],
     },
     { label: t('Slot'), value: String(account.slot), actions: [action('move', t('Move…'))] },
   ];
 }
 
-/** Actions shown in the dashboard: everything except removal (native UI only). */
+/** Actions shown in the dashboard: the webview allow-list, which leaves removal to native UI. */
 export function accountActions(account: Account, t: Translate): AccountAction[] {
   return availableActions(account)
-    .filter((id) => id !== 'remove')
+    .filter((id) => (ACCOUNT_ACTION_IDS as readonly string[]).includes(id))
     .map((id) => ({ id, label: actionLabel(id, t) }));
 }
 

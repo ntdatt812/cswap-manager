@@ -17,7 +17,7 @@ import { configureLocalization } from './vscode/l10n';
 import { Logger } from './vscode/logger';
 import { describeCliError } from './vscode/messages';
 import { applyDisplayNames } from './core/model/displayNames';
-import { applyPriorities, type PriorityEntry } from './core/model/priorities';
+import { PriorityStore } from './core/service/priorityStore';
 import { CrossWindowSync } from './vscode/crossWindowSync';
 import { CswapUpdateCheck } from './vscode/cswapUpdateCheck';
 import { ProjectAccounts } from './vscode/projectAccounts';
@@ -62,28 +62,22 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   });
   // Display names (VS Code settings) and priorities (`cswap priority`, absent from list --json) are
   // added to every snapshot.
-  let priorities: readonly PriorityEntry[] | undefined;
+  const priorities = new PriorityStore(
+    () => cli.priorities(),
+    () => refreshService.redecorate(),
+    (message) => logger.warn(message),
+  );
   const refreshService = new RefreshService({
     cli,
-    decorate: (snapshot) => applyPriorities(applyDisplayNames(snapshot, configuration.displayNameMap()), priorities),
+    decorate: (snapshot) => priorities.apply(applyDisplayNames(snapshot, configuration.displayNameMap())),
   });
   const gate = new OperationGate();
   const switchService = new SwitchService(cli, refreshService, gate);
   const managementService = new ManagementService(cli, refreshService, gate);
-  const loadPriorities = async (): Promise<void> => {
-    const read = await cli.priorities();
-    if (read.ok) {
-      priorities = read.value;
-      refreshService.redecorate();
-    } else {
-      logger.warn(`cswap priority could not be read (${read.error.kind}).`);
-    }
-  };
   const firstLoad = refreshService.onDidChange((state) => {
     if (state.snapshot !== undefined && !state.refreshing) {
       firstLoad.dispose();
-      void loadPriorities();
-      void projectAccounts.load();
+      void priorities.load();
     }
   });
   const autoRefresh = new AutoRefreshController(refreshService, configuration);
@@ -92,7 +86,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const autoSwitch = new AutoSwitchController({ context, cli, gate, refreshService, switchService, configuration, logger, homeDir });
   const crossWindow = new CrossWindowSync(context.globalStorageUri, refreshService, logger);
   const updateCheck = new CswapUpdateCheck(context, cli, resolver, logger, () => configuration.checkCswapUpdates());
-  const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger });
+  const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger, homeDir });
   // Out of the way of start-up: one check shortly after activation, then at most daily.
   const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
   const dashboard = new DashboardController({
@@ -113,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     logger,
     firstLoad,
     managementService,
-    managementService.onDidApply(() => void loadPriorities()),
+    managementService.onDidApply((event) => priorities.onApplied(event)),
     refreshService,
     switchService,
     gate,

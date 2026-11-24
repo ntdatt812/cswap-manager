@@ -84,6 +84,22 @@ export function validateRuleInput(key: AutoSwitchRuleKey, input: string): RuleVa
 }
 
 /** Builds `config set` arguments only for allow-listed keys with values that pass validation. */
+/** The typed update for a value `validateRuleInput` accepted for that key. */
+export function ruleUpdate(key: AutoSwitchRuleKey, value: string): AutoSwitchRuleUpdate {
+  switch (key) {
+    case 'autoswitch.strategy':
+      return { key, value: value as AutoSwitchStrategy };
+    case 'autoswitch.model':
+      return { key, value };
+    case 'autoswitch.threshold':
+    case 'autoswitch.weeklyThreshold':
+      return { key, value: Number(value) };
+    case 'autoswitch.cooldownSeconds':
+    case 'autoswitch.intervalSeconds':
+      return { key, value: Number(value) };
+  }
+}
+
 export function autoSwitchRuleArgs(rule: AutoSwitchRuleUpdate): readonly string[] | undefined {
   if (!(AUTO_SWITCH_RULE_KEYS as readonly string[]).includes(rule.key)) {
     return undefined;

@@ -200,5 +200,8 @@ describe('buildQuickSwitchItems', () => {
     );
     const item = buildQuickSwitchItems(multi, options()).find((candidate) => candidate.action?.kind === 'account');
     assert.equal(item?.description, '5h ███░░░ 50%   7d █▎░░░░ 20%');
+    // The description is display-ready: slanted cells stay icons, since the switcher no longer re-sanitises it.
+    const slanted = buildQuickSwitchItems(multi, options({ barStyle: 'parallelograms' })).find((candidate) => candidate.action?.kind === 'account');
+    assert.match(slanted?.description ?? '', /^5h (\$\(cswap-slant-[0-8]\)){6} 50%/);
   });
 });

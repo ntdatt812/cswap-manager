@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import { normalizeAlias } from '../core/model/accountPolicy';
-import { neutralizeLinks, redactText } from '../core/security/redact';
+import { aliasProblemText } from './manageFlow';
 import type { ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
-import { describeCliError } from './messages';
+import { describeCliError, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
 
 export interface AddAccountDependencies {
@@ -32,7 +32,7 @@ export function freeSlots(usedSlots: readonly number[], count = 5): number[] {
  */
 export async function runAddAccount(deps: AddAccountDependencies): Promise<void> {
   if (deps.gate.isBusy()) {
-    void vscode.window.showInformationMessage(t('Another cswap operation is in progress. Try again when it finishes.'));
+    showBusy();
     return;
   }
   const fresh = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: t('Cswap: refreshing accounts…') }, () =>
@@ -75,7 +75,7 @@ export async function runAddAccount(deps: AddAccountDependencies): Promise<void>
           return undefined;
         }
         const alias = normalizeAlias(input);
-        return alias.ok ? undefined : t('Use only letters, digits, "-", "_" and "." (stored in lower case).');
+        return alias.ok ? undefined : aliasProblemText(alias.problem);
       },
     });
     if (aliasInput === undefined) {
@@ -102,16 +102,14 @@ export async function runAddAccount(deps: AddAccountDependencies): Promise<void>
   );
   switch (outcome.kind) {
     case 'busy':
-      void vscode.window.showInformationMessage(t('Another cswap operation is in progress. Try again when it finishes.'));
+      showBusy();
       return;
     case 'cancelled':
       void vscode.window.showWarningMessage(t('cswap did not add the account (it cancelled without changes).'));
       return;
-    case 'failed': {
-      const detail = outcome.error.detail ? ` (${redactText(outcome.error.detail, { homeDir: deps.homeDir })})` : '';
-      void vscode.window.showErrorMessage(neutralizeLinks(`${t('cswap could not add the account: {0}', describeCliError(outcome.error))}${detail}`));
+    case 'failed':
+      showCliFailure(outcome.error, deps.homeDir, (description) => t('cswap could not add the account: {0}', description));
       return;
-    }
     case 'added': {
       const text =
         outcome.result.kind === 'updated'

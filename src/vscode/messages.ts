@@ -1,5 +1,26 @@
+import * as vscode from 'vscode';
 import { localize } from './l10n';
 import type { CliError } from '../core/cli/cliErrors';
+import { neutralizeLinks, redactText } from '../core/security/redact';
+
+/** Only one cswap operation runs at a time. */
+export function showBusy(): void {
+  void vscode.window.showInformationMessage(localize('Another cswap operation is in progress. Try again when it finishes.'));
+}
+
+/**
+ * A failed cswap command: its description (optionally framed, e.g. "could not add: …") followed by
+ * cswap's own last line, redacted, when there is one.
+ */
+export function showCliFailure(error: CliError, homeDir: string, frame: (description: string) => string = (description) => description): void {
+  const detail = error.detail ? ` (${redactText(error.detail, { homeDir })})` : '';
+  void vscode.window.showErrorMessage(neutralizeLinks(`${frame(describeCliError(error))}${detail}`));
+}
+
+/** Why something failed, in the error's own words (redacted and capped), or "unknown". */
+export function errorReason(error: unknown, homeDir: string): string {
+  return error instanceof Error && error.message !== '' ? redactText(error.message, { homeDir, maxLength: 300 }) : localize('unknown');
+}
 
 /** Localizable user-facing text for CLI errors. */
 export function describeCliError(error: CliError): string {

@@ -96,14 +96,6 @@ export function sanitizeLabel(text: string): string {
   return text.replace(/\$\(/g, '$​(');
 }
 
-/**
- * Like `sanitizeLabel`, but keeps the slant usage-bar icons (`$(cswap-slant-0…8)`), for lines that
- * contain a bar. Any other `$(` is still neutralised; the bar icons only draw a bar cell.
- */
-export function sanitizeLabelKeepingBars(text: string): string {
-  return text.replace(/\$\((?!cswap-slant-[0-8]\))/g, '$​(');
-}
-
 function shorten(text: string): string {
   return text.length <= MAX_NAME_LENGTH ? text : `${text.slice(0, MAX_NAME_LENGTH - 1)}…`;
 }

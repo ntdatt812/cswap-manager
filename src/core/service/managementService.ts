@@ -10,12 +10,35 @@ import type { RefreshRequest, RefreshResult } from './refreshService';
 /** A snapshot this recent is trusted as what the user confirmed, without re-reading it (switches and changes). */
 export const CONFIRMED_FRESH_MS = 15_000;
 
+/**
+ * Whether what the user acted on can be used without re-reading it first (a full cswap list,
+ * ~0.6 s): it is recent, still the latest read, and no later refresh failed. A failed refresh after
+ * an account change leaves an old snapshot in place, so that always forces the re-read.
+ */
+export function canTrustConfirmed(
+  state: { readonly snapshot?: AccountsSnapshot; readonly lastError?: unknown },
+  confirmedWith: AccountsSnapshot,
+  now: number,
+): boolean {
+  return now - confirmedWith.capturedAt <= CONFIRMED_FRESH_MS && state.snapshot === confirmedWith && state.lastError === undefined;
+}
+
 export interface ManageCli {
   manage(operation: ManageOperation): Promise<CliOutcome<void>>;
   /** Reads `cswap priority` back: `list --json` carries no priority, so this is how a change is verified. */
-  priorities?(): Promise<CliOutcome<PriorityEntry[]>>;
-  addAccount?(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>>;
+  priorities(): Promise<CliOutcome<PriorityEntry[]>>;
+  addAccount(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>>;
 }
+
+/** What a change cswap accepted means for priorities, which `list --json` does not carry. */
+export interface ManageApplied {
+  /** The change can have changed priorities (a priority change, or accounts added, removed or moved). */
+  readonly prioritiesChanged: boolean;
+  /** `cswap priority` as read to verify a priority change, so it need not be read again. */
+  readonly priorities?: readonly PriorityEntry[];
+}
+
+const PRIORITY_CHANGING: ReadonlySet<ManageOperation['kind']> = new Set(['setPriority', 'clearPriority', 'move', 'remove']);
 
 export type AddOutcome =
   | { readonly kind: 'busy' }
@@ -109,7 +132,7 @@ export function sameAccountsAt(confirmed: AccountsSnapshot, current: AccountsSna
 
 /** Runs one account-policy change at a time and verifies its effect with a fresh `list --json`. */
 export class ManagementService {
-  private readonly applied = new Emitter<void>();
+  private readonly applied = new Emitter<ManageApplied>();
   /** Fires after cswap accepted a change (e.g. to re-read data that `list --json` lacks). */
   readonly onDidApply = this.applied.event;
 
@@ -127,7 +150,7 @@ export class ManagementService {
   async apply(operation: ManageOperation, confirmedWith?: AccountsSnapshot): Promise<ManageOutcome> {
     const outcome = await this.gate.run(async (): Promise<ManageOutcome> => {
       let before = this.refresher.getState().snapshot;
-      if (confirmedWith !== undefined && !this.canTrust(confirmedWith)) {
+      if (confirmedWith !== undefined && !canTrustConfirmed(this.refresher.getState(), confirmedWith, this.now())) {
         const fresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true });
         if (!fresh.ok) {
           return { kind: 'failed', error: fresh.error };
@@ -152,17 +175,21 @@ export class ManagementService {
       if (!result.ok) {
         return { kind: 'failed', error: result.error };
       }
-      this.applied.fire();
+      let priorities: readonly PriorityEntry[] | undefined;
+      let verified: ManageOutcome;
       if (!refresh.ok) {
-        return { kind: 'applied', verification: 'unverified', refreshError: refresh.error };
+        verified = { kind: 'applied', verification: 'unverified', refreshError: refresh.error };
+      } else if (!expectation(refresh.snapshot)) {
+        verified = { kind: 'applied', verification: 'mismatch' };
+      } else if (operation.kind === 'setPriority' || operation.kind === 'clearPriority') {
+        const read = await this.cli.priorities();
+        priorities = read.ok ? read.value : undefined;
+        verified = read.ok ? priorityVerification(operation, before, refresh.snapshot, read.value) : { kind: 'applied', verification: 'unverified', refreshError: read.error };
+      } else {
+        verified = { kind: 'applied', verification: 'confirmed' };
       }
-      if (!expectation(refresh.snapshot)) {
-        return { kind: 'applied', verification: 'mismatch' };
-      }
-      if (operation.kind === 'setPriority' || operation.kind === 'clearPriority') {
-        return this.verifyPriority(operation, before, refresh.snapshot);
-      }
-      return { kind: 'applied', verification: 'confirmed' };
+      this.applied.fire({ prioritiesChanged: PRIORITY_CHANGING.has(operation.kind), ...(priorities === undefined ? {} : { priorities }) });
+      return verified;
     });
     return outcome ?? { kind: 'busy' };
   }
@@ -173,9 +200,6 @@ export class ManagementService {
    */
   async addCurrent(options: { readonly slot?: number; readonly alias?: string }): Promise<AddOutcome> {
     const outcome = await this.gate.run(async (): Promise<AddOutcome> => {
-      if (this.cli.addAccount === undefined) {
-        return { kind: 'cancelled' };
-      }
       const result = await this.cli.addAccount(options);
       const refresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true, verifyActive: true });
       if (!result.ok) {
@@ -185,7 +209,7 @@ export class ManagementService {
       if (added.kind === 'cancelled') {
         return { kind: 'cancelled' };
       }
-      this.applied.fire();
+      this.applied.fire({ prioritiesChanged: true });
       if (!refresh.ok) {
         return { kind: 'added', result: added, verification: 'unverified', refreshError: refresh.error };
       }
@@ -200,32 +224,22 @@ export class ManagementService {
     this.applied.dispose();
   }
 
-  /**
-   * Like switching: the re-read before a change (a full cswap list, ~0.6 s) is skipped only when what
-   * the user acted on is recent, is still the latest read, and no later refresh failed.
-   */
-  private canTrust(confirmedWith: AccountsSnapshot): boolean {
-    const state = this.refresher.getState();
-    return this.now() - confirmedWith.capturedAt <= CONFIRMED_FRESH_MS && state.snapshot === confirmedWith && state.lastError === undefined;
-  }
+}
 
-  private async verifyPriority(
-    operation: Extract<ManageOperation, { kind: 'setPriority' | 'clearPriority' }>,
-    before: AccountsSnapshot | undefined,
-    after: AccountsSnapshot,
-  ): Promise<ManageOutcome> {
-    const read = await this.cli.priorities?.();
-    if (read === undefined || !read.ok) {
-      return { kind: 'applied', verification: 'unverified', ...(read === undefined || read.ok ? {} : { refreshError: read.error }) };
-    }
-    const subject = before?.accounts.find((account) => account.slot === operation.slot);
-    const account = subject === undefined ? undefined : after.accounts.find((candidate) => hasIdentity(candidate, identityOf(subject)));
-    // cswap lists every account, 0 included; a tier that cannot be told apart is unverified, never assumed.
-    const tier = account === undefined ? undefined : priorityOf(account, read.value);
-    if (tier === undefined) {
-      return { kind: 'applied', verification: 'unverified' };
-    }
-    const expected = operation.kind === 'setPriority' ? operation.priority : 0;
-    return { kind: 'applied', verification: tier === expected ? 'confirmed' : 'mismatch' };
+/** Checks a priority change against `cswap priority` read back, following the account by identity. */
+function priorityVerification(
+  operation: Extract<ManageOperation, { kind: 'setPriority' | 'clearPriority' }>,
+  before: AccountsSnapshot | undefined,
+  after: AccountsSnapshot,
+  entries: readonly PriorityEntry[],
+): ManageOutcome {
+  const subject = before?.accounts.find((account) => account.slot === operation.slot);
+  const account = subject === undefined ? undefined : after.accounts.find((candidate) => hasIdentity(candidate, identityOf(subject)));
+  // cswap lists every account, 0 included; a tier that cannot be told apart is unverified, never assumed.
+  const tier = account === undefined ? undefined : priorityOf(account, entries);
+  if (tier === undefined) {
+    return { kind: 'applied', verification: 'unverified' };
   }
+  const expected = operation.kind === 'setPriority' ? operation.priority : 0;
+  return { kind: 'applied', verification: tier === expected ? 'confirmed' : 'mismatch' };
 }

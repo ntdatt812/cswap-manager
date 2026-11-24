@@ -10,8 +10,8 @@ export const MOVE_ACCOUNT_TO_COMMAND = 'cswapManager.moveAccountTo';
 
 /**
  * Drag an account onto another one in the Accounts view to give it that slot (the two trade
- * places). The drop only asks the move flow, which confirms in a modal and verifies like
- * "Move to slot…"; keyboard users keep that command.
+ * places). The drop hands over to the move flow, which re-checks, verifies and offers Undo;
+ * keyboard users keep "Move to slot…".
  */
 export class AccountsDragAndDrop implements vscode.TreeDragAndDropController<NodeModel> {
   readonly dragMimeTypes = [ACCOUNT_DRAG_MIME];
