@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-24
 - **Countdown to the next refresh**: while automatic refresh runs, the Accounts view's title and the dashboard header show only the time left, ticking every second (`Active: #3 · 0:42`), and so does the end of the status bar item (`#3 · 7d 40% · 0:42`; *Quick Settings › Status bar › Countdown to the next refresh*, `cswapManager.statusBar.countdown`, on by default). The dashboard's tooltip keeps the data's age. With automatic refresh off or paused (window not in front), the age shows as before; stale or failed data shows its warning instead of a countdown, and no countdown runs while a refresh does. One clock drives every countdown, and only while one is shown.
 - **Switch when an account is used up** (on/off in one step: first item of *Auto-Switch…*, or **Cswap: Switch When an Account Is Used Up (On/Off)**): automatic switching at cswap's highest threshold, 99.9%, with the weekly threshold following it, so a session moves to another account instead of stopping at the limit. The strategy you chose stays. Checks run every 60 s by default (*Rules… › Check interval*, from 15 s), so one request can still meet the limit just before the switch; Claude Code uses the new account from its next request, without a restart.
 - **Tidier screens** after a pass through the whole UI:
