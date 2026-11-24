@@ -175,6 +175,11 @@ describe('describeView', () => {
     assert.equal(describeView(state, { ...base, freshness: { freshness: 'fresh' }, nextRefreshAt: NOW + 61_500 }).description, 'Active: #2 · 1:02');
     // Overdue: 0:00 until the refresh starts.
     assert.equal(describeView(state, { ...base, freshness: { freshness: 'fresh' }, nextRefreshAt: NOW - 5_000 }).description, 'Active: #2 · 0:00');
+    // Stale data keeps its warning and age instead, as on the status bar.
+    assert.equal(
+      describeView(state, { ...base, freshness: { freshness: 'stale', reason: 'too-old' }, nextRefreshAt: NOW + 42_000 }).description,
+      'Stale · Active: #2 · updated just now',
+    );
   });
 
   it('marks stale data and explains why', () => {

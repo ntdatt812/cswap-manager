@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { CliError } from '../core/cli/cliErrors';
 import { identityOf } from '../core/model/accountPolicy';
 import { previewMove, resolveDropTarget, type DropTarget, type PendingMove } from '../core/presentation/accountDrag';
-import { buildAccountNodes, describeView, visibleAccounts, type NodeModel } from '../core/presentation/accountTree';
+import { buildAccountNodes, describeView, type NodeModel } from '../core/presentation/accountTree';
 import { sortOrderLabel } from '../core/presentation/quickSettings';
 import type { ManageOutcome } from '../core/service/managementService';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
@@ -10,7 +10,7 @@ import { AccountsDragAndDrop, MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndD
 import { AccountsTreeProvider } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
-import { CLOCK_TICK_MS, COUNTDOWN_TICK_MS, presentationOptions, t } from './presentation';
+import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
 import { showSaveFailed } from './settingErrors';
 
 /** How long the slot numbers a move changed stay highlighted. */
@@ -32,8 +32,8 @@ export class AccountsView implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private filter: string | undefined;
   private clock: ReturnType<typeof setInterval> | undefined;
-  /** Ticks every second while the view is visible, for the countdown to the next refresh. */
-  private countdownClock: ReturnType<typeof setInterval> | undefined;
+  /** Accounts the last render listed (after the filter), for the header's filter message. */
+  private visibleCount = 0;
   private progressDone: (() => void) | undefined;
   /** A dropped move cswap is still running: shown at once. */
   private pending: PendingMove | undefined;
@@ -56,7 +56,8 @@ export class AccountsView implements vscode.Disposable {
         this.render();
       }),
       this.treeView.onDidChangeVisibility(() => this.onVisibilityChanged()),
-      deps.autoRefresh.onDidChangeSchedule(() => this.renderHeader()),
+      deps.autoRefresh.onDidChangeSchedule(() => this.renderVisibleHeader()),
+      deps.autoRefresh.onCountdownTick(() => this.renderVisibleHeader()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration(`${CONFIG_SECTION}.sidebar.sortOrder`) ||
@@ -154,7 +155,6 @@ export class AccountsView implements vscode.Disposable {
     this.deps.autoRefresh.setConsumer('accountsView', visible);
     if (visible) {
       this.clock ??= setInterval(() => this.render(), CLOCK_TICK_MS);
-      this.countdownClock ??= setInterval(() => this.renderHeader(), COUNTDOWN_TICK_MS);
       this.render();
     } else {
       this.stopClock();
@@ -165,10 +165,6 @@ export class AccountsView implements vscode.Disposable {
     if (this.clock !== undefined) {
       clearInterval(this.clock);
       this.clock = undefined;
-    }
-    if (this.countdownClock !== undefined) {
-      clearInterval(this.countdownClock);
-      this.countdownClock = undefined;
     }
   }
 
@@ -196,7 +192,15 @@ export class AccountsView implements vscode.Disposable {
     const filter = this.filter === undefined ? {} : { filter: this.filter };
     const nodes = snapshot ? buildAccountNodes(snapshot, { ...options, sortOrder, ...filter, highlightSlots: this.moved }) : [];
     this.provider.setNodes(nodes);
+    this.visibleCount = nodes.length;
     this.renderHeader();
+  }
+
+  /** The countdown ticks only where it can be seen. */
+  private renderVisibleHeader(): void {
+    if (this.treeView.visible) {
+      this.renderHeader();
+    }
   }
 
   /** The view's description and message, which hold the countdown: cheap enough to run every second. */
@@ -204,16 +208,16 @@ export class AccountsView implements vscode.Disposable {
     const { refreshService, configuration, describeError, autoRefresh } = this.deps;
     const state = refreshService.getState();
     const now = Date.now();
-    const schedule = autoRefresh.schedule();
+    const nextRefreshAt = autoRefresh.nextRefreshAt();
     const filter = this.filter === undefined ? {} : { filter: this.filter };
     const presentation = describeView(state, {
       now,
       t,
       freshness: assessFreshness(state, now, configuration.staleAfterMs()),
-      visibleCount: state.snapshot ? visibleAccounts(state.snapshot, configuration.sortOrder(), this.filter).length : 0,
+      visibleCount: this.visibleCount,
       describeError,
       ...filter,
-      ...(schedule.kind === 'scheduled' ? { nextRefreshAt: schedule.at } : {}),
+      ...(nextRefreshAt === undefined ? {} : { nextRefreshAt }),
     });
     if (this.treeView.description !== presentation.description) {
       this.treeView.description = presentation.description;

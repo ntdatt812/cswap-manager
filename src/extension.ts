@@ -21,7 +21,7 @@ import { PriorityStore } from './core/service/priorityStore';
 import { CrossWindowSync } from './vscode/crossWindowSync';
 import { CswapUpdateCheck } from './vscode/cswapUpdateCheck';
 import { AccountAdder } from './vscode/addAccountFlow';
-import { WeeklyResetNotifier } from './vscode/weeklyResetNotifier';
+import { watchWeeklyResets } from './vscode/weeklyResetNotifier';
 import { ProjectAccounts } from './vscode/projectAccounts';
 import { StatusBarController } from './vscode/statusBarController';
 
@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const updateCheck = new CswapUpdateCheck(context, cli, resolver, logger, () => configuration.checkCswapUpdates());
   const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger, homeDir });
   const accountAdder = new AccountAdder({ refreshService, managementService, gate, homeDir });
-  const weeklyResetNotifier = new WeeklyResetNotifier(refreshService, configuration);
+  const weeklyResetNotifier = watchWeeklyResets(refreshService, configuration);
   // Out of the way of start-up: one check shortly after activation, then at most daily.
   const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
   const dashboard = new DashboardController({

@@ -5,6 +5,7 @@ import type { AccountsState, FreshnessAssessment } from '../service/refreshServi
 import {
   accountLevel,
   accountName,
+  countdownDue,
   hasUnavailableUsage,
   metricsRow,
   planText,
@@ -74,6 +75,8 @@ export const STATUS_BAR_BAR_WIDTH = 8;
 export interface StatusBarModel {
   /** May contain `$(codicon)` syntax; CLI-derived text is sanitized so it cannot add icons. */
   readonly text: string;
+  /** When `text` ends with a countdown: the text before it and its due time, so it can tick alone. */
+  readonly countdown?: { readonly prefix: string; readonly at: number };
   readonly tooltip: TooltipModel;
   readonly level: UsageLevel;
   readonly accessibilityLabel: string;
@@ -242,12 +245,12 @@ export function buildStatusBarModel(state: AccountsState, options: StatusBarOpti
     // Whatever was ticked has nothing to show right now; never leave an empty item.
     segments.push(slotText);
   }
-  // Stale data keeps its clock icon instead: a countdown would suggest all is well.
-  if (options.nextRefreshAt !== undefined && !stale) {
-    segments.push(countdownText(options.nextRefreshAt - options.now));
-  }
   const icon = has('icon') ? `$(${LEVEL_ICON[level]})` : '';
-  const text = `${[icon, segments.join(' · ')].filter((piece) => piece !== '').join(' ')}${stale ? ' $(history)' : ''}`;
+  const base = [icon, segments.join(' · ')].filter((piece) => piece !== '').join(' ');
+  // Stale data keeps its clock icon instead of a countdown.
+  const due = countdownDue(options.nextRefreshAt, options.freshness, state.refreshing);
+  const countdown = due === undefined ? undefined : { prefix: `${base}${segments.length > 0 ? ' · ' : ' '}`, at: due };
+  const text = countdown === undefined ? `${base}${stale ? ' $(history)' : ''}` : `${countdown.prefix}${countdownText(countdown.at - options.now)}`;
   const spoken = account === undefined ? t('Cswap: active account unknown') : t('Cswap: active slot {0}. {1}', account.slot, usage ?? '');
-  return { text, tooltip, level, accessibilityLabel: stale ? `${spoken} ${t('(stale)')}` : spoken };
+  return { text, ...(countdown === undefined ? {} : { countdown }), tooltip, level, accessibilityLabel: stale ? `${spoken} ${t('(stale)')}` : spoken };
 }

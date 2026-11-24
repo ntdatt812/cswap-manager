@@ -8,16 +8,16 @@ const COLLAPSIBLE: Record<NodeModel['collapsible'], vscode.TreeItemCollapsibleSt
   expanded: vscode.TreeItemCollapsibleState.Expanded,
 };
 
-/**
- * Builds an untrusted Markdown tooltip. Every CLI-derived string goes through `appendText`, which
- * escapes Markdown and, with theme icons on, `$(…)` too, so account data cannot inject links,
- * command URIs, HTML or icons. Only a usage bar made of slant icons is appended as Markdown.
- */
 /** Text from cswap inside a table cell: a `|` would end the cell and a line break the row. */
 function tableCell(text: string): string {
   return text.replace(/\|/g, '∣').replace(/[\r\n]+/g, ' ');
 }
 
+/**
+ * Builds an untrusted Markdown tooltip. Every CLI-derived string goes through `appendText`, which
+ * escapes Markdown and, with theme icons on, `$(…)` too, so account data cannot inject links,
+ * command URIs, HTML or icons. Only a usage bar made of slant icons is appended as Markdown.
+ */
 export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString(undefined, true);
   markdown.isTrusted = false;

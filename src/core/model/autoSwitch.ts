@@ -154,8 +154,10 @@ export interface AutoSwitchRules {
   readonly customized: readonly string[];
 }
 
+export type RuleField = keyof Omit<AutoSwitchRules, 'customized'>;
+
 /** Expected JSON type of each rule; values of any other type are ignored. */
-const RULE_TYPES: Readonly<Record<keyof Omit<AutoSwitchRules, 'customized'>, 'number' | 'string' | 'boolean'>> = {
+const RULE_TYPES: Readonly<Record<RuleField, 'number' | 'string' | 'boolean'>> = {
   threshold: 'number',
   weeklyThreshold: 'number',
   intervalSeconds: 'number',
@@ -170,7 +172,7 @@ const RULE_TYPES: Readonly<Record<keyof Omit<AutoSwitchRules, 'customized'>, 'nu
   fableProbe: 'boolean',
 };
 
-const RULE_KEYS: Readonly<Record<string, keyof Omit<AutoSwitchRules, 'customized'>>> = {
+const RULE_KEYS: Readonly<Record<string, RuleField>> = {
   'autoswitch.threshold': 'threshold',
   'autoswitch.weeklyThreshold': 'weeklyThreshold',
   'autoswitch.intervalSeconds': 'intervalSeconds',
@@ -184,6 +186,11 @@ const RULE_KEYS: Readonly<Record<string, keyof Omit<AutoSwitchRules, 'customized
   'usage.headerProbe': 'headerProbe',
   'usage.fableProbe': 'fableProbe',
 };
+
+/** The `AutoSwitchRules` field a cswap setting key is read into; undefined for settings not read. */
+export function ruleField(key: string): RuleField | undefined {
+  return Object.hasOwn(RULE_KEYS, key) ? RULE_KEYS[key] : undefined;
+}
 
 /**
  * Reads only the entries listed above. The payload also carries the settings file `path`
@@ -205,7 +212,7 @@ export function parseAutoSwitchRules(stdout: string): AutoSwitchRules | undefine
     if (!isRecord(entry) || typeof entry['key'] !== 'string') {
       continue;
     }
-    const field = RULE_KEYS[entry['key']];
+    const field = ruleField(entry['key']);
     if (field === undefined) {
       continue;
     }

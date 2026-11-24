@@ -12,7 +12,7 @@ import type {
   TimelineItem,
   WebviewToHost,
 } from '../shared/dashboardProtocol';
-import { countdownText } from '../shared/countdown';
+import { COUNTDOWN_TICK_MS, countdownText } from '../shared/countdown';
 import { filterRows, isTableSortKey, sortRows, type SortDirection, type TableSortKey } from '../shared/dashboardTable';
 
 interface VsCodeApi {
@@ -212,28 +212,45 @@ function post(messageToHost: WebviewToHost): void {
 
 // ---- Header, suggestions, overview ----
 
+let countdownTimer: number | undefined;
+
+function setFreshnessText(text: string): void {
+  if (freshness.textContent !== text) {
+    freshness.textContent = text;
+  }
+}
+
+function tickCountdown(): void {
+  if (model?.nextRefreshAt !== undefined) {
+    setFreshnessText(countdownText(model.nextRefreshAt - Date.now()));
+  }
+}
+
+/** The one-second timer runs only while a countdown is shown. */
+function updateCountdownTimer(counting: boolean): void {
+  if (counting) {
+    countdownTimer ??= window.setInterval(tickCountdown, COUNTDOWN_TICK_MS);
+  } else if (countdownTimer !== undefined) {
+    window.clearInterval(countdownTimer);
+    countdownTimer = undefined;
+  }
+}
+
 /**
  * While automatic refresh runs and the data is fine, the header shows only the countdown to the next
  * refresh (`0:42`, ticking every second); its tooltip keeps the data's age. Otherwise the age, or the
- * stale / failed warning, as before. A ticking countdown is not announced to screen readers.
+ * stale / failed warning, as before. A ticking countdown is not announced to screen readers. The host
+ * sends `nextRefreshAt` only while a countdown should show (never with stale data or while busy).
  */
 function renderFreshness(current: DashboardModel): void {
-  const counting = !current.busy && current.nextRefreshAt !== undefined && current.freshnessTone === 'ok';
-  freshness.textContent = current.busy
-    ? current.strings.busy
-    : counting && current.nextRefreshAt !== undefined
-      ? countdownText(current.nextRefreshAt - Date.now())
-      : current.freshnessText;
+  const due = current.nextRefreshAt;
+  const counting = due !== undefined;
+  setFreshnessText(counting ? countdownText(due - Date.now()) : current.busy ? current.strings.busy : current.freshnessText);
   freshness.title = counting ? current.freshnessText : '';
   freshness.setAttribute('aria-live', counting ? 'off' : 'polite');
   freshness.className = `pill tone-${current.busy ? 'neutral' : current.freshnessTone}${current.busy ? ' busy' : ''}${counting ? ' countdown' : ''}`;
+  updateCountdownTimer(counting);
 }
-
-setInterval(() => {
-  if (model !== undefined) {
-    renderFreshness(model);
-  }
-}, 1000);
 
 function renderHeader(current: DashboardModel): void {
   const s = current.strings;
@@ -420,7 +437,8 @@ function renderTable(): void {
   matchCount.textContent = ui.query.trim() ? current.strings.matchCount.replace('{0}', String(rows.length)).replace('{1}', String(current.rows.length)) : '';
 
   // With one plan for every account the plan column says nothing: it is left out, the heading says it.
-  const columns = current.commonPlan === undefined ? COLUMNS : COLUMNS.filter((column) => column.key !== 'plan');
+  const showPlan = current.commonPlan === undefined;
+  const columns = showPlan ? COLUMNS : COLUMNS.filter((column) => column.key !== 'plan');
   const head = el('thead', {}, [el('tr', {}, columns.map((column) => sortHeader(current, column.key, column.label(current), column.className)))]);
   const body = el('tbody');
   if (rows.length === 0) {
@@ -440,7 +458,7 @@ function renderTable(): void {
         el('div', { className: 'name-line' }, [nameButton, row.active && el('span', { className: 'chip active', text: current.strings.activeBadge }), row.flag !== undefined && el('span', { className: `flag tone-${row.flag.tone}`, text: row.flag.text })]),
         row.secondary !== undefined && el('div', { className: 'muted ellipsis', text: row.secondary, attrs: { title: row.secondary } }),
       ]),
-      current.commonPlan === undefined && el('td', { className: 'col-plan' }, [row.plan === undefined ? el('span', { className: 'muted', text: '—' }) : el('span', { className: 'chip', text: row.plan })]),
+      showPlan && el('td', { className: 'col-plan' }, [row.plan === undefined ? el('span', { className: 'muted', text: '—' }) : el('span', { className: 'chip', text: row.plan })]),
       usageCell(row),
       el('td', { className: 'col-reset muted', text: row.resetText ?? '—' }),
     ]);

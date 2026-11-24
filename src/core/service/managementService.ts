@@ -195,6 +195,7 @@ export class ManagementService {
     return this.add(
       () => this.cli.addAccount(options),
       (snapshot, slot) => snapshot.active.slot === slot && snapshot.accounts.some((account) => account.slot === slot),
+      true,
     );
   }
 
@@ -206,13 +207,19 @@ export class ManagementService {
     return this.add(
       () => this.cli.addToken(token, options),
       (snapshot, slot) => snapshot.accounts.some((account) => account.slot === slot),
+      false,
     );
   }
 
-  private async add(run: () => Promise<CliOutcome<AddResult>>, landed: (snapshot: AccountsSnapshot, slot: number) => boolean): Promise<AddOutcome> {
+  /** @param verifyActive the run can change the active account, so the refresh after it checks it. */
+  private async add(
+    run: () => Promise<CliOutcome<AddResult>>,
+    landed: (snapshot: AccountsSnapshot, slot: number) => boolean,
+    verifyActive: boolean,
+  ): Promise<AddOutcome> {
     const outcome = await this.gate.run(async (): Promise<AddOutcome> => {
       const result = await run();
-      const refresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true, verifyActive: true });
+      const refresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true, verifyActive });
       if (!result.ok) {
         return { kind: 'failed', error: result.error };
       }

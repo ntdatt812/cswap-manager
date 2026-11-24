@@ -14,7 +14,7 @@ import {
   refreshChoices,
   refreshLabel,
   SETTING_KEYS,
-  quickSettingsPageOf,
+  shareHistoryOn,
   type QuickSettingsValues,
 } from '../../src/core/presentation/quickSettings';
 
@@ -50,11 +50,8 @@ describe('quick settings rows', () => {
       settings.map((row) => row.key).sort(),
       [...SETTING_KEYS].sort(),
     );
-    // The main page fits without scrolling; each key opens on the page that lists it.
+    // The main page fits without scrolling.
     assert.ok(main.filter((row) => row.separator !== true).length <= 13);
-    for (const row of settings) {
-      assert.equal(quickSettingsPageOf(row.key), advanced.includes(row) ? 'advanced' : 'main', row.key);
-    }
     const value = (key: string) => settings.find((row) => row.key === key)?.value;
     assert.equal(value('language'), 'Tiếng Việt');
     assert.equal(value('confirmSwitch'), 'Off');
@@ -78,6 +75,12 @@ describe('quick settings rows', () => {
     const value = (key: string) => rows.flatMap((row) => (row.separator !== true && row.key === key ? [row.value] : []))[0];
     assert.equal(value('autoStrategy'), 'rules not loaded');
     assert.equal(value('confirmSwitch'), 'On');
+  });
+
+  it('reads chat-history sharing as on unless cswap says false', () => {
+    assert.equal(shareHistoryOn(undefined), undefined);
+    assert.equal(shareHistoryOn({}), true);
+    assert.equal(shareHistoryOn({ shareHistory: false }), false);
   });
 
   it('validates keys and language values passed from outside', () => {

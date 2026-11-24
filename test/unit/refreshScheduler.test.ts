@@ -36,6 +36,7 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 function setup(lastRefreshAt: number | undefined, now = 100_000) {
   const timers = new FakeTimers();
   let ticks = 0;
+  let changes = 0;
   let last = lastRefreshAt;
   const scheduler = new RefreshScheduler({
     tick: () => {
@@ -43,11 +44,12 @@ function setup(lastRefreshAt: number | undefined, now = 100_000) {
       last = now;
       return Promise.resolve();
     },
+    onChange: () => changes++,
     lastRefreshAt: () => last,
     now: () => now,
     timers,
   });
-  return { scheduler, timers, ticks: () => ticks };
+  return { scheduler, timers, ticks: () => ticks, changes: () => changes };
 }
 
 describe('normalizeIntervalMs', () => {
@@ -61,20 +63,35 @@ describe('normalizeIntervalMs', () => {
 });
 
 describe('RefreshScheduler', () => {
-  it('reports its schedule for the countdown: off, paused, due at a time, refreshing', async () => {
+  it('reports when the next refresh is due: undefined while off, inactive or refreshing', async () => {
     const { scheduler, timers } = setup(80_000);
-    assert.deepEqual(scheduler.schedule(), { kind: 'off' });
+    assert.equal(scheduler.nextRefreshAt(), undefined, 'off');
     scheduler.configure(60_000);
-    assert.deepEqual(scheduler.schedule(), { kind: 'paused' }, 'not active yet');
+    assert.equal(scheduler.nextRefreshAt(), undefined, 'not active yet');
     scheduler.setActive(true);
     // Due one interval after the last refresh (80 s + 60 s), with the clock at 100 s.
-    assert.deepEqual(scheduler.schedule(), { kind: 'scheduled', at: 140_000 });
+    assert.equal(scheduler.nextRefreshAt(), 140_000);
     timers.runAll();
-    assert.deepEqual(scheduler.schedule(), { kind: 'refreshing' });
+    assert.equal(scheduler.nextRefreshAt(), undefined, 'refreshing');
     await flush();
-    assert.equal(scheduler.schedule().kind, 'scheduled');
+    assert.equal(scheduler.nextRefreshAt(), 160_000, 'one interval after the refresh that just ran');
     scheduler.setActive(false);
-    assert.deepEqual(scheduler.schedule(), { kind: 'paused' });
+    assert.equal(scheduler.nextRefreshAt(), undefined, 'inactive again');
+  });
+
+  it('calls onChange only when the due time actually changes', () => {
+    const { scheduler, changes } = setup(80_000);
+    scheduler.configure(60_000);
+    assert.equal(changes(), 0, 'still undefined while inactive');
+    scheduler.setActive(true);
+    assert.equal(changes(), 1);
+    scheduler.reschedule();
+    scheduler.configure(60_000);
+    assert.equal(changes(), 1, 'same due time');
+    scheduler.configure(90_000);
+    assert.equal(changes(), 2);
+    scheduler.setActive(false);
+    assert.equal(changes(), 3);
   });
 
   it('does nothing while inactive or disabled', () => {

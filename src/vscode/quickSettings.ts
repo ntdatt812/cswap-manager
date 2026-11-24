@@ -21,7 +21,7 @@ import {
   statusBarColorsLabel,
   statusBarLookLabel,
   statusBarPartLabel,
-  quickSettingsPageOf,
+  shareHistoryOn,
   timeoutChoices,
   tokenUsageLevel,
   type QuickSettingsPage,
@@ -109,7 +109,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     autoSwitchStrategy: rules?.strategy,
     autoSwitchModel: rules === undefined ? undefined : (rules.model ?? null),
     autoSwitchRules: deps.autoSwitch.rulesText(),
-    shareHistory: rules === undefined ? undefined : rules.shareHistory !== false,
+    shareHistory: shareHistoryOn(rules),
     tokenUsage: tokenUsageLevel(rules),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
@@ -134,16 +134,23 @@ function rowItems(deps: QuickSettingsDependencies, page: QuickSettingsPage): Row
 }
 
 /** On/off rows that switch in place, without a screen of their own. */
-const TOGGLES: Partial<Record<SettingKey, (deps: QuickSettingsDependencies) => Promise<void>>> = {
-  confirmSwitch: (deps) => deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch()),
-  notifyReset: (deps) => deps.configuration.setNotifyOnWeeklyReset(!deps.configuration.notifyOnWeeklyReset()),
-};
+const TOGGLES = {
+  confirmSwitch: (deps: QuickSettingsDependencies) => deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch()),
+  notifyReset: (deps: QuickSettingsDependencies) => deps.configuration.setNotifyOnWeeklyReset(!deps.configuration.notifyOnWeeklyReset()),
+} satisfies Partial<Record<SettingKey, (deps: QuickSettingsDependencies) => Promise<void>>>;
+type ToggleKey = keyof typeof TOGGLES;
+/** Rows that open a screen of their own. */
+type ScreenKey = Exclude<SettingKey, ToggleKey | 'advanced'>;
+
+function isToggle(key: SettingKey): key is ToggleKey {
+  return Object.hasOwn(TOGGLES, key);
+}
 
 /**
  * One page of the settings list. On/off rows switch in place; every other row closes the list and
  * resolves to its key so its own screen can open. The "Advanced…" page has a ← Back button.
  */
-function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined, page: QuickSettingsPage): Promise<SettingKey | typeof BACK | undefined> {
+function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined, page: QuickSettingsPage): Promise<ScreenKey | 'advanced' | typeof BACK | undefined> {
   return new Promise((resolve) => {
     const picker = vscode.window.createQuickPick<RowItem>();
     if (page === 'advanced') {
@@ -163,7 +170,7 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined,
         picker.activeItems = [active];
       }
     };
-    let result: SettingKey | typeof BACK | undefined;
+    let result: ScreenKey | 'advanced' | typeof BACK | undefined;
     let open = true;
     render(focus);
     // Data read on demand: auto-switch rules (loaded once auto-switch runs) and the project mapping.
@@ -181,10 +188,10 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined,
         }
       });
     }
-    const toggle = async (key: SettingKey, flip: (deps: QuickSettingsDependencies) => Promise<void>) => {
+    const toggle = async (key: ToggleKey) => {
       picker.busy = true;
       try {
-        await flip(deps);
+        await TOGGLES[key](deps);
       } catch (error) {
         showSaveFailed(error);
       } finally {
@@ -197,9 +204,8 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined,
       if (key === undefined || picker.busy) {
         return;
       }
-      const flip = TOGGLES[key];
-      if (flip !== undefined) {
-        void toggle(key, flip);
+      if (isToggle(key)) {
+        void toggle(key);
         return;
       }
       result = key;
@@ -609,7 +615,7 @@ async function editThresholds(deps: QuickSettingsDependencies, typedWarning?: st
 }
 
 /** Opens a row's own screen. */
-async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promise<Outcome> {
+async function editRow(deps: QuickSettingsDependencies, key: ScreenKey): Promise<Outcome> {
   const { configuration } = deps;
   switch (key) {
     case 'language':
@@ -620,15 +626,6 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
         LANGUAGE_SETTINGS.map((language) => ({ value: language, label: languageLabel(language, t) })),
         configuration.languageSetting(),
       );
-    case 'confirmSwitch':
-      await configuration.setConfirmSwitch(!configuration.confirmSwitch());
-      return 'list';
-    case 'notifyReset':
-      await configuration.setNotifyOnWeeklyReset(!configuration.notifyOnWeeklyReset());
-      return 'list';
-    case 'advanced':
-      // Opened by the list itself (a page, not a screen).
-      return 'list';
     case 'refresh': {
       const current = configuration.refreshIntervalSeconds();
       return editValue(
@@ -727,7 +724,10 @@ export async function openQuickSettings(deps: QuickSettingsDependencies, focus?:
     void offerReload();
   }
   let active = focus;
-  let page: QuickSettingsPage = focus === undefined ? 'main' : quickSettingsPageOf(focus);
+  // A link straight to a setting opens the page that lists it.
+  let page: QuickSettingsPage = buildQuickSettingsRows(currentValues(deps), t, 'advanced').some((row) => row.separator !== true && row.key === focus)
+    ? 'advanced'
+    : 'main';
   for (;;) {
     const key = await pickRow(deps, active, page);
     if (key === undefined) {

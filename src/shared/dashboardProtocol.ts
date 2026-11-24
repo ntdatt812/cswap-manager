@@ -226,7 +226,7 @@ export interface DashboardModel {
   /** Next resets within the timeline horizon, soonest first. */
   readonly timeline: readonly TimelineItem[];
   readonly rows: readonly DashboardRow[];
-  /** When the next automatic refresh is due (epoch ms); the header then counts down to it. */
+  /** When the next automatic refresh is due (epoch ms), only while the header should count down to it. */
   readonly nextRefreshAt?: number;
   /** Every account has this plan: shown once by the heading, and the plan column is left out. */
   readonly commonPlan?: string;

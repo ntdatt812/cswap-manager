@@ -18,6 +18,7 @@ import type { AccountsState, FreshnessAssessment } from '../service/refreshServi
 import {
   accountLevel,
   accountName,
+  countdownDue,
   hasCustomName,
   describeView,
   hasUnavailableUsage,
@@ -421,11 +422,13 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
   const strings = dashboardStrings(t);
   const freshness = freshnessOf(state, options);
   const autoSwitch = autoSwitchOverview(options);
+  // Without data the header shows the error or loading state, never a countdown.
+  const nextRefreshAt = snapshot === undefined ? undefined : countdownDue(options.nextRefreshAt, options.freshness, busy);
   const common = {
     freshnessText: freshness.text,
     freshnessTone: freshness.tone,
     ...(autoSwitch === undefined ? {} : { autoSwitch }),
-    ...(options.nextRefreshAt === undefined ? {} : { nextRefreshAt: options.nextRefreshAt }),
+    ...(nextRefreshAt === undefined ? {} : { nextRefreshAt }),
     busy,
     strings,
   };

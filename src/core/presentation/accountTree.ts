@@ -1,7 +1,7 @@
 import type { CliError } from '../cli/cliErrors';
 import { accountContextValue } from './accountActions';
 import { TESTED_SCHEMA_VERSIONS } from '../model/parsers';
-import type { Account, AccountsSnapshot, UsageMetrics } from '../model/types';
+import type { Account, AccountsSnapshot, UsageMetrics, UsageWindow } from '../model/types';
 import type { AccountsState, FreshnessAssessment } from '../service/refreshService';
 import {
   alignedDuration,
@@ -103,7 +103,7 @@ export function rowColumns(accounts: readonly Account[]): RowColumns {
   };
 }
 
-export function alignedPercent(pct: number | undefined, columns: RowColumns): string {
+function alignedPercent(pct: number | undefined, columns: RowColumns): string {
   return padDigits(pct === undefined ? '?' : formatPercent(pct), columns.percentDigits);
 }
 
@@ -279,12 +279,6 @@ export function loginDue(account: Account, now: number): LoginDue | undefined {
 }
 
 /**
- * The slot Claude Code was just logged in to again: its login needed renewing (due within cswap's
- * 7 days, expired, or refused by the server) and it is now the active account with a login that is
- * no longer due. cswap reads the active account's login from Claude Code itself, so this is what a
- * `/login` to an account cswap already has looks like. The account is followed by email.
- */
-/**
  * The organization worth showing: none for the default organization of a personal account, which
  * Anthropic names "<email>'s Organization" and so only repeats the email.
  */
@@ -294,21 +288,6 @@ export function shownOrganization(account: Account): string | undefined {
     return name;
   }
   return name.toLowerCase() === `${account.email.toLowerCase()}'s organization` ? undefined : name;
-}
-
-export function renewedLoginSlot(previous: AccountsSnapshot | undefined, current: AccountsSnapshot, now: number): number | undefined {
-  const active = current.accounts.find((account) => account.slot === current.active.slot);
-  if (previous === undefined || active?.email === undefined || current.active.activeUnmanaged === true) {
-    return undefined;
-  }
-  const email = active.email.toLowerCase();
-  const before = previous.accounts.find((account) => account.email?.toLowerCase() === email && account.organizationUuid === active.organizationUuid);
-  if (before === undefined) {
-    return undefined;
-  }
-  const neededRenewal = loginDue(before, now) !== undefined || before.usageStatus === 'relogin_required';
-  const renewed = active.loginExpiresAt !== undefined && active.loginExpiresAt !== before.loginExpiresAt && loginDue(active, now) === undefined;
-  return neededRenewal && renewed ? active.slot : undefined;
 }
 
 function loginDueText(due: LoginDue, options: PresentationOptions): string {
@@ -380,10 +359,24 @@ function accountIcon(account: Account, isActive: boolean, level: UsageLevel): Ic
   }
 }
 
-/** The aligned part of an account row: each window's percentage, then the time to the next reset. */
-function usageColumnsText(account: Account, options: PresentationOptions, columns: RowColumns): string[] {
+/** Extras for `usageColumnsText` where a list can show more than the sidebar. */
+export interface UsageColumnsStyle {
+  /** Drawn between a window's label and its percentage, e.g. a usage bar. */
+  readonly bar?: (window: UsageWindow) => string;
+  /** Applied to each window's label, e.g. where `$(icon)` syntax would render. */
+  readonly label?: (label: string) => string;
+}
+
+/**
+ * The aligned part of an account row (sidebar and switch picker): each window's percentage, then
+ * the time to the first window's reset while it is ahead.
+ */
+export function usageColumnsText(account: Account, options: PresentationOptions, columns: RowColumns, style: UsageColumnsStyle = {}): string[] {
   const windows = account.usage?.windows ?? [];
-  const parts = windows.map((window) => `${windowLabel(window.key)} ${alignedPercent(window.pct, columns)}`);
+  const parts = windows.map((window) => {
+    const label = windowLabel(window.key);
+    return [style.label?.(label) ?? label, style.bar?.(window), alignedPercent(window.pct, columns)].filter((piece) => piece !== undefined).join(' ');
+  });
   const firstReset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined);
   if (firstReset !== undefined && firstReset > options.now) {
     parts.push(`↻ ${alignedDuration(firstReset - options.now)}`);
@@ -533,6 +526,14 @@ export interface ViewPresentationOptions {
   readonly nextRefreshAt?: number;
 }
 
+/**
+ * The due time a countdown should show, or undefined: stale data keeps its warning instead (a
+ * countdown would suggest all is well), and a refresh already running needs no countdown.
+ */
+export function countdownDue(nextRefreshAt: number | undefined, freshness: FreshnessAssessment, refreshing: boolean): number | undefined {
+  return freshness.freshness === 'stale' || refreshing ? undefined : nextRefreshAt;
+}
+
 function errorViewState(error: CliError | undefined): ViewState {
   switch (error?.kind) {
     case undefined:
@@ -565,7 +566,8 @@ export function describeView(state: AccountsState, options: ViewPresentationOpti
   const activeText = snapshot.active.slot === undefined ? t('Active: unknown') : t('Active: #{0}', snapshot.active.slot);
   const stale = options.freshness.freshness === 'stale';
   // While automatic refresh runs, the countdown to the next one says it all; otherwise the data's age.
-  const countdown = options.nextRefreshAt === undefined ? undefined : countdownText(options.nextRefreshAt - now);
+  const due = countdownDue(options.nextRefreshAt, options.freshness, state.refreshing);
+  const countdown = due === undefined ? undefined : countdownText(due - now);
   const description = [stale ? t('Stale') : undefined, activeText, countdown ?? (updated === undefined ? undefined : t('updated {0}', updated))]
     .filter((part): part is string => part !== undefined)
     .join(' · ');

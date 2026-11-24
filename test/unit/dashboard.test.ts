@@ -193,6 +193,14 @@ describe('buildDashboardModel', () => {
     assert.equal(busy.rows[1]?.detail.canSwitch, false);
   });
 
+  it('carries the next refresh time only while a countdown should show', () => {
+    const due = NOW + 42_000;
+    assert.equal(buildDashboardModel(ready(), options({ nextRefreshAt: due })).nextRefreshAt, due);
+    assert.equal(buildDashboardModel(ready(), options({ nextRefreshAt: due, freshness: { freshness: 'stale', reason: 'too-old' } })).nextRefreshAt, undefined, 'stale');
+    assert.equal(buildDashboardModel(ready(), options({ nextRefreshAt: due, switching: true })).nextRefreshAt, undefined, 'busy');
+    assert.equal(buildDashboardModel({ refreshing: false, lastError: cliError('timeout') }, options({ nextRefreshAt: due })).nextRefreshAt, undefined, 'no data');
+  });
+
   it('reports loading, error, empty and stale states', () => {
     assert.equal(buildDashboardModel({ refreshing: true }, options()).state, 'loading');
     const error = buildDashboardModel({ refreshing: false, lastError: cliError('executable-not-found') }, options());

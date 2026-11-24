@@ -20,16 +20,9 @@ export function normalizeIntervalMs(seconds: number): number {
   return Math.max(MIN_REFRESH_INTERVAL_MS, Math.round(seconds * 1000));
 }
 
-/** Where automatic refresh stands, for a countdown: off, paused (hidden view or window not in front), running, or due at a time. */
-export type RefreshSchedule =
-  | { readonly kind: 'off' }
-  | { readonly kind: 'paused' }
-  | { readonly kind: 'refreshing' }
-  | { readonly kind: 'scheduled'; readonly at: number };
-
 export interface RefreshSchedulerOptions {
   readonly tick: () => Promise<unknown>;
-  /** Called whenever the schedule changes (a countdown shown elsewhere can follow it). */
+  /** Called when `nextRefreshAt()` changes (a countdown shown elsewhere can follow it). */
   readonly onChange?: () => void;
   /** When the last refresh attempt started (manual or automatic); drives the next due time. */
   readonly lastRefreshAt: () => number | undefined;
@@ -69,35 +62,22 @@ export class RefreshScheduler implements Disposable {
     }
   }
 
-  isScheduled(): boolean {
-    return this.handle !== undefined;
-  }
-
-  schedule(): RefreshSchedule {
-    if (this.intervalMs <= 0) {
-      return { kind: 'off' };
-    }
-    if (this.running) {
-      return { kind: 'refreshing' };
-    }
-    if (!this.active || this.dueAt === undefined) {
-      return { kind: 'paused' };
-    }
-    return { kind: 'scheduled', at: this.dueAt };
+  /** When the armed timer fires; undefined while off, paused (inactive) or refreshing. */
+  nextRefreshAt(): number | undefined {
+    return this.dueAt;
   }
 
   /** Recomputes the next due time, e.g. after a manual refresh finished. */
   reschedule(): void {
+    const previous = this.dueAt;
     this.clear();
-    if (this.disposed || !this.active || this.intervalMs <= 0 || this.running) {
-      this.options.onChange?.();
-      return;
+    if (!this.disposed && this.active && this.intervalMs > 0 && !this.running) {
+      const last = this.options.lastRefreshAt();
+      const due = last === undefined ? 0 : Math.max(0, last + this.intervalMs - this.now());
+      this.dueAt = this.now() + due;
+      this.handle = this.timers.setTimeout(() => void this.fire(), due);
     }
-    const last = this.options.lastRefreshAt();
-    const due = last === undefined ? 0 : Math.max(0, last + this.intervalMs - this.now());
-    this.dueAt = this.now() + due;
-    this.handle = this.timers.setTimeout(() => void this.fire(), due);
-    this.options.onChange?.();
+    this.notifyIfChanged(previous);
   }
 
   dispose(): void {
@@ -113,11 +93,18 @@ export class RefreshScheduler implements Disposable {
     this.dueAt = undefined;
   }
 
+  private notifyIfChanged(previous: number | undefined): void {
+    if (this.dueAt !== previous) {
+      this.options.onChange?.();
+    }
+  }
+
   private async fire(): Promise<void> {
+    const previous = this.dueAt;
     this.handle = undefined;
     this.dueAt = undefined;
     this.running = true;
-    this.options.onChange?.();
+    this.notifyIfChanged(previous);
     try {
       await this.options.tick();
     } catch {

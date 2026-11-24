@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import { isValidTokenEmail, tokenKind, type TokenKind } from '../core/cli/cswapCli';
 import type { AccountsSnapshot } from '../core/model/types';
-import { renewedLoginSlot } from '../core/presentation/accountTree';
+import { renewedLoginSlot } from '../core/presentation/snapshotChanges';
 import type { AddOutcome, ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
 import { describeCliError, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
+import { onFocusedSnapshotChange } from './snapshotTransitions';
 
 export interface AddAccountDependencies {
   readonly refreshService: RefreshService;
@@ -27,8 +28,6 @@ export function freeSlots(usedSlots: readonly number[], count = 5): number[] {
   return free;
 }
 
-type AddWay = 'current' | 'login' | 'token' | 'refreshLogin';
-
 /**
  * Adding accounts to cswap: the Accounts view's + button, the switcher's last row, and an offer that
  * appears by itself when Claude Code is logged in to an account cswap does not manage yet (right
@@ -42,13 +41,10 @@ export class AccountAdder implements vscode.Disposable {
   private flows = 0;
   /** The automatic offer was made for the current unmanaged login; reset once the login is managed again. */
   private offered = false;
-  /** The snapshot seen at the last refresh, to tell when a login was renewed. */
-  private previous: AccountsSnapshot | undefined;
   private readonly subscription: vscode.Disposable;
 
   constructor(private readonly deps: AddAccountDependencies) {
-    this.previous = deps.refreshService.getState().snapshot;
-    this.subscription = deps.refreshService.onDidChange(() => this.onRefresh());
+    this.subscription = onFocusedSnapshotChange(deps.refreshService, (previous, current) => this.onRefresh(previous, current));
   }
 
   dispose(): void {
@@ -63,52 +59,31 @@ export class AccountAdder implements vscode.Disposable {
   private async chooseWay(): Promise<void> {
     const snapshot = this.deps.refreshService.getState().snapshot;
     const activeSlot = snapshot?.active.slot;
-    const items: Array<vscode.QuickPickItem & { way: AddWay }> = [
+    const items: Array<vscode.QuickPickItem & { readonly run: () => Promise<void> | void }> = [
       ...(snapshot?.active.activeUnmanaged === true
-        ? [{ way: 'current' as const, label: `$(add) ${t('Add the account Claude Code is logged in to')}`, detail: t('cswap does not manage this login yet.') }]
+        ? [{ label: `$(add) ${t('Add the account Claude Code is logged in to')}`, detail: t('cswap does not manage this login yet.'), run: () => this.addCurrentLogin() }]
         : []),
-      { way: 'login', label: `$(sign-in) ${t('Log in to a new account…')}`, detail: t('Use /login in Claude Code; the extension then offers to add it. The usual way.') },
-      { way: 'token', label: `$(key) ${t('Paste a setup-token or API key…')}`, detail: t('Claude Code keeps its current login. Create a setup-token with "claude setup-token".') },
+      { label: `$(sign-in) ${t('Log in to a new account…')}`, detail: t('Use /login in Claude Code; the extension then offers to add it. The usual way.'), run: () => this.guideLogin() },
+      { label: `$(key) ${t('Paste a setup-token or API key…')}`, detail: t('Claude Code keeps its current login. Create a setup-token with "claude setup-token".'), run: () => this.addToken() },
       ...(activeSlot === undefined
         ? []
         : [
             {
-              way: 'refreshLogin' as const,
               label: `$(sync) ${t('Refresh the stored login of slot {0}', activeSlot)}`,
               detail: t('After logging in to this account again with /login, for example when its login is about to expire.'),
+              run: () => this.refreshStoredLogin(),
             },
           ]),
     ];
     const picked = await vscode.window.showQuickPick(items, { title: t('Add an account to cswap') });
-    switch (picked?.way) {
-      case 'current':
-        return this.addCurrentLogin();
-      case 'login':
-        return this.guideLogin();
-      case 'token':
-        return this.addToken();
-      case 'refreshLogin':
-        return this.refreshStoredLogin();
-      case undefined:
-        return;
-    }
+    await picked?.run();
   }
 
   /**
    * After a refresh: a login cswap does not manage yet is offered for adding, and a `/login` again
    * to an account cswap already has (expired or about to) replaces its stored login by itself.
    */
-  private onRefresh(): void {
-    const snapshot = this.deps.refreshService.getState().snapshot;
-    if (snapshot === undefined || snapshot === this.previous) {
-      return;
-    }
-    const previous = this.previous;
-    this.previous = snapshot;
-    // Every open window refreshes; only the one in front acts, so nothing runs or asks twice.
-    if (!vscode.window.state.focused) {
-      return;
-    }
+  private onRefresh(previous: AccountsSnapshot | undefined, snapshot: AccountsSnapshot): void {
     const renewed = renewedLoginSlot(previous, snapshot, Date.now());
     if (renewed !== undefined) {
       void this.storeRenewedLogin(renewed);
@@ -160,24 +135,21 @@ export class AccountAdder implements vscode.Disposable {
       return;
     }
     this.offered = true;
-    const add = t('Add to cswap…');
-    void vscode.window.showInformationMessage(t('Claude Code is logged in to an account cswap does not manage yet.'), add).then((choice) => {
-      if (choice === add) {
+    this.offerAddCurrent(t('Claude Code is logged in to an account cswap does not manage yet.'), t('Add to cswap…'));
+  }
+
+  private guideLogin(): void {
+    const done = t('I have logged in');
+    this.offerAddCurrent(t('In Claude Code, type /login and log in to the new account, then click "{0}". Accounts already in cswap stay there.', done), done);
+  }
+
+  /** A notice whose one button adds the current login. Not awaited: the user may leave it open while logging in elsewhere. */
+  private offerAddCurrent(message: string, button: string): void {
+    void vscode.window.showInformationMessage(message, button).then((choice) => {
+      if (choice === button) {
         void this.inFlow(() => this.addCurrentLogin());
       }
     });
-  }
-
-  /** Not awaited: the user leaves this notification open while logging in elsewhere. */
-  private guideLogin(): void {
-    const done = t('I have logged in');
-    void vscode.window
-      .showInformationMessage(t('In Claude Code, type /login and log in to the new account, then click "{0}". Accounts already in cswap stay there.', done), done)
-      .then((choice) => {
-        if (choice === done) {
-          void this.inFlow(() => this.addCurrentLogin());
-        }
-      });
   }
 
   /** `cswap add` for the login Claude Code uses now, into a free slot. */
@@ -198,38 +170,36 @@ export class AccountAdder implements vscode.Disposable {
     if (slot === undefined) {
       return;
     }
-    const proceed = t('Add');
-    const confirm = await vscode.window.showWarningMessage(
+    await this.confirmAndAddCurrent(
+      slot,
       t('Store the current Claude Code login in cswap slot {0}?', slot),
-      { modal: true, detail: t('cswap copies the login Claude Code uses right now, checks it with Anthropic, and makes it the active account in that slot.') },
-      proceed,
+      t('cswap copies the login Claude Code uses right now, checks it with Anthropic, and makes it the active account in that slot.'),
+      t('Add'),
     );
-    if (confirm !== proceed) {
-      return;
-    }
-    const outcome = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Cswap: adding the current login…') }, () =>
-      this.deps.managementService.addCurrent({ slot }),
-    );
-    this.report(outcome, 'login');
   }
 
-  /** `cswap add` without a slot: refreshes the stored copy of the login Claude Code uses now. */
+  /** `cswap add` for the active slot: refreshes the stored copy of the login Claude Code uses now. */
   private async refreshStoredLogin(): Promise<void> {
     const snapshot = await this.freshSnapshot();
     const slot = snapshot?.active.slot;
     if (slot === undefined) {
       return;
     }
-    const proceed = t('Refresh stored login');
-    const confirm = await vscode.window.showWarningMessage(
+    // Bound to the slot: if Claude Code is on another account by now, cswap cancels instead.
+    await this.confirmAndAddCurrent(
+      slot,
       t('Refresh the login cswap stored for slot {0}?', slot),
-      { modal: true, detail: t('cswap replaces it with the login Claude Code uses right now. Do this after logging in to that same account again with /login.') },
-      proceed,
+      t('cswap replaces it with the login Claude Code uses right now. Do this after logging in to that same account again with /login.'),
+      t('Refresh stored login'),
     );
+  }
+
+  /** Asks in a modal, then runs `cswap add --slot` with progress and reports the outcome. */
+  private async confirmAndAddCurrent(slot: number, question: string, detail: string, proceed: string): Promise<void> {
+    const confirm = await vscode.window.showWarningMessage(question, { modal: true, detail }, proceed);
     if (confirm !== proceed) {
       return;
     }
-    // Bound to the slot: if Claude Code is on another account by now, cswap cancels instead.
     const outcome = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Cswap: adding the current login…') }, () =>
       this.deps.managementService.addCurrent({ slot }),
     );
@@ -238,7 +208,8 @@ export class AccountAdder implements vscode.Disposable {
 
   /** `cswap add-token -`: the token is typed into a password box and handed to cswap on stdin. */
   private async addToken(): Promise<void> {
-    const snapshot = await this.freshSnapshot();
+    // The active account does not matter here: only the free slots and the emails in use.
+    const snapshot = await this.freshSnapshot(false);
     if (snapshot === undefined) {
       return;
     }
@@ -292,14 +263,14 @@ export class AccountAdder implements vscode.Disposable {
     this.report(outcome, kind);
   }
 
-  /** Re-reads cswap (with the active login checked) so the choice of free slots is current. */
-  private async freshSnapshot(): Promise<AccountsSnapshot | undefined> {
+  /** Re-reads cswap so the choice of free slots is current; `verifyActive` also checks the active login. */
+  private async freshSnapshot(verifyActive = true): Promise<AccountsSnapshot | undefined> {
     if (this.deps.gate.isBusy()) {
       showBusy();
       return undefined;
     }
     const fresh = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: t('Cswap: refreshing accounts…') }, () =>
-      this.deps.refreshService.refresh({ trigger: 'manual', requireFresh: true, verifyActive: true }),
+      this.deps.refreshService.refresh({ trigger: 'manual', requireFresh: true, verifyActive }),
     );
     if (!fresh.ok) {
       void vscode.window.showErrorMessage(describeCliError(fresh.error));

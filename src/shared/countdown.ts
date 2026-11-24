@@ -1,3 +1,6 @@
+/** The countdown to the next automatic refresh ticks every second. */
+export const COUNTDOWN_TICK_MS = 1_000;
+
 /**
  * A countdown as minutes and seconds, rounded up so it reaches 0:00 only when time is up: `0:42`,
  * `1:05`, `60:00`. Shared by the Accounts view and the dashboard webview.

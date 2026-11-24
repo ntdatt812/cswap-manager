@@ -1,4 +1,4 @@
-import type { AutoSwitchRules } from '../model/autoSwitch';
+import { ruleField, type AutoSwitchRules } from '../model/autoSwitch';
 
 /**
  * cswap settings the extension may change through `cswap config set/unset`, with the same
@@ -30,13 +30,11 @@ export const INTERVAL_MAX_SECONDS = 3_600;
 export const HYSTERESIS_MAX_PCT = 50;
 export const UNHEALTHY_TICKS_RANGE = { min: 1, max: 100 } as const;
 
-const BOOLEAN_KEYS = ['run.shareHistory', 'usage.headerProbe', 'usage.fableProbe'] as const;
-type BooleanKey = (typeof BOOLEAN_KEYS)[number];
+type BooleanKey = 'run.shareHistory' | 'usage.headerProbe' | 'usage.fableProbe';
+type NumericKey = Exclude<AutoSwitchRuleKey, 'autoswitch.strategy' | 'autoswitch.model' | BooleanKey>;
 
 export type AutoSwitchRuleUpdate =
-  | { readonly key: 'autoswitch.threshold' | 'autoswitch.weeklyThreshold'; readonly value: number }
-  | { readonly key: 'autoswitch.cooldownSeconds' | 'autoswitch.intervalSeconds' | 'autoswitch.unhealthyTicks'; readonly value: number }
-  | { readonly key: 'autoswitch.hysteresisPct'; readonly value: number }
+  | { readonly key: NumericKey; readonly value: number }
   | { readonly key: 'autoswitch.strategy'; readonly value: AutoSwitchStrategy }
   | { readonly key: 'autoswitch.model'; readonly value: string }
   | { readonly key: BooleanKey; readonly value: boolean };
@@ -120,12 +118,10 @@ export function ruleUpdate(key: AutoSwitchRuleKey, value: string): AutoSwitchRul
       return { key, value };
     case 'autoswitch.threshold':
     case 'autoswitch.weeklyThreshold':
-      return { key, value: Number(value) };
     case 'autoswitch.cooldownSeconds':
     case 'autoswitch.intervalSeconds':
-    case 'autoswitch.unhealthyTicks':
-      return { key, value: Number(value) };
     case 'autoswitch.hysteresisPct':
+    case 'autoswitch.unhealthyTicks':
       return { key, value: Number(value) };
     case 'run.shareHistory':
     case 'usage.headerProbe':
@@ -145,28 +141,19 @@ export function autoSwitchRuleArgs(rule: AutoSwitchRuleUpdate): readonly string[
 
 /** Whether the settings read back from cswap hold the value the rules editor just wrote. */
 export function ruleMatches(rules: AutoSwitchRules, key: AutoSwitchRuleKey, written: string): boolean {
-  const fields = {
-    'autoswitch.threshold': 'threshold',
-    'autoswitch.weeklyThreshold': 'weeklyThreshold',
-    'autoswitch.cooldownSeconds': 'cooldownSeconds',
-    'autoswitch.intervalSeconds': 'intervalSeconds',
-    'autoswitch.hysteresisPct': 'hysteresisPct',
-    'autoswitch.unhealthyTicks': 'unhealthyTicks',
-    'autoswitch.strategy': 'strategy',
-    'autoswitch.model': 'model',
-    'run.shareHistory': 'shareHistory',
-    'usage.headerProbe': 'headerProbe',
-    'usage.fableProbe': 'fableProbe',
-  } as const;
   if (written === '') {
     return !rules.customized.includes(key);
   }
-  const actual = rules[fields[key]];
-  if (key === 'autoswitch.strategy' || key === 'autoswitch.model') {
-    return actual === written;
+  const field = ruleField(key);
+  const actual = field === undefined ? undefined : rules[field];
+  switch (typeof actual) {
+    case 'string':
+      return actual === written;
+    case 'boolean':
+      return actual === (written === 'true');
+    case 'number':
+      return Math.abs(actual - Number(written)) < 1e-9;
+    default:
+      return false;
   }
-  if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
-    return actual === (written === 'true');
-  }
-  return typeof actual === 'number' && Math.abs(actual - Number(written)) < 1e-9;
 }

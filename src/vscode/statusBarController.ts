@@ -5,6 +5,7 @@ import { statusBarButtonLabel } from '../core/presentation/quickSettings';
 import {
   buildStatusBarModel,
   STATUS_BAR_BUTTONS,
+  statusBarParts,
   type StatusBarButton,
   type StatusBarColors,
   type StatusBarModel,
@@ -12,10 +13,11 @@ import {
 } from '../core/presentation/statusBar';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
 import type { SwitchService } from '../core/service/switchService';
+import { countdownText } from '../shared/countdown';
 import { renderTooltip } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
-import { CLOCK_TICK_MS, COUNTDOWN_TICK_MS, presentationOptions, t } from './presentation';
+import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
 
 export interface StatusBarDependencies {
   readonly refreshService: RefreshService;
@@ -76,7 +78,8 @@ export class StatusBarController implements vscode.Disposable {
   private readonly buttons = new Map<StatusBarButton, vscode.StatusBarItem>();
   private readonly disposables: vscode.Disposable[] = [];
   private clock: ReturnType<typeof setInterval> | undefined;
-  private clockTick = CLOCK_TICK_MS;
+  /** The last full render's countdown, which ticks on its own in between. */
+  private countdown: StatusBarModel['countdown'];
   private previewing: StatusBarPreview | undefined;
 
   constructor(private readonly deps: StatusBarDependencies) {
@@ -97,6 +100,7 @@ export class StatusBarController implements vscode.Disposable {
       this.item,
       deps.refreshService.onDidChange(() => this.render()),
       deps.autoRefresh.onDidChangeSchedule(() => this.render()),
+      deps.autoRefresh.onCountdownTick(() => this.tickCountdown()),
       deps.switchService.onDidChangeSwitching(() => this.render()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(CONFIG_SECTION)) {
@@ -147,7 +151,7 @@ export class StatusBarController implements vscode.Disposable {
     const { refreshService, switchService, configuration, describeError } = this.deps;
     const state = refreshService.getState();
     const options = presentationOptions(configuration);
-    const schedule = this.deps.autoRefresh.schedule();
+    const nextRefreshAt = configuration.statusBarCountdown() ? this.deps.autoRefresh.nextRefreshAt() : undefined;
     return buildStatusBarModel(state, {
       ...options,
       mode: 'custom',
@@ -156,29 +160,39 @@ export class StatusBarController implements vscode.Disposable {
       freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
       switching: switchService.isSwitching(),
       describeError,
-      ...(configuration.statusBarCountdown() && schedule.kind === 'scheduled' ? { nextRefreshAt: schedule.at } : {}),
+      ...(nextRefreshAt === undefined ? {} : { nextRefreshAt }),
     });
   }
 
-  /** Every second while a countdown shows, otherwise every 30 s for relative times. */
+  /** Re-renders every 30 s for relative times; the countdown ticks separately. */
   private setClock(running: boolean): void {
-    const tick = running && this.deps.configuration.statusBarCountdown() && this.deps.autoRefresh.schedule().kind === 'scheduled' ? COUNTDOWN_TICK_MS : CLOCK_TICK_MS;
-    if (running && this.clockTick === tick && this.clock !== undefined) {
-      return;
-    }
-    if (this.clock !== undefined) {
+    if (running) {
+      this.clock ??= setInterval(() => this.render(), CLOCK_TICK_MS);
+    } else if (this.clock !== undefined) {
       clearInterval(this.clock);
       this.clock = undefined;
     }
-    if (running) {
-      this.clock = setInterval(() => this.render(), tick);
-      this.clockTick = tick;
+  }
+
+  /** Only the countdown at the end of the text changes between full renders. */
+  private tickCountdown(): void {
+    if (this.countdown === undefined) {
+      return;
+    }
+    const text = `${this.countdown.prefix}${countdownText(this.countdown.at - Date.now())}`;
+    if (this.item.text !== text) {
+      this.item.text = text;
     }
   }
 
   private render(): void {
     const look = this.look();
-    const model = this.model(look);
+    const shown = statusBarParts('custom', look.parts).length > 0;
+    // Before building the model: this can move the schedule, which renders again, and must not leave an older model behind.
+    this.deps.autoRefresh.setConsumer('statusBar', shown);
+    this.setClock(shown);
+    const model = shown ? this.model(look) : undefined;
+    this.countdown = model?.countdown;
     // Buttons belong to the account item: hiding the item hides every Cswap button too.
     for (const [button, item] of this.buttons) {
       if (model !== undefined && look.buttons.includes(button)) {
@@ -192,8 +206,6 @@ export class StatusBarController implements vscode.Disposable {
       }
     }
 
-    this.deps.autoRefresh.setConsumer('statusBar', model !== undefined);
-    this.setClock(model !== undefined);
     if (model === undefined) {
       this.item.hide();
       return;

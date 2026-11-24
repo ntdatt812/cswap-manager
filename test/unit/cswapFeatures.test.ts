@@ -25,8 +25,8 @@ import { PriorityStore } from '../../src/core/service/priorityStore';
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { draggedSlot, dropMove, previewMove, resolveDropTarget } from '../../src/core/presentation/accountDrag';
-import { renewedLoginSlot, shownOrganization, type NodeModel } from '../../src/core/presentation/accountTree';
-import { weeklyResets } from '../../src/core/presentation/weeklyResets';
+import { shownOrganization, type NodeModel } from '../../src/core/presentation/accountTree';
+import { renewedLoginSlot, weeklyResets } from '../../src/core/presentation/snapshotChanges';
 import { SLANT_BAR_PATTERN, usageBar } from '../../src/core/presentation/format';
 import { tokenUsageLevel } from '../../src/core/presentation/quickSettings';
 import { manageCliStubs, ok } from '../helpers/fixtures';
@@ -215,6 +215,7 @@ describe('management of priorities, removal and adding', () => {
     const service = new ManagementService(added.cli, added.refresher, new OperationGate());
     assert.deepEqual(await service.addToken('sk-ant-oat01-abc', { slot: 4 }), { kind: 'added', result: { kind: 'added', slot: 4 }, verification: 'confirmed' });
     assert.deepEqual(added.tokenCalls, [{ token: 'sk-ant-oat01-abc', options: { slot: 4 } }]);
+    assert.equal(added.requests[0]?.verifyActive, false, 'no cswap status: the active account did not change');
     const missing = fake(BEFORE, undefined, ok('manage', { kind: 'added', slot: 4 }));
     assert.equal(((await new ManagementService(missing.cli, missing.refresher, new OperationGate()).addToken('sk-ant-oat01-abc', { slot: 4 })) as { verification?: string }).verification, 'mismatch');
   });

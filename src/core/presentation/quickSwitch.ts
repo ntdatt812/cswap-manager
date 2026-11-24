@@ -1,7 +1,17 @@
 import type { SwitchStrategy } from '../cli/cswapCli';
 import type { Account, AccountsSnapshot } from '../model/types';
-import { accountLevel, accountName, alignedPercent, hasCustomName, hasUnavailableUsage, relativeAge, rowColumns, type PresentationOptions, type RowColumns } from './accountTree';
-import { alignedDuration, epochOf, formatPercent, maxUsagePct, padDigits, usageAgeMs, usageBar, windowLabel } from './format';
+import {
+  accountLevel,
+  accountName,
+  hasCustomName,
+  hasUnavailableUsage,
+  relativeAge,
+  rowColumns,
+  usageColumnsText,
+  type PresentationOptions,
+  type RowColumns,
+} from './accountTree';
+import { epochOf, formatPercent, maxUsagePct, padDigits, usageAgeMs, usageBar } from './format';
 import { sanitizeLabel } from './statusBar';
 import { usageStatusText } from './usageStatus';
 
@@ -20,12 +30,12 @@ export interface QuickSwitchItemModel {
 }
 
 /**
- * The usage columns of an account's label: one bar per window (full width for a single window,
- * shorter when several share the line) and the next reset. Numbers are padded with figure spaces
- * like the sidebar, so the bars, percentages and reset times line up from one account to the next.
+ * The usage columns of an account's label: the sidebar's columns with one bar per window (full
+ * width for a single window, shorter when several share the line), so the bars, percentages and
+ * reset times line up from one account to the next.
  */
 function usageColumns(account: Account, options: PresentationOptions, columns: RowColumns): string[] {
-  const { t, now } = options;
+  const { t } = options;
   if (account.usageStatus !== undefined && hasUnavailableUsage(account)) {
     return [sanitizeLabel(usageStatusText(account.usageStatus, t))];
   }
@@ -34,11 +44,10 @@ function usageColumns(account: Account, options: PresentationOptions, columns: R
     return [t('usage unknown')];
   }
   const width = windows.length === 1 ? 10 : 6;
-  const parts = windows.map(
-    (window) => `${sanitizeLabel(windowLabel(window.key))} ${usageBar(window.pct ?? 0, width, options.barStyle, { icons: true })} ${alignedPercent(window.pct, columns)}`,
-  );
-  const reset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined && epoch > now);
-  return reset === undefined ? parts : [...parts, `↻ ${alignedDuration(reset - now)}`];
+  return usageColumnsText(account, options, columns, {
+    label: sanitizeLabel,
+    bar: (window) => usageBar(window.pct ?? 0, width, options.barStyle, { icons: true }),
+  });
 }
 
 function detailLine(account: Account, active: boolean, snapshot: AccountsSnapshot, options: PresentationOptions): string {

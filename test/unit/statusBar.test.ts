@@ -75,6 +75,15 @@ describe('buildStatusBarModel', () => {
       buildStatusBarModel(ready(), options({ nextRefreshAt: NOW + 42_000, freshness: { freshness: 'stale', reason: 'too-old' } }))?.text,
       '$(account) #2 · 7d 40% $(history)',
     );
+    assert.equal(buildStatusBarModel({ ...ready(), refreshing: true }, options({ nextRefreshAt: NOW + 42_000 }))?.countdown, undefined, 'not while refreshing');
+  });
+
+  it('keeps the text before the countdown so it can tick on its own', () => {
+    const model = buildStatusBarModel(ready(), options({ nextRefreshAt: NOW + 42_000 }));
+    assert.deepEqual(model?.countdown, { prefix: '$(account) #2 · 7d 40% · ', at: NOW + 42_000 });
+    const iconOnly = buildStatusBarModel(ready(), options({ mode: 'custom', parts: ['icon'], nextRefreshAt: NOW + 42_000 }));
+    assert.equal(iconOnly?.text, '$(account) 0:42');
+    assert.equal(iconOnly?.countdown?.prefix, '$(account) ');
   });
 
   it('renders each mode for the active account', () => {

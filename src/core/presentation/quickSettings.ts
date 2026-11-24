@@ -308,6 +308,11 @@ export function tokenUsageLevel(settings: { readonly headerProbe?: boolean; read
   return settings.fableProbe === true ? 'fable' : 'haiku';
 }
 
+/** cswap's `run.shareHistory`, on unless set to false; undefined while the settings are not loaded. */
+export function shareHistoryOn(settings: { readonly shareHistory?: boolean } | undefined): boolean | undefined {
+  return settings === undefined ? undefined : settings.shareHistory !== false;
+}
+
 export function tokenUsageLabel(level: TokenUsageLevel | undefined, t: Translate): string {
   switch (level) {
     case undefined:
@@ -330,13 +335,6 @@ export function modelLabel(model: string | null | undefined, t: Translate): stri
   }
   return model.toLowerCase() === 'all' ? t('All per-model limits') : model;
 }
-
-/** Which page a row is on, so a link straight to a setting opens the right page. */
-export function quickSettingsPageOf(key: SettingKey): QuickSettingsPage {
-  return (ADVANCED_KEYS as readonly SettingKey[]).includes(key) ? 'advanced' : 'main';
-}
-
-const ADVANCED_KEYS = ['shareHistory', 'notifyReset', 'tokenUsage', 'cliPath', 'cswapVersion', 'timeout', 'transfer', 'allSettings'] as const;
 
 export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate, page: QuickSettingsPage = 'main'): QuickSettingsRow[] {
   return page === 'main' ? mainRows(values, t) : advancedRows(values, t);

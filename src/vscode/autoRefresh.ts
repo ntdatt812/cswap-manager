@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
-import { RefreshScheduler, type RefreshSchedule } from '../core/service/refreshScheduler';
+import { RefreshScheduler } from '../core/service/refreshScheduler';
 import type { RefreshService } from '../core/service/refreshService';
+import { COUNTDOWN_TICK_MS } from '../shared/countdown';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 
 export type RefreshConsumer = 'accountsView' | 'statusBar' | 'dashboard';
@@ -15,6 +16,10 @@ export class AutoRefreshController implements vscode.Disposable {
   private readonly scheduleChanged = new vscode.EventEmitter<void>();
   /** The next automatic refresh moved (scheduled, started, paused or turned off). */
   readonly onDidChangeSchedule = this.scheduleChanged.event;
+  private readonly countdownTicked = new vscode.EventEmitter<void>();
+  /** Every second while an automatic refresh is due, so countdowns can tick from one clock. */
+  readonly onCountdownTick = this.countdownTicked.event;
+  private ticker: ReturnType<typeof setInterval> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -24,12 +29,16 @@ export class AutoRefreshController implements vscode.Disposable {
     this.scheduler = new RefreshScheduler({
       tick: () => refreshService.refresh({ trigger: 'interval' }),
       lastRefreshAt: () => refreshService.getState().lastAttemptAt,
-      onChange: () => this.scheduleChanged.fire(),
+      onChange: () => {
+        this.updateTicker();
+        this.scheduleChanged.fire();
+      },
     });
     this.scheduler.configure(configuration.refreshIntervalMs());
     this.disposables.push(
       this.scheduler,
       this.scheduleChanged,
+      this.countdownTicked,
       refreshService.onDidChange((state) => {
         if (!state.refreshing) {
           this.scheduler.reschedule();
@@ -44,9 +53,9 @@ export class AutoRefreshController implements vscode.Disposable {
     );
   }
 
-  /** For the countdown to the next automatic refresh. */
-  schedule(): RefreshSchedule {
-    return this.scheduler.schedule();
+  /** When the next automatic refresh is due; undefined while off, paused or refreshing. */
+  nextRefreshAt(): number | undefined {
+    return this.scheduler.nextRefreshAt();
   }
 
   setConsumer(consumer: RefreshConsumer, needsData: boolean): void {
@@ -59,6 +68,7 @@ export class AutoRefreshController implements vscode.Disposable {
   }
 
   dispose(): void {
+    this.stopTicker();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -71,6 +81,22 @@ export class AutoRefreshController implements vscode.Disposable {
     const state = this.refreshService.getState();
     if (active && state.lastAttemptAt === undefined && !state.refreshing) {
       void this.refreshService.refresh({ trigger: 'activation' });
+    }
+  }
+
+  /** The ticker runs only while a refresh is due. */
+  private updateTicker(): void {
+    if (this.nextRefreshAt() === undefined) {
+      this.stopTicker();
+    } else {
+      this.ticker ??= setInterval(() => this.countdownTicked.fire(), COUNTDOWN_TICK_MS);
+    }
+  }
+
+  private stopTicker(): void {
+    if (this.ticker !== undefined) {
+      clearInterval(this.ticker);
+      this.ticker = undefined;
     }
   }
 }
