@@ -1,4 +1,4 @@
-import { isValidSlot, normalizeAlias, parseThreshold } from '../model/accountPolicy';
+import { isValidSlot, parseThreshold } from '../model/accountPolicy';
 import { parsePriority, parsePriorityList, type PriorityEntry } from '../model/priorities';
 import { parseMappingList, type MappingEntry } from '../model/mappings';
 import { buildTickResult, parseAutoSwitchRules, type AutoSwitchRules, type AutoTickResult } from '../model/autoSwitch';
@@ -62,8 +62,6 @@ export function switchArgs(target: SwitchTarget): readonly string[] | undefined 
 
 /** Account-policy operations verified against cswap 1.1.0 (see docs/CLI-CONTRACT.md, Phase 5). */
 export type ManageOperation =
-  | { readonly kind: 'setAlias'; readonly slot: number; readonly alias: string }
-  | { readonly kind: 'removeAlias'; readonly slot: number }
   | { readonly kind: 'setDisabled'; readonly slot: number; readonly disabled: boolean }
   | { readonly kind: 'setThreshold'; readonly slot: number; readonly threshold: number }
   | { readonly kind: 'clearThreshold'; readonly slot: number }
@@ -83,7 +81,8 @@ export function parseAddOutput(stdout: string): ParseResult<AddResult> {
   if (moved !== null) {
     return { ok: true, value: { kind: 'moved', slot: Number(moved[1]) } };
   }
-  const updated = /Updated credentials for Account (\d+)/.exec(stdout);
+  // `add` refreshes "credentials"; `add-token` refreshes a "token" or an "API key".
+  const updated = /Updated (?:credentials|token|API key) for Account (\d+)/.exec(stdout);
   if (updated !== null) {
     return { ok: true, value: { kind: 'updated', slot: Number(updated[1]) } };
   }
@@ -109,27 +108,61 @@ export function parseRemoveOutput(stdout: string): ParseResult<void> {
  * `cswap add` arguments from validated values only. A slot is passed only when the caller checked it
  * is free: an occupied slot would make cswap prompt to overwrite another account.
  */
-export function addArgs(options: { readonly slot?: number; readonly alias?: string }): readonly string[] | undefined {
-  const args = ['add'];
+export function addArgs(options: { readonly slot?: number }): readonly string[] | undefined {
+  if (options.slot === undefined) {
+    return ['add'];
+  }
+  return isValidSlot(options.slot) ? ['add', '--slot', String(options.slot)] : undefined;
+}
+
+export type TokenKind = 'setup-token' | 'api-key';
+
+/** OAuth prefixes from cswap's `credentials._OAUTH_TOKEN_PREFIXES`; any other `sk-ant-` value is an API key. */
+const OAUTH_TOKEN_PREFIXES = ['sk-ant-oat', 'sk-ant-ort'];
+const TOKEN_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,}$/;
+/** cswap's own `_validate_email`, minus a leading `-` (it would read as a flag). */
+const TOKEN_EMAIL_PATTERN = /^[a-zA-Z0-9._%+][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+/**
+ * What a pasted value is, split the way cswap splits it (`credentials.looks_like_api_key`), or
+ * undefined when it is not one token on one line. Only the shape is checked, never the value.
+ */
+export function tokenKind(token: string): TokenKind | undefined {
+  const text = token.trim();
+  if (!TOKEN_PATTERN.test(text)) {
+    return undefined;
+  }
+  return OAUTH_TOKEN_PREFIXES.some((prefix) => text.startsWith(prefix)) ? 'setup-token' : 'api-key';
+}
+
+export function isValidTokenEmail(email: string): boolean {
+  return TOKEN_EMAIL_PATTERN.test(email);
+}
+
+/**
+ * `cswap add-token -` arguments. The token itself is never an argument (process lists show those):
+ * `-` makes cswap read it from stdin. A slot is passed only when the caller checked it is free.
+ */
+export function addTokenArgs(options: { readonly slot?: number; readonly email?: string }): readonly string[] | undefined {
+  const args = ['add-token', '-'];
   if (options.slot !== undefined) {
     if (!isValidSlot(options.slot)) {
       return undefined;
     }
     args.push('--slot', String(options.slot));
   }
-  if (options.alias !== undefined) {
-    const alias = normalizeAlias(options.alias);
-    if (!alias.ok) {
+  if (options.email !== undefined) {
+    if (!isValidTokenEmail(options.email)) {
       return undefined;
     }
-    args.push('--alias', alias.value);
+    args.push('--email', options.email);
   }
   return args;
 }
 
 /**
- * Builds arguments only from validated values: positive integer slots, an alias that passed the
- * CLI's own rules (so it can never start with `-`), and a threshold inside 50–99.9.
+ * Builds arguments only from validated values (positive integer slots, a threshold inside 50–99.9, a
+ * priority inside 0–1000), so no argument can ever be read as a flag.
  */
 export function manageArgs(operation: ManageOperation): readonly string[] | undefined {
   if (!isValidSlot(operation.slot)) {
@@ -137,12 +170,6 @@ export function manageArgs(operation: ManageOperation): readonly string[] | unde
   }
   const slot = String(operation.slot);
   switch (operation.kind) {
-    case 'setAlias': {
-      const alias = normalizeAlias(operation.alias);
-      return alias.ok ? ['alias', slot, alias.value] : undefined;
-    }
-    case 'removeAlias':
-      return ['alias', slot, '--unset'];
     case 'setDisabled':
       return [operation.disabled ? 'disable' : 'enable', slot];
     case 'setThreshold': {
@@ -339,8 +366,17 @@ export class CswapCli {
   }
 
   /** `cswap add`: stores the current Claude Code login (or refreshes it when already managed). */
-  addAccount(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>> {
+  addAccount(options: { readonly slot?: number }): Promise<CliOutcome<AddResult>> {
     return this.mutate('manage', addArgs(options), parseAddOutput);
+  }
+
+  /**
+   * `cswap add-token -`: registers a setup-token or API key. The token goes to cswap on stdin only;
+   * it is never an argument, never logged, and cswap's output is redacted like every other command.
+   */
+  addToken(token: string, options: { readonly slot?: number; readonly email?: string }): Promise<CliOutcome<AddResult>> {
+    const args = tokenKind(token) === undefined ? undefined : addTokenArgs(options);
+    return this.mutate('manage', args, parseAddOutput, `${token.trim()}\n`);
   }
 
   /** `cswap export <file> [--account N]`: cswap writes the file (owner-only); the extension never reads it. */

@@ -22,6 +22,7 @@ import {
   statusBarLookLabel,
   statusBarPartLabel,
   timeoutChoices,
+  tokenUsageLevel,
   type QuickSettingsValues,
   type SettingKey,
   type StatusBarLook,
@@ -105,6 +106,8 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     autoSwitchStrategy: rules?.strategy,
     autoSwitchModel: rules === undefined ? undefined : (rules.model ?? null),
     autoSwitchRules: deps.autoSwitch.rulesText(),
+    shareHistory: rules === undefined ? undefined : rules.shareHistory !== false,
+    tokenUsage: tokenUsageLevel(rules),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
     barStyle: configuration.barStyle(),
@@ -357,7 +360,7 @@ async function saveParts(deps: QuickSettingsDependencies, parts: readonly Status
 const PART_SAMPLES: Record<StatusBarPart, (deps: QuickSettingsDependencies) => string> = {
   icon: () => '$(account) $(warning) $(error)',
   slot: () => '#1',
-  name: () => t('alias or email'),
+  name: () => t('display name or email'),
   plan: () => 'Max · Ultra',
   bar: (deps) => barStyleSample(deps.configuration.barStyle()),
   usage: () => '7d 40%',
@@ -618,6 +621,10 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
       return fromMenu(await deps.autoSwitch.chooseModel({ back: true }));
     case 'autoRules':
       return fromMenu(await deps.autoSwitch.editRules({ back: true }));
+    case 'shareHistory':
+      return fromMenu(await deps.autoSwitch.chooseShareHistory({ back: true }));
+    case 'tokenUsage':
+      return fromMenu(await deps.autoSwitch.chooseTokenUsage({ back: true }));
     case 'statusBar':
       return openStatusBarPage(deps);
     case 'barStyle':

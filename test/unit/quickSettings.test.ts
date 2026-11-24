@@ -26,6 +26,8 @@ const values: QuickSettingsValues = {
   autoSwitchStrategy: 'consume-first',
   autoSwitchModel: 'Fable',
   autoSwitchRules: 'switch at 90% · cooldown 300s · every 60s',
+  shareHistory: true,
+  tokenUsage: 'haiku',
   statusBarParts: ['icon', 'slot', 'bar', 'usage'],
   statusBarButtons: ['settings'],
   barStyle: 'parallelograms',

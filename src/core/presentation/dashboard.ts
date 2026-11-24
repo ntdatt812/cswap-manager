@@ -69,7 +69,7 @@ export function dashboardStrings(t: Translate): DashboardStrings {
     activeBadge: t('Active'),
     noActive: t('The active account is unknown.'),
     searchLabel: t('Search accounts'),
-    searchPlaceholder: t('Slot, email, alias, plan or status'),
+    searchPlaceholder: t('Slot, email, plan or status'),
     accountsHeading: t('Accounts'),
     detailHeading: t('Account details'),
     columnSlot: t('Slot'),

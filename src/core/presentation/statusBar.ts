@@ -136,9 +136,6 @@ function tooltipFor(account: Account | undefined, state: AccountsState, options:
     if (account.displayName !== undefined) {
       rows.push({ label: t('Display name'), value: account.displayName });
     }
-    if (account.alias !== undefined) {
-      rows.push({ label: t('Alias'), value: account.alias });
-    }
     if (account.email !== undefined) {
       rows.push({ label: t('Email'), value: account.email });
     }

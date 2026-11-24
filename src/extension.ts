@@ -20,6 +20,7 @@ import { applyDisplayNames } from './core/model/displayNames';
 import { PriorityStore } from './core/service/priorityStore';
 import { CrossWindowSync } from './vscode/crossWindowSync';
 import { CswapUpdateCheck } from './vscode/cswapUpdateCheck';
+import { AccountAdder } from './vscode/addAccountFlow';
 import { ProjectAccounts } from './vscode/projectAccounts';
 import { StatusBarController } from './vscode/statusBarController';
 
@@ -87,6 +88,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const crossWindow = new CrossWindowSync(context.globalStorageUri, refreshService, logger);
   const updateCheck = new CswapUpdateCheck(context, cli, resolver, logger, () => configuration.checkCswapUpdates());
   const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger, homeDir });
+  const accountAdder = new AccountAdder({ refreshService, managementService, gate, homeDir });
   // Out of the way of start-up: one check shortly after activation, then at most daily.
   const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
   const dashboard = new DashboardController({
@@ -117,6 +119,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     dashboard,
     autoSwitch,
     crossWindow,
+    accountAdder,
     { dispose: () => clearTimeout(updateTimer) },
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.displayNames`)) {
@@ -128,7 +131,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
         void refreshService.refresh({ trigger: 'configuration', requireFresh: true });
       }
     }),
-    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, homeDir }),
+    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, accountAdder, homeDir }),
   );
 
   return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow } : undefined;

@@ -61,7 +61,7 @@ describe('auto-switch event parsing', () => {
     ]);
   });
 
-  it('reads only autoswitch.* settings and never the settings path', () => {
+  it('reads only the settings it shows, and never the settings path', () => {
     const rules = parseAutoSwitchRules(
       JSON.stringify({
         schemaVersion: 1,
@@ -70,12 +70,22 @@ describe('auto-switch event parsing', () => {
           { key: 'autoswitch.threshold', value: 85, isSet: true },
           { key: 'autoswitch.weeklyThreshold', value: null, isSet: false },
           { key: 'autoswitch.intervalSeconds', value: 60, isSet: false },
+          { key: 'autoswitch.unhealthyTicks', value: 3, isSet: false },
           { key: 'autoswitch.strategy', value: 'best', isSet: false },
+          { key: 'run.shareHistory', value: false, isSet: true },
+          { key: 'usage.headerProbe', value: 'yes', isSet: false },
           { key: 'ui.theme', value: 'dark', isSet: true },
         ],
       }),
     );
-    assert.deepEqual(rules, { threshold: 85, intervalSeconds: 60, strategy: 'best', customized: ['autoswitch.threshold'] });
+    assert.deepEqual(rules, {
+      threshold: 85,
+      intervalSeconds: 60,
+      unhealthyTicks: 3,
+      strategy: 'best',
+      shareHistory: false,
+      customized: ['autoswitch.threshold', 'run.shareHistory'],
+    });
     assert.equal(JSON.stringify(rules).includes('Users'), false);
     assert.equal(parseAutoSwitchRules('{"settings":{}}'), undefined);
   });

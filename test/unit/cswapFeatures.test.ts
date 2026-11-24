@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { autoSwitchRuleArgs, ruleMatches, validateRuleInput } from '../../src/core/cli/autoSwitchRules';
 import { cliError } from '../../src/core/cli/cliErrors';
-import { addArgs, manageArgs, parseAddOutput, parseRemoveOutput, type AddResult, type CliOutcome, type ManageOperation } from '../../src/core/cli/cswapCli';
+import { CswapCli, addArgs, addTokenArgs, manageArgs, parseAddOutput, parseRemoveOutput, tokenKind, type AddResult, type CliOutcome, type ManageOperation } from '../../src/core/cli/cswapCli';
 import { isNewer, latestFromPypi, upgradeCommand } from '../../src/core/cli/cswapUpdate';
 import {
   exportArgs,
@@ -25,8 +25,9 @@ import { PriorityStore } from '../../src/core/service/priorityStore';
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { draggedSlot, dropMove, previewMove, resolveDropTarget } from '../../src/core/presentation/accountDrag';
-import type { NodeModel } from '../../src/core/presentation/accountTree';
+import { renewedLoginSlot, type NodeModel } from '../../src/core/presentation/accountTree';
 import { SLANT_BAR_PATTERN, usageBar } from '../../src/core/presentation/format';
+import { tokenUsageLevel } from '../../src/core/presentation/quickSettings';
 import { manageCliStubs, ok } from '../helpers/fixtures';
 
 const version = (text: string): CliVersion => {
@@ -104,12 +105,11 @@ describe('cswap priority', () => {
 });
 
 describe('cswap add / remove', () => {
-  it('builds add arguments only from a valid slot and alias', () => {
+  it('builds add arguments only from a valid slot', () => {
     assert.deepEqual(addArgs({}), ['add']);
-    assert.deepEqual(addArgs({ slot: 6, alias: 'Work' }), ['add', '--slot', '6', '--alias', 'work']);
+    assert.deepEqual(addArgs({ slot: 6 }), ['add', '--slot', '6']);
     assert.equal(addArgs({ slot: 0 }), undefined);
-    assert.equal(addArgs({ alias: '-x' }), undefined);
-    assert.equal(addArgs({ alias: 'a b' }), undefined);
+    assert.equal(addArgs({ slot: 1.5 }), undefined);
   });
 
   it('reads what cswap add and remove printed', () => {
@@ -142,12 +142,18 @@ describe('management of priorities, removal and adding', () => {
 
   function fake(after: AccountsSnapshot, read: CliOutcome<PriorityEntry[]> = ok('priority', []), add?: CliOutcome<AddResult>) {
     const requests: RefreshRequest[] = [];
+    const tokenCalls: Array<{ token: string; options: { slot?: number; email?: string } }> = [];
     return {
       requests,
+      tokenCalls,
       cli: {
         manage: (_: ManageOperation) => Promise.resolve(ok('manage', undefined)),
         priorities: () => Promise.resolve(read),
         addAccount: () => Promise.resolve(add ?? ok('manage', { kind: 'cancelled' as const })),
+        addToken: (token: string, options: { slot?: number; email?: string }) => {
+          tokenCalls.push({ token, options });
+          return Promise.resolve(add ?? ok('manage', { kind: 'cancelled' as const }));
+        },
       },
       refresher: {
         getState: () => ({ snapshot: BEFORE }),
@@ -201,6 +207,71 @@ describe('management of priorities, removal and adding', () => {
     const failed = fake(BEFORE, undefined, { ok: false, error: cliError('timeout', { command: 'manage' }), meta: { command: 'manage' } });
     assert.equal((await new ManagementService(failed.cli, failed.refresher, new OperationGate()).addCurrent({})).kind, 'failed');
   });
+
+  it('adds a token account and checks only that its slot is listed (the active account stays)', async () => {
+    const listed = snapshotOf([{ number: 1, email: 'a@example.com' }, { number: 2, email: 'b@example.com' }, { number: 4, email: 'setup-token-4@token.local' }], 1);
+    const added = fake(listed, undefined, ok('manage', { kind: 'added', slot: 4 }));
+    const service = new ManagementService(added.cli, added.refresher, new OperationGate());
+    assert.deepEqual(await service.addToken('sk-ant-oat01-abc', { slot: 4 }), { kind: 'added', result: { kind: 'added', slot: 4 }, verification: 'confirmed' });
+    assert.deepEqual(added.tokenCalls, [{ token: 'sk-ant-oat01-abc', options: { slot: 4 } }]);
+    const missing = fake(BEFORE, undefined, ok('manage', { kind: 'added', slot: 4 }));
+    assert.equal(((await new ManagementService(missing.cli, missing.refresher, new OperationGate()).addToken('sk-ant-oat01-abc', { slot: 4 })) as { verification?: string }).verification, 'mismatch');
+  });
+});
+
+describe('cswap add-token', () => {
+  const SETUP = `sk-ant-oat01-${'A'.repeat(40)}`;
+  const KEY = `sk-ant-api03-${'b'.repeat(40)}`;
+
+  it('tells setup-tokens from API keys the way cswap does, and refuses anything else', () => {
+    assert.equal(tokenKind(SETUP), 'setup-token');
+    assert.equal(tokenKind(`  ${SETUP}\n`), 'setup-token');
+    assert.equal(tokenKind(`sk-ant-ort01-${'c'.repeat(40)}`), 'setup-token');
+    assert.equal(tokenKind(KEY), 'api-key');
+    assert.equal(tokenKind(`sk-ant-usr-${'d'.repeat(40)}`), 'api-key');
+    for (const bad of ['', 'sk-ant-short', `${SETUP} extra`, `${SETUP}\nsecond`, `Bearer ${SETUP}`, `sk-ant-oat01-${'A'.repeat(30)}"`]) {
+      assert.equal(tokenKind(bad), undefined, JSON.stringify(bad.slice(0, 20)));
+    }
+  });
+
+  it('never puts the token in the arguments', () => {
+    assert.deepEqual(addTokenArgs({}), ['add-token', '-']);
+    assert.deepEqual(addTokenArgs({ slot: 6, email: 'me@example.com' }), ['add-token', '-', '--slot', '6', '--email', 'me@example.com']);
+    assert.equal(addTokenArgs({ slot: 0 }), undefined);
+    for (const email of ['-x@example.com', '--force', 'no-at-sign', 'a@b', 'a b@example.com']) {
+      assert.equal(addTokenArgs({ email }), undefined, email);
+    }
+  });
+
+  it('sends the token on stdin only and refuses a malformed one without running cswap', async () => {
+    const calls: Array<{ args: readonly string[]; input?: string }> = [];
+    const cli = new CswapCli({
+      runner: {
+        run: (_file, args, options) => {
+          calls.push({ args, ...(options.input === undefined ? {} : { input: options.input }) });
+          return Promise.resolve({ kind: 'exited', exitCode: 0, signal: null, stdout: 'Added Account 6: setup-token-6@token.local [personal] (from token)\n', stderr: '', durationMs: 2 });
+        },
+      },
+      resolveExecutable: () => Promise.resolve({ ok: true, path: 'C:\\bin\\cswap.exe', source: 'path' }),
+      settings: () => ({ timeoutMs: 10_000, maxOutputBytes: 4096 }),
+      workingDirectory: 'C:\\Users\\dev',
+      baseEnv: {},
+      homeDir: 'C:\\Users\\dev',
+    });
+    const outcome = await cli.addToken(` ${SETUP} `, { slot: 6 });
+    assert.deepEqual(outcome.ok ? outcome.value : undefined, { kind: 'added', slot: 6 });
+    assert.deepEqual(calls, [{ args: ['add-token', '-', '--slot', '6'], input: `${SETUP}\n` }]);
+    assert.ok(!calls[0]!.args.some((arg) => arg.includes('sk-ant')));
+
+    const refused = await cli.addToken('not a token', { slot: 6 });
+    assert.equal(refused.ok ? 'ok' : refused.error.kind, 'invalid-request');
+    assert.equal(calls.length, 1);
+  });
+
+  it('reads what cswap add-token printed', () => {
+    assert.deepEqual(parseAddOutput('Updated token for Account 4 (setup-token-4@token.local [personal]).'), { ok: true, value: { kind: 'updated', slot: 4 } });
+    assert.deepEqual(parseAddOutput('Updated API key for Account 5 (k@example.com [personal]).'), { ok: true, value: { kind: 'updated', slot: 5 } });
+  });
 });
 
 describe('re-reading before a change', () => {
@@ -214,9 +285,8 @@ describe('re-reading before a change', () => {
     return {
       requests,
       cli: {
+        ...manageCliStubs,
         manage: (_: ManageOperation) => Promise.resolve(ok('manage', undefined)),
-        priorities: () => Promise.resolve(ok('priority', [])),
-        addAccount: () => Promise.resolve(ok('manage', { kind: 'cancelled' as const })),
       },
       refresher: {
         getState: () => ({ snapshot: BEFORE, ...(lastError === undefined ? {} : { lastError }) }),
@@ -279,6 +349,41 @@ describe('per-model limits (autoswitch.model)', () => {
     assert.deepEqual(autoSwitchRuleArgs({ key: 'autoswitch.model', value: 'Fable' }), ['config', 'set', 'autoswitch.model', 'Fable']);
     assert.equal(ruleMatches({ model: 'Fable', customized: ['autoswitch.model'] }, 'autoswitch.model', 'Fable'), true);
     assert.equal(ruleMatches({ customized: [] }, 'autoswitch.model', ''), true, 'reset to default');
+  });
+});
+
+describe('more cswap settings (hysteresis, unhealthy checks, history sharing, token usage)', () => {
+  it('validates with the ranges in cswap SETTING_SPECS', () => {
+    assert.deepEqual(validateRuleInput('autoswitch.hysteresisPct', '12.5'), { ok: true, value: '12.5' });
+    assert.deepEqual(validateRuleInput('autoswitch.hysteresisPct', '0'), { ok: true, value: '0' });
+    for (const bad of ['50.1', '-1', 'abc', '']) {
+      assert.equal(validateRuleInput('autoswitch.hysteresisPct', bad).ok, false, bad);
+    }
+    assert.deepEqual(validateRuleInput('autoswitch.unhealthyTicks', '5'), { ok: true, value: '5' });
+    for (const bad of ['0', '101', '2.5', '--x']) {
+      assert.equal(validateRuleInput('autoswitch.unhealthyTicks', bad).ok, false, bad);
+    }
+    for (const key of ['run.shareHistory', 'usage.headerProbe', 'usage.fableProbe'] as const) {
+      assert.deepEqual(validateRuleInput(key, 'false'), { ok: true, value: 'false' });
+      assert.equal(validateRuleInput(key, 'yes').ok, false, 'only true/false are written');
+    }
+  });
+
+  it('builds config arguments and verifies booleans read back', () => {
+    assert.deepEqual(autoSwitchRuleArgs({ key: 'usage.headerProbe', value: true }), ['config', 'set', 'usage.headerProbe', 'true']);
+    assert.deepEqual(autoSwitchRuleArgs({ key: 'autoswitch.unhealthyTicks', value: 4 }), ['config', 'set', 'autoswitch.unhealthyTicks', '4']);
+    assert.equal(autoSwitchRuleArgs({ key: 'autoswitch.hysteresisPct', value: 80 }), undefined);
+    assert.equal(ruleMatches({ shareHistory: false, customized: ['run.shareHistory'] }, 'run.shareHistory', 'false'), true);
+    assert.equal(ruleMatches({ headerProbe: false, customized: [] }, 'usage.headerProbe', 'true'), false);
+    assert.equal(ruleMatches({ unhealthyTicks: 4, customized: ['autoswitch.unhealthyTicks'] }, 'autoswitch.unhealthyTicks', '4'), true);
+  });
+
+  it('reads the token-usage level from the two probe settings', () => {
+    assert.equal(tokenUsageLevel(undefined), undefined);
+    assert.equal(tokenUsageLevel({}), 'off');
+    assert.equal(tokenUsageLevel({ fableProbe: true }), 'off', 'the Fable probe acts only with the Haiku one');
+    assert.equal(tokenUsageLevel({ headerProbe: true }), 'haiku');
+    assert.equal(tokenUsageLevel({ headerProbe: true, fableProbe: true }), 'fable');
   });
 });
 
@@ -456,7 +561,7 @@ describe('priorities kept in step with account changes', () => {
     assert.equal(reads, 0, 'the verifying read is reused');
     assert.equal(store.apply(SNAPSHOT).accounts[0]?.priority, 3);
     store.onApplied({ prioritiesChanged: false });
-    assert.equal(reads, 0, 'an alias or threshold change cannot move tiers');
+    assert.equal(reads, 0, 'a rotation or threshold change cannot move tiers');
     store.onApplied({ prioritiesChanged: true });
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(reads, 1, 'a move, removal or add re-reads');
@@ -480,5 +585,38 @@ describe('priorities kept in step with account changes', () => {
       { prioritiesChanged: true, priorities: [{ slot: 2, email: 'b@example.com', tier: 5 }] },
       { prioritiesChanged: false },
     ]);
+  });
+});
+
+describe('logging in again to an account cswap already has', () => {
+  const NOW = Date.parse('2026-11-24T12:00:00Z');
+  const DAY = 86_400_000;
+  type Row = { number: number; email: string; loginExpiresAt?: string; usageStatus?: string };
+  const at = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
+  function snapshot(rows: Row[], active: number): AccountsSnapshot {
+    const list = parseListOutput(
+      JSON.stringify({ schemaVersion: 1, activeAccountNumber: active, accounts: rows.map((row) => ({ usageStatus: 'ok', usage: null, ...row, active: row.number === active })) }),
+    );
+    assert.ok(list.ok);
+    return buildSnapshot(list.value, undefined, 1);
+  }
+
+  it('finds the slot whose expired or refused login was just renewed', () => {
+    const before = snapshot([{ number: 1, email: 'a@example.com', loginExpiresAt: at(300 * DAY) }, { number: 2, email: 'b@example.com', loginExpiresAt: at(-DAY) }], 1);
+    const after = snapshot([{ number: 1, email: 'a@example.com', loginExpiresAt: at(300 * DAY) }, { number: 2, email: 'B@example.com', loginExpiresAt: at(365 * DAY) }], 2);
+    assert.equal(renewedLoginSlot(before, after, NOW), 2);
+
+    const refused = snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(200 * DAY), usageStatus: 'relogin_required' }], 1);
+    assert.equal(renewedLoginSlot(refused, snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(365 * DAY) }], 2), NOW), 2);
+  });
+
+  it('ignores a plain switch, a healthy account and a login that is still due', () => {
+    const expired = snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(-DAY) }], 1);
+    // `cswap switch 2` restores the stored (still expired) login: nothing was renewed.
+    assert.equal(renewedLoginSlot(expired, snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(-DAY) }], 2), NOW), undefined);
+    assert.equal(renewedLoginSlot(expired, snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(3 * DAY) }], 2), NOW), undefined, 'still within 7 days');
+    const healthy = snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(100 * DAY) }], 2);
+    assert.equal(renewedLoginSlot(healthy, snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(365 * DAY) }], 2), NOW), undefined);
+    assert.equal(renewedLoginSlot(undefined, healthy, NOW), undefined);
   });
 });

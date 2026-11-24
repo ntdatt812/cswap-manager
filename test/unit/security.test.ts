@@ -171,7 +171,7 @@ describe('L4: the account must not change between confirmation and execution', (
   it('proceeds when nothing changed', async () => {
     const refresher = refresherReturning(confirmed);
     const service = new ManagementService({ ...manageCliStubs, manage: () => Promise.resolve(ok('manage', undefined) as CliOutcome<void>) }, refresher, new OperationGate());
-    const outcome = await service.apply({ kind: 'removeAlias', slot: 3 }, confirmed);
+    const outcome = await service.apply({ kind: 'clearThreshold', slot: 3 }, confirmed);
     assert.equal(outcome.kind, 'applied');
     assert.equal(refresher.requests.length, 2, 'pre-check refresh + verification refresh');
   });

@@ -23,8 +23,6 @@ const COMMANDS = [
   'cswapManager.openDashboard',
   'cswapManager.showAccountDetails',
   'cswapManager.manageAccount',
-  'cswapManager.setAlias',
-  'cswapManager.removeAlias',
   'cswapManager.disableAccount',
   'cswapManager.enableAccount',
   'cswapManager.setThreshold',
@@ -120,24 +118,24 @@ suite('Cswap Manager (extension host)', () => {
     assert.equal(api.dashboard.isOpen(), false);
   });
 
-  test('sets and removes an alias end-to-end with verification (opt-in: CSWAP_E2E_MUTATE=1)', async function () {
+  test('sets and clears a switch threshold end-to-end with verification (opt-in: CSWAP_E2E_MUTATE=1)', async function () {
     if (process.env.CSWAP_E2E_MUTATE !== '1') {
       this.skip();
       return;
     }
     const refreshed = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
     assert.ok(refreshed.ok);
-    // Only an inactive account without an alias, so removing the alias restores the exact state.
-    const target = refreshed.snapshot.accounts.find((account) => account.slot !== refreshed.snapshot.active.slot && account.alias === undefined);
+    // Only an inactive account without its own threshold, so clearing it restores the exact state.
+    const target = refreshed.snapshot.accounts.find((account) => account.slot !== refreshed.snapshot.active.slot && account.threshold === undefined);
     if (target === undefined) {
       this.skip();
       return;
     }
-    const set = await api.managementService.apply({ kind: 'setAlias', slot: target.slot, alias: 'cswap-e2e-probe' });
-    const removed = await api.managementService.apply({ kind: 'removeAlias', slot: target.slot });
+    const set = await api.managementService.apply({ kind: 'setThreshold', slot: target.slot, threshold: 97.5 });
+    const cleared = await api.managementService.apply({ kind: 'clearThreshold', slot: target.slot });
     assert.deepEqual(set, { kind: 'applied', verification: 'confirmed' });
-    assert.deepEqual(removed, { kind: 'applied', verification: 'confirmed' });
-    assert.equal(api.refreshService.getState().snapshot?.accounts.find((account) => account.slot === target.slot)?.alias, undefined);
+    assert.deepEqual(cleared, { kind: 'applied', verification: 'confirmed' });
+    assert.equal(api.refreshService.getState().snapshot?.accounts.find((account) => account.slot === target.slot)?.threshold, undefined);
   });
 
   test('switches the UI language with cswapManager.language', async function () {

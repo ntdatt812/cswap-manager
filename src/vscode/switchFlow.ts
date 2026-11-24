@@ -21,6 +21,8 @@ export interface SwitchFlowDependencies {
 
 interface ActionItem extends vscode.QuickPickItem {
   readonly action?: QuickSwitchAction;
+  /** The last row: add an account instead of switching. */
+  readonly addAccount?: true;
 }
 
 function findAccount(deps: SwitchFlowDependencies, slot: number): Account | undefined {
@@ -162,16 +164,17 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
     model.separator
       ? { label: model.label, kind: vscode.QuickPickItemKind.Separator }
       : {
-          label: `${model.iconId ? `$(${model.iconId}) ` : ''}${sanitizeLabel(model.label)}`,
+          label: `${model.iconId ? `$(${model.iconId}) ` : ''}${model.label}`,
           ...(model.description === undefined ? {} : { description: model.description }),
           ...(model.detail === undefined ? {} : { detail: sanitizeLabel(model.detail) }),
           ...(model.action === undefined ? {} : { action: model.action }),
         },
   );
+  items.push({ label: '', kind: vscode.QuickPickItemKind.Separator }, { label: `$(add) ${t('Add Account…')}`, addAccount: true });
   const active = snapshot.active.slot === undefined ? t('unknown') : `#${snapshot.active.slot}`;
   const picked = await pickOne(items, {
     title: t('Cswap: switch account (active: {0})', active),
-    placeholder: stale ? t('Data may be out of date. Type to search by slot, email, alias or plan.') : t('Type to search by slot, email, alias or plan.'),
+    placeholder: stale ? t('Data may be out of date. Type to search by slot, email or plan.') : t('Type to search by slot, email or plan.'),
     matchOnDescription: true,
     matchOnDetail: true,
     buttons: [
@@ -179,6 +182,10 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
       { iconId: 'gear', tooltip: t('Cswap Settings'), run: () => vscode.commands.executeCommand('cswapManager.quickSettings') },
     ],
   });
+  if (picked?.addAccount === true) {
+    void vscode.commands.executeCommand('cswapManager.addAccount');
+    return undefined;
+  }
   const action = picked?.action;
   if (action === undefined) {
     return undefined;

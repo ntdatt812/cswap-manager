@@ -3,13 +3,9 @@ import type { Account } from '../model/types';
 import type { Translate } from './accountTree';
 import { formatPercent } from './format';
 
-/** Actions that make sense for the account's current state (e.g. "Remove alias" only when set). */
+/** Actions that make sense for the account's current state (e.g. "Clear switch threshold" only when set). */
 export function availableActions(account: Account): AccountActionId[] {
-  const actions: AccountActionId[] = ['setDisplayName', 'setAlias'];
-  if (account.alias !== undefined) {
-    actions.push('removeAlias');
-  }
-  actions.push(account.disabled === true ? 'enable' : 'disable', 'setThreshold');
+  const actions: AccountActionId[] = ['setDisplayName', account.disabled === true ? 'enable' : 'disable', 'setThreshold'];
   if (account.threshold !== undefined) {
     actions.push('clearThreshold');
   }
@@ -25,10 +21,6 @@ export function actionLabel(action: AccountActionId, t: Translate): string {
   switch (action) {
     case 'setDisplayName':
       return t('Set display name…');
-    case 'setAlias':
-      return t('Set alias…');
-    case 'removeAlias':
-      return t('Remove alias');
     case 'disable':
       return t('Disable in rotation…');
     case 'enable':
@@ -61,14 +53,6 @@ export function manageRows(account: Account, t: Translate): ManageRow[] {
       actions: [action('setDisplayName', account.displayName === undefined ? t('Set…') : t('Change…'))],
     },
     {
-      label: t('Alias'),
-      value: account.alias ?? t('not set'),
-      actions: [
-        action('setAlias', account.alias === undefined ? t('Set…') : t('Change…')),
-        ...(account.alias === undefined ? [] : [action('removeAlias', t('Remove'))]),
-      ],
-    },
-    {
       label: t('Auto-rotation'),
       value: account.disabled === true ? t('held out') : t('included'),
       actions: [account.disabled === true ? action('enable', t('Include')) : action('disable', t('Hold out…'))],
@@ -99,14 +83,13 @@ export function accountActions(account: Account, t: Translate): AccountAction[] 
 
 /**
  * Tree item context value with state flags, matched by `when` clauses in package.json, e.g.
- * `cswap.account:inactive:enabled:aliased:nothreshold`.
+ * `cswap.account:inactive:enabled:nothreshold`.
  */
 export function accountContextValue(account: Account, active: boolean): string {
   return [
     'cswap.account',
     active ? 'active' : 'inactive',
     account.disabled === true ? 'disabled' : 'enabled',
-    account.alias !== undefined ? 'aliased' : 'unaliased',
     account.threshold !== undefined ? 'threshold' : 'nothreshold',
   ].join(':');
 }

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { AccountActionId } from '../shared/dashboardProtocol';
 import type { ManageOperation } from '../core/cli/cswapCli';
-import { THRESHOLD_MAX, THRESHOLD_MIN, isValidSlot, normalizeAlias, parseThreshold, type AliasProblem } from '../core/model/accountPolicy';
+import { THRESHOLD_MAX, THRESHOLD_MIN, isValidSlot, parseThreshold } from '../core/model/accountPolicy';
 import type { Account, AccountsSnapshot } from '../core/model/types';
 import { actionLabel, availableActions } from '../core/presentation/accountActions';
 import { accountName } from '../core/presentation/accountTree';
@@ -30,19 +30,6 @@ export interface ManageFlowDependencies {
 /** Account names come from the CLI: strip icon syntax and link syntax before they reach any UI text. */
 function label(account: Account): string {
   return neutralizeLinks(sanitizeLabel(t('slot {0} ({1})', account.slot, accountName(account, t))));
-}
-
-export function aliasProblemText(problem: AliasProblem): string {
-  switch (problem) {
-    case 'empty':
-      return t('Enter an alias, or use "Remove alias" to clear it.');
-    case 'numeric':
-      return t('An alias cannot be only digits (those are slot numbers).');
-    case 'leading-dash':
-      return t('An alias cannot start with "-".');
-    case 'invalid-characters':
-      return t('Use only letters, digits, "-", "_" and "." (stored in lower case).');
-  }
 }
 
 async function snapshotOrRefresh(deps: ManageFlowDependencies): Promise<AccountsSnapshot | undefined> {
@@ -78,7 +65,7 @@ async function promptDisplayName(deps: ManageFlowDependencies, account: Account)
   }
   const value = await vscode.window.showInputBox({
     title: t('Display name for {0}', label(account)),
-    prompt: t('Shown instead of the alias or email in the sidebar, status bar and dashboard. Any text up to {0} characters; kept in VS Code only, never sent to cswap. Leave empty to remove.', DISPLAY_NAME_MAX),
+    prompt: t('Shown instead of the email in the sidebar, status bar and dashboard. Any text up to {0} characters; kept in VS Code only, never sent to cswap. Leave empty to remove.', DISPLAY_NAME_MAX),
     value: account.displayName ?? '',
     validateInput: (input) => (input.trim().length > DISPLAY_NAME_MAX ? t('Use at most {0} characters.', DISPLAY_NAME_MAX) : undefined),
   });
@@ -96,29 +83,6 @@ async function promptDisplayName(deps: ManageFlowDependencies, account: Account)
     neutralizeLinks(sanitizeLabel(cleaned === '' ? t('Display name of slot {0} removed.', account.slot) : t('Slot {0} is now shown as "{1}".', account.slot, cleaned))),
     5000,
   );
-}
-
-async function promptAlias(account: Account): Promise<ManageOperation | undefined> {
-  const value = await vscode.window.showInputBox({
-    title: t('Set alias for {0}', label(account)),
-    prompt: t('A short name for commands such as "cswap switch work". cswap stores it in lower case, using only a–z, 0–9, "-", "_" and ".". For capitals, spaces or accents, use "Set display name…".'),
-    value: account.alias ?? '',
-    validateInput: (input): string | vscode.InputBoxValidationMessage | undefined => {
-      const result = normalizeAlias(input);
-      if (!result.ok) {
-        return aliasProblemText(result.problem);
-      }
-      // Say up front what cswap will actually store.
-      return result.value === input.trim()
-        ? undefined
-        : { message: t('Will be saved as "{0}".', result.value), severity: vscode.InputBoxValidationSeverity.Info };
-    },
-  });
-  if (value === undefined) {
-    return undefined;
-  }
-  const alias = normalizeAlias(value);
-  return alias.ok ? { kind: 'setAlias', slot: account.slot, alias: alias.value } : undefined;
 }
 
 async function promptThreshold(account: Account): Promise<ManageOperation | undefined> {
@@ -192,7 +156,7 @@ async function confirmMove(account: Account, targetSlot: number, snapshot: Accou
       modal: true,
       detail: [
         consequence,
-        t('Aliases, stored logins and session history move with their accounts. Slot numbers used in commands or scripts (for example "cswap switch {0}") will then refer to a different account.', targetSlot),
+        t('Stored logins and session history move with their accounts. Slot numbers used in commands or scripts (for example "cswap switch {0}") will then refer to a different account.', targetSlot),
       ].join('\n\n'),
     },
     proceed,
@@ -202,10 +166,6 @@ async function confirmMove(account: Account, targetSlot: number, snapshot: Accou
 
 async function operationFor(action: AccountActionId, account: Account, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
   switch (action) {
-    case 'setAlias':
-      return promptAlias(account);
-    case 'removeAlias':
-      return { kind: 'removeAlias', slot: account.slot };
     case 'disable':
       return confirmDisable(account, snapshot);
     case 'enable':
@@ -262,10 +222,6 @@ async function promptPriority(account: Account): Promise<ManageOperation | undef
 
 function successText(operation: ManageOperation, account: Account): string {
   switch (operation.kind) {
-    case 'setAlias':
-      return t('Alias of slot {0} set to "{1}".', account.slot, operation.alias);
-    case 'removeAlias':
-      return t('Alias of slot {0} removed.', account.slot);
     case 'setDisabled':
       return operation.disabled ? t('Slot {0} is now held out of rotation.', account.slot) : t('Slot {0} is back in rotation.', account.slot);
     case 'setThreshold':

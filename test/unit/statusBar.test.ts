@@ -5,7 +5,7 @@ import { parseListOutput } from '../../src/core/model/parsers';
 import { buildSnapshot } from '../../src/core/model/reconcile';
 import type { AccountsSnapshot } from '../../src/core/model/types';
 import type { Translate } from '../../src/core/presentation/accountTree';
-import { DEFAULT_THRESHOLDS } from '../../src/core/presentation/format';
+import { DEFAULT_THRESHOLDS, FIGURE_SPACE } from '../../src/core/presentation/format';
 import { buildQuickSwitchItems } from '../../src/core/presentation/quickSwitch';
 import { buildStatusBarModel, sanitizeLabel, statusBarParts, type StatusBarOptions, type StatusBarPart } from '../../src/core/presentation/statusBar';
 import type { AccountsState } from '../../src/core/service/refreshService';
@@ -171,8 +171,9 @@ describe('buildQuickSwitchItems', () => {
 
   it('shows a usage bar with the next reset and keeps details on the second line', () => {
     const four = items.find((item) => item.action?.kind === 'account' && item.action.slot === 4);
-    assert.equal(four?.label, '4 · u4@example.com');
-    assert.equal(four?.description, '7d ░░░░░░░░░░ 0%   ↻ 3d 20h');
+    // Same columns as the sidebar: slot, usage (padded with figure spaces) and reset first, the name last.
+    assert.equal(four?.label, `4 · 7d ░░░░░░░░░░ ${FIGURE_SPACE.repeat(2)}0% · ↻ 3d 20h · u4@example.com`);
+    assert.equal(four?.description, undefined);
     assert.equal(four?.detail, 'Ultra · ModelA 1% · updated 1m ago');
     assert.equal(four?.iconId, 'account');
     const current = items.find((item) => item.action?.kind === 'account' && item.action.active);
@@ -187,7 +188,7 @@ describe('buildQuickSwitchItems', () => {
     assert.equal(icon(8), 'circle-slash');
     assert.equal(items.some((item) => item.description?.includes('active') || item.detail?.includes('· active')), false);
     const eight = items.find((item) => item.action?.kind === 'account' && item.action.slot === 8);
-    assert.equal(eight?.description, 're-login required');
+    assert.match(eight?.label ?? '', /^8 · re-login required · /);
   });
 
   it('uses shorter bars when an account has several windows', () => {
@@ -199,9 +200,9 @@ describe('buildQuickSwitchItems', () => {
       }),
     );
     const item = buildQuickSwitchItems(multi, options()).find((candidate) => candidate.action?.kind === 'account');
-    assert.equal(item?.description, '5h ███░░░ 50%   7d █▎░░░░ 20%');
-    // The description is display-ready: slanted cells stay icons, since the switcher no longer re-sanitises it.
+    assert.equal(item?.label, '1 · 5h ███░░░ 50% · 7d █▎░░░░ 20% · a@example.com');
+    // The label is display-ready: slanted cells stay icons, since the switcher does not re-sanitise it.
     const slanted = buildQuickSwitchItems(multi, options({ barStyle: 'parallelograms' })).find((candidate) => candidate.action?.kind === 'account');
-    assert.match(slanted?.description ?? '', /^5h (\$\(cswap-slant-[0-8]\)){6} 50%/);
+    assert.match(slanted?.label ?? '', /^1 · 5h (\$\(cswap-slant-[0-8]\)){6} 50%/);
   });
 });

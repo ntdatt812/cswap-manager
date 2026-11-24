@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- **Adding accounts is easy to find**: a **＋** button opens the Accounts view's toolbar, and the switch picker ends with **＋ Add Account…**. It asks how: log in to a new account with `/login` (the usual way), paste a setup-token or API key, or refresh the stored login of the active account. After `/login` with an account cswap does not manage yet, the extension notices by itself and offers **Add to cswap…**.
+- **Setup-token and API-key accounts** (`cswap add-token`): paste the token into a password box; it goes to cswap on its standard input only (never an argument, never logged or stored by the extension). Confirmed first; only free slots are offered.
+- **Logging in again** to an account cswap already has (expired, about to expire or refused) is detected: the extension runs `cswap add --slot N` once to store the new login (cswap cancels if Claude Code is no longer on that account) and says so. Only the window in front acts.
+- **More cswap settings**: *Rules…* adds minimum advantage (`autoswitch.hysteresisPct`) and failed checks before skipping (`autoswitch.unhealthyTicks`); *Quick Settings* adds **Chat history across accounts** (`run.shareHistory`) and **Usage of token accounts** (`usage.headerProbe` / `usage.fableProbe`, which spend 1 Haiku / Fable token per reading).
+- **Columns line up everywhere**: the switch picker shows `slot · 7d ▰▱ 40% · ↻ 2d 4h · name` like the sidebar; the dashboard's reset timeline and *Manage account* list share one grid, so names, quota left and values sit in columns; tooltips show their details as a two-column table.
+- **Aliases removed from the extension**: *Set Alias…* and *Remove Alias* are gone from the menus, *Manage Account…* and the dashboard, and *Add Current Login…* no longer asks for one. Use **Set Display Name…** instead: it allows capitals, spaces and accents. An alias set in a terminal (`cswap alias`) is still shown as the account's name when it has no display name, and stays searchable.
+
 ## 0.9.0 — 2026-11-24
 - **Sidebar columns line up**: each account row now reads `slot · 7d 40% · ↻ 2d 4h · name`, with numbers padded so percentages and reset times sit in straight columns; plan and problems follow in dim text. Usage rows under an account show the bar and percentage first. The active account is marked by its icon (and still named in its tooltip and spoken label).
 - **Smoother drag and drop**: the move shows in the list at once while cswap runs it, and the two slot numbers it changed stay highlighted for a moment. Dropping on an account's usage rows counts as dropping on the account, and dropping on the empty space below the list moves the account to the end. When the list is not sorted by slot, a one-time tip offers to sort by slot.

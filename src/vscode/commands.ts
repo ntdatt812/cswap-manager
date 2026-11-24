@@ -22,7 +22,7 @@ import type { ProjectAccounts } from './projectAccounts';
 import { describeCliError } from './messages';
 import { runAccountAction, runDropMove } from './manageFlow';
 import { MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndDrop';
-import { runAddAccount } from './addAccountFlow';
+import type { AccountAdder } from './addAccountFlow';
 import { exportAccounts, importAccounts, importUsage, saveUsageReadings } from './transferFlow';
 import { t } from './presentation';
 import { openQuickSettings } from './quickSettings';
@@ -43,6 +43,7 @@ export interface CommandDependencies {
   readonly statusBar: StatusBarController;
   readonly updateCheck: CswapUpdateCheck;
   readonly projectAccounts: ProjectAccounts;
+  readonly accountAdder: AccountAdder;
   readonly homeDir: string;
 }
 
@@ -145,8 +146,6 @@ async function sortCommand(deps: CommandDependencies): Promise<void> {
 /** Tree-row commands for each management action; without a row they ask for the account. */
 const ACTION_COMMANDS: ReadonlyArray<[string, AccountActionId]> = [
   ['cswapManager.setDisplayName', 'setDisplayName'],
-  ['cswapManager.setAlias', 'setAlias'],
-  ['cswapManager.removeAlias', 'removeAlias'],
   ['cswapManager.disableAccount', 'disable'],
   ['cswapManager.enableAccount', 'enable'],
   ['cswapManager.setThreshold', 'setThreshold'],
@@ -164,7 +163,7 @@ export function registerCommands(deps: CommandDependencies): vscode.Disposable[]
       vscode.commands.registerCommand(command, (node?: NodeModel) => runAccountAction(deps, action, node?.slot)),
     ),
     vscode.commands.registerCommand('cswapManager.refresh', () => refreshCommand(deps)),
-    vscode.commands.registerCommand('cswapManager.addAccount', () => runAddAccount(deps)),
+    vscode.commands.registerCommand('cswapManager.addAccount', () => deps.accountAdder.run()),
     // Internal (not contributed): a drop in the Accounts view. Arguments are checked again in runDropMove.
     vscode.commands.registerCommand(MOVE_ACCOUNT_TO_COMMAND, (slot: unknown, targetSlot: unknown) =>
       typeof slot === 'number' && typeof targetSlot === 'number' ? runDropMove(deps, slot, targetSlot) : undefined,

@@ -1,7 +1,7 @@
 import { Emitter } from './emitter';
 
 /**
- * Serializes every state-changing cswap command (switch, alias, disable, threshold, move) so two
+ * Serializes every state-changing cswap command (switch, disable, threshold, priority, move) so two
  * mutations never run at once, even when started from different UI surfaces.
  */
 export class OperationGate {

@@ -244,16 +244,6 @@
         "category": "Cswap"
       },
       {
-        "command": "cswapManager.setAlias",
-        "title": "%command.setAlias.title%",
-        "category": "Cswap"
-      },
-      {
-        "command": "cswapManager.removeAlias",
-        "title": "%command.removeAlias.title%",
-        "category": "Cswap"
-      },
-      {
         "command": "cswapManager.disableAccount",
         "title": "%command.disableAccount.title%",
         "category": "Cswap"
@@ -358,6 +348,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "cswapManager.addAccount",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@0"
+        },
+        {
           "command": "cswapManager.refresh",
           "when": "view == cswapManager.accounts",
           "group": "navigation@1"
@@ -401,11 +396,6 @@
           "command": "cswapManager.showDiagnostics",
           "when": "view == cswapManager.accounts",
           "group": "z_support@1"
-        },
-        {
-          "command": "cswapManager.addAccount",
-          "when": "view == cswapManager.accounts",
-          "group": "x_accounts@1"
         },
         {
           "command": "cswapManager.openClaudeForProject",
@@ -464,14 +454,6 @@
           "when": "false"
         },
         {
-          "command": "cswapManager.setAlias",
-          "when": "false"
-        },
-        {
-          "command": "cswapManager.removeAlias",
-          "when": "false"
-        },
-        {
           "command": "cswapManager.disableAccount",
           "when": "false"
         },
@@ -517,16 +499,6 @@
           "command": "cswapManager.setDisplayName",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
           "group": "2_manage@0"
-        },
-        {
-          "command": "cswapManager.setAlias",
-          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@1"
-        },
-        {
-          "command": "cswapManager.removeAlias",
-          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:aliased(:|$)/",
-          "group": "2_manage@2"
         },
         {
           "command": "cswapManager.disableAccount",

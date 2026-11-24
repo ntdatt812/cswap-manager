@@ -1,16 +1,22 @@
 import type { AutoSwitchRules } from '../model/autoSwitch';
 
 /**
- * Auto-switch rules the extension may change through `cswap config set/unset`, with the same
- * validation cswap 1.2.0 applies (verified with live probes). Anything else stays CLI-only.
+ * cswap settings the extension may change through `cswap config set/unset`, with the same
+ * validation cswap 1.2.0 applies (`settings.SETTING_SPECS`, verified with live probes). Anything else
+ * stays CLI-only: `autoswitch.includeApiKeyAccounts` on purpose (API keys bill per token).
  */
 export const AUTO_SWITCH_RULE_KEYS = [
   'autoswitch.threshold',
   'autoswitch.weeklyThreshold',
   'autoswitch.cooldownSeconds',
   'autoswitch.intervalSeconds',
+  'autoswitch.hysteresisPct',
+  'autoswitch.unhealthyTicks',
   'autoswitch.strategy',
   'autoswitch.model',
+  'run.shareHistory',
+  'usage.headerProbe',
+  'usage.fableProbe',
 ] as const;
 export type AutoSwitchRuleKey = (typeof AUTO_SWITCH_RULE_KEYS)[number];
 
@@ -21,12 +27,19 @@ export const THRESHOLD_RANGE = { min: 50, max: 99.9 } as const;
 export const INTERVAL_MIN_SECONDS = 15;
 export const COOLDOWN_MAX_SECONDS = 86_400;
 export const INTERVAL_MAX_SECONDS = 3_600;
+export const HYSTERESIS_MAX_PCT = 50;
+export const UNHEALTHY_TICKS_RANGE = { min: 1, max: 100 } as const;
+
+const BOOLEAN_KEYS = ['run.shareHistory', 'usage.headerProbe', 'usage.fableProbe'] as const;
+type BooleanKey = (typeof BOOLEAN_KEYS)[number];
 
 export type AutoSwitchRuleUpdate =
   | { readonly key: 'autoswitch.threshold' | 'autoswitch.weeklyThreshold'; readonly value: number }
-  | { readonly key: 'autoswitch.cooldownSeconds' | 'autoswitch.intervalSeconds'; readonly value: number }
+  | { readonly key: 'autoswitch.cooldownSeconds' | 'autoswitch.intervalSeconds' | 'autoswitch.unhealthyTicks'; readonly value: number }
+  | { readonly key: 'autoswitch.hysteresisPct'; readonly value: number }
   | { readonly key: 'autoswitch.strategy'; readonly value: AutoSwitchStrategy }
-  | { readonly key: 'autoswitch.model'; readonly value: string };
+  | { readonly key: 'autoswitch.model'; readonly value: string }
+  | { readonly key: BooleanKey; readonly value: boolean };
 
 /**
  * `autoswitch.model`: "all" or comma-separated per-model window names (e.g. "Fable"). cswap accepts
@@ -76,14 +89,28 @@ export function validateRuleInput(key: AutoSwitchRuleKey, input: string): RuleVa
         ? { ok: true, value: String(value) }
         : { ok: false, range };
     }
+    case 'autoswitch.hysteresisPct': {
+      const range = `0–${HYSTERESIS_MAX_PCT}`;
+      return /^\d+(\.\d+)?$/.test(text) && Number(text) <= HYSTERESIS_MAX_PCT ? { ok: true, value: String(Number(text)) } : { ok: false, range };
+    }
+    case 'autoswitch.unhealthyTicks': {
+      const range = `${UNHEALTHY_TICKS_RANGE.min}–${UNHEALTHY_TICKS_RANGE.max}`;
+      const value = Number(text);
+      return /^\d+$/.test(text) && value >= UNHEALTHY_TICKS_RANGE.min && value <= UNHEALTHY_TICKS_RANGE.max
+        ? { ok: true, value: String(value) }
+        : { ok: false, range };
+    }
     case 'autoswitch.strategy':
       return (AUTO_SWITCH_STRATEGIES as readonly string[]).includes(text) ? { ok: true, value: text } : { ok: false, range: AUTO_SWITCH_STRATEGIES.join(', ') };
     case 'autoswitch.model':
       return validateModels(text);
+    case 'run.shareHistory':
+    case 'usage.headerProbe':
+    case 'usage.fableProbe':
+      return text === 'true' || text === 'false' ? { ok: true, value: text } : { ok: false, range: 'true, false' };
   }
 }
 
-/** Builds `config set` arguments only for allow-listed keys with values that pass validation. */
 /** The typed update for a value `validateRuleInput` accepted for that key. */
 export function ruleUpdate(key: AutoSwitchRuleKey, value: string): AutoSwitchRuleUpdate {
   switch (key) {
@@ -96,10 +123,18 @@ export function ruleUpdate(key: AutoSwitchRuleKey, value: string): AutoSwitchRul
       return { key, value: Number(value) };
     case 'autoswitch.cooldownSeconds':
     case 'autoswitch.intervalSeconds':
+    case 'autoswitch.unhealthyTicks':
       return { key, value: Number(value) };
+    case 'autoswitch.hysteresisPct':
+      return { key, value: Number(value) };
+    case 'run.shareHistory':
+    case 'usage.headerProbe':
+    case 'usage.fableProbe':
+      return { key, value: value === 'true' };
   }
 }
 
+/** Builds `config set` arguments only for allow-listed keys with values that pass validation. */
 export function autoSwitchRuleArgs(rule: AutoSwitchRuleUpdate): readonly string[] | undefined {
   if (!(AUTO_SWITCH_RULE_KEYS as readonly string[]).includes(rule.key)) {
     return undefined;
@@ -115,8 +150,13 @@ export function ruleMatches(rules: AutoSwitchRules, key: AutoSwitchRuleKey, writ
     'autoswitch.weeklyThreshold': 'weeklyThreshold',
     'autoswitch.cooldownSeconds': 'cooldownSeconds',
     'autoswitch.intervalSeconds': 'intervalSeconds',
+    'autoswitch.hysteresisPct': 'hysteresisPct',
+    'autoswitch.unhealthyTicks': 'unhealthyTicks',
     'autoswitch.strategy': 'strategy',
     'autoswitch.model': 'model',
+    'run.shareHistory': 'shareHistory',
+    'usage.headerProbe': 'headerProbe',
+    'usage.fableProbe': 'fableProbe',
   } as const;
   if (written === '') {
     return !rules.customized.includes(key);
@@ -124,6 +164,9 @@ export function ruleMatches(rules: AutoSwitchRules, key: AutoSwitchRuleKey, writ
   const actual = rules[fields[key]];
   if (key === 'autoswitch.strategy' || key === 'autoswitch.model') {
     return actual === written;
+  }
+  if ((BOOLEAN_KEYS as readonly string[]).includes(key)) {
+    return actual === (written === 'true');
   }
   return typeof actual === 'number' && Math.abs(actual - Number(written)) < 1e-9;
 }

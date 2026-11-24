@@ -52,7 +52,7 @@ describe('buildAccountNodes', () => {
     assert.equal(bob?.icon?.id, 'pass-filled');
     assert.equal(bob?.icon?.color, 'charts.green');
     assert.equal(bob?.collapsible, 'expanded');
-    assert.equal(bob?.contextValue, 'cswap.account:active:enabled:unaliased:nothreshold');
+    assert.equal(bob?.contextValue, 'cswap.account:active:enabled:nothreshold');
     // The icon marks the active account; the spoken label still says so.
     assert.equal(bob?.label, '2 · 7d \u200740% · ↻ 4d \u20070h · bob@example.com');
     assert.equal(bob?.description, 'Ultra');

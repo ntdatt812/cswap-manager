@@ -13,7 +13,7 @@ import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
-import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel } from '../core/presentation/quickSettings';
+import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel, tokenUsageLevel, type TokenUsageLevel } from '../core/presentation/quickSettings';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
   AutoSwitchService,
@@ -296,6 +296,74 @@ export class AutoSwitchController implements vscode.Disposable {
     }
   }
 
+  /** `run.shareHistory`: whether accounts opened with `cswap run` see one shared conversation history. */
+  async chooseShareHistory(options: MenuOptions = {}): Promise<MenuResult> {
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    const current = rules?.shareHistory !== false;
+    type Item = vscode.QuickPickItem & { readonly value: boolean };
+    const items: Item[] = [
+      { label: t('Shared'), detail: t('Every account opened with "Open Claude Code as…" sees the same conversations (/resume) and prompt history. cswap default.'), value: true },
+      { label: t('Separate per account'), detail: t('Each account keeps its own conversations.'), value: false },
+    ].map((item) => (item.value === current ? { ...item, description: t('current') } : item));
+    const picked = await pickOne(items, {
+      title: t('Chat history across accounts'),
+      placeholder: t('These are cswap settings; they also apply to `cswap run` in a terminal.'),
+      isActive: (item) => item.value === current,
+      back: options.back === true,
+    });
+    if (picked === BACK) {
+      return 'back';
+    }
+    if (picked === undefined) {
+      return 'closed';
+    }
+    if (picked.value !== current) {
+      await this.applyRule('run.shareHistory', String(picked.value));
+    }
+    return 'done';
+  }
+
+  /**
+   * `usage.headerProbe` / `usage.fableProbe`: the usage endpoint never answers a setup-token account,
+   * so cswap can read its usage from a 1-token request's headers instead, which spends quota.
+   */
+  async chooseTokenUsage(options: MenuOptions = {}): Promise<MenuResult> {
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    const current = tokenUsageLevel(rules);
+    type Item = vscode.QuickPickItem & { readonly value: TokenUsageLevel };
+    const choices: Item[] = [
+      { label: t('Off'), detail: t('Setup-token accounts show "usage unavailable". cswap default.'), value: 'off' },
+      { label: t('5-hour and weekly'), detail: t('Each check sends a 1-token Haiku request from that account.'), value: 'haiku' },
+      { label: t('5-hour, weekly and Fable'), detail: t('Also a 1-token Fable request per check, which spends Fable quota.'), value: 'fable' },
+    ];
+    const items = choices.map((item) => (item.value === current ? { ...item, description: t('current') } : item));
+    const picked = await pickOne(items, {
+      title: t('Usage of token accounts'),
+      placeholder: t('Only for accounts added with a setup-token. These are cswap settings.'),
+      isActive: (item) => item.value === current,
+      back: options.back === true,
+    });
+    if (picked === BACK) {
+      return 'back';
+    }
+    if (picked === undefined) {
+      return 'closed';
+    }
+    if (picked.value !== current) {
+      // Fable first when turning off, Haiku first when turning on: the Fable probe needs the Haiku one.
+      const writes: Array<[AutoSwitchRuleKey, string]> = [
+        ['usage.headerProbe', String(picked.value !== 'off')],
+        ['usage.fableProbe', String(picked.value === 'fable')],
+      ];
+      for (const [key, value] of picked.value === 'off' ? writes.reverse() : writes) {
+        if (!(await this.applyRule(key, value))) {
+          break;
+        }
+      }
+    }
+    return 'done';
+  }
+
   /**
    * `autoswitch.model`: whether per-model weekly limits (e.g. Fable) count when cswap picks an
    * account. Used by manual "most headroom" / "next available" switches and by auto-switch alike.
@@ -438,6 +506,18 @@ export class AutoSwitchController implements vscode.Disposable {
       { key: 'autoswitch.weeklyThreshold', label: t('Weekly threshold'), value: valueText(rules?.weeklyThreshold, '%'), help: t('Separate line for the 7-day and per-model windows; not set means the switch threshold.') },
       { key: 'autoswitch.cooldownSeconds', label: t('Cooldown'), value: valueText(rules?.cooldownSeconds, ' s'), help: t('Minimum time between two automatic switches.') },
       { key: 'autoswitch.intervalSeconds', label: t('Check interval'), value: valueText(rules?.intervalSeconds, ' s'), help: t('How often usage is checked while auto-switch is on.') },
+      {
+        key: 'autoswitch.hysteresisPct',
+        label: t('Minimum advantage'),
+        value: valueText(rules?.hysteresisPct, '%'),
+        help: t('Auto-switch moves only to an account with at least this many percentage points more quota left than the active one, so it does not bounce between similar accounts.'),
+      },
+      {
+        key: 'autoswitch.unhealthyTicks',
+        label: t('Failed checks before skipping'),
+        value: valueText(rules?.unhealthyTicks),
+        help: t('After this many failed usage checks in a row, auto-switch treats an account as unhealthy and skips it.'),
+      },
       { key: 'autoswitch.strategy', label: t('Strategy'), value: strategyLabel(rules?.strategy), help: t('How the next account is chosen.') },
     ];
     const picked = await pickOne(

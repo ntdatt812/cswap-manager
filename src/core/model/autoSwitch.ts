@@ -130,16 +130,26 @@ export function findEvent<K extends AutoEvent['kind']>(result: AutoTickResult, k
   return result.events.find((event): event is Extract<AutoEvent, { kind: K }> => event.kind === kind);
 }
 
-/** cswap auto-switch settings from `cswap config --json list`. `undefined` means "not set / none". */
+/**
+ * cswap settings from `cswap config --json list`: the auto-switch rules plus the few other settings
+ * the extension shows. `undefined` means "not set / none".
+ */
 export interface AutoSwitchRules {
   readonly threshold?: number;
   readonly weeklyThreshold?: number;
   readonly intervalSeconds?: number;
   readonly cooldownSeconds?: number;
   readonly hysteresisPct?: number;
+  readonly unhealthyTicks?: number;
   readonly strategy?: string;
   readonly model?: string;
   readonly includeApiKeyAccounts?: boolean;
+  /** `run.shareHistory`: `cswap run` sessions share one conversation history. */
+  readonly shareHistory?: boolean;
+  /** `usage.headerProbe`: read setup-token accounts' usage with a 1-token Haiku request. */
+  readonly headerProbe?: boolean;
+  /** `usage.fableProbe`: with the header probe, also a 1-token Fable request for Fable's weekly limit. */
+  readonly fableProbe?: boolean;
   /** Keys explicitly set by the user (others are cswap defaults). */
   readonly customized: readonly string[];
 }
@@ -151,9 +161,13 @@ const RULE_TYPES: Readonly<Record<keyof Omit<AutoSwitchRules, 'customized'>, 'nu
   intervalSeconds: 'number',
   cooldownSeconds: 'number',
   hysteresisPct: 'number',
+  unhealthyTicks: 'number',
   strategy: 'string',
   model: 'string',
   includeApiKeyAccounts: 'boolean',
+  shareHistory: 'boolean',
+  headerProbe: 'boolean',
+  fableProbe: 'boolean',
 };
 
 const RULE_KEYS: Readonly<Record<string, keyof Omit<AutoSwitchRules, 'customized'>>> = {
@@ -162,13 +176,17 @@ const RULE_KEYS: Readonly<Record<string, keyof Omit<AutoSwitchRules, 'customized
   'autoswitch.intervalSeconds': 'intervalSeconds',
   'autoswitch.cooldownSeconds': 'cooldownSeconds',
   'autoswitch.hysteresisPct': 'hysteresisPct',
+  'autoswitch.unhealthyTicks': 'unhealthyTicks',
   'autoswitch.strategy': 'strategy',
   'autoswitch.model': 'model',
   'autoswitch.includeApiKeyAccounts': 'includeApiKeyAccounts',
+  'run.shareHistory': 'shareHistory',
+  'usage.headerProbe': 'headerProbe',
+  'usage.fableProbe': 'fableProbe',
 };
 
 /**
- * Reads only the `autoswitch.*` entries. The payload also carries the settings file `path`
+ * Reads only the entries listed above. The payload also carries the settings file `path`
  * (which contains the user's home directory); it is never read.
  */
 export function parseAutoSwitchRules(stdout: string): AutoSwitchRules | undefined {

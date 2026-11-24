@@ -436,10 +436,12 @@ function renderTimeline(current: DashboardModel): void {
     timeline.replaceChildren(el('p', { className: 'muted', text: current.state === 'ready' ? s.timelineEmpty : '' }));
     return;
   }
-  const axis = el('div', { className: 'timeline-row axis', attrs: { 'aria-hidden': 'true' } }, [
-    el('span'),
-    el('div', { className: 'axis-labels' }, [el('span', { text: s.timelineStart }), el('span', { text: s.timelineEnd })]),
-    el('span'),
+  // The axis is the list's first row so it shares the columns (track, badge, name, quota left) with the accounts.
+  const axis = el('li', { attrs: { 'aria-hidden': 'true' } }, [
+    el('div', { className: 'timeline-row axis' }, [
+      el('span'),
+      el('div', { className: 'axis-labels' }, [el('span', { text: s.timelineStart }), el('span', { text: s.timelineEnd })]),
+    ]),
   ]);
   // Each row is a button: clicking a dot (or anywhere on its row) opens that account's details.
   const items = current.timeline.map((item: TimelineItem) => {
@@ -470,7 +472,7 @@ function renderTimeline(current: DashboardModel): void {
     });
     return el('li', {}, [row]);
   });
-  timeline.replaceChildren(axis, el('ul', { className: 'timeline-list' }, items));
+  timeline.replaceChildren(el('ul', { className: 'timeline-list' }, [axis, ...items]));
 }
 
 // ---- Detail panel ----

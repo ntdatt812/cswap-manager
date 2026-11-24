@@ -1,7 +1,7 @@
 import type { SwitchStrategy } from '../cli/cswapCli';
 import type { Account, AccountsSnapshot } from '../model/types';
-import { accountLevel, accountName, hasCustomName, hasUnavailableUsage, relativeAge, type PresentationOptions } from './accountTree';
-import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageBar, windowLabel } from './format';
+import { accountLevel, accountName, alignedPercent, hasCustomName, hasUnavailableUsage, relativeAge, rowColumns, type PresentationOptions, type RowColumns } from './accountTree';
+import { alignedDuration, epochOf, formatPercent, maxUsagePct, padDigits, usageAgeMs, usageBar, windowLabel } from './format';
 import { sanitizeLabel } from './statusBar';
 import { usageStatusText } from './usageStatus';
 
@@ -10,8 +10,8 @@ export type QuickSwitchAction =
   | { readonly kind: 'account'; readonly slot: number; readonly active: boolean };
 
 export interface QuickSwitchItemModel {
-  readonly label: string;
   /** Display-ready: text from cswap is already neutralised here, and it may hold usage-bar icons. */
+  readonly label: string;
   readonly description?: string;
   readonly detail?: string;
   readonly iconId?: string;
@@ -19,23 +19,26 @@ export interface QuickSwitchItemModel {
   readonly action?: QuickSwitchAction;
 }
 
-/** One bar per window: full width for a single window, shorter when several share the line. */
-function usageLine(account: Account, options: PresentationOptions): string {
+/**
+ * The usage columns of an account's label: one bar per window (full width for a single window,
+ * shorter when several share the line) and the next reset. Numbers are padded with figure spaces
+ * like the sidebar, so the bars, percentages and reset times line up from one account to the next.
+ */
+function usageColumns(account: Account, options: PresentationOptions, columns: RowColumns): string[] {
   const { t, now } = options;
   if (account.usageStatus !== undefined && hasUnavailableUsage(account)) {
-    return sanitizeLabel(usageStatusText(account.usageStatus, t));
+    return [sanitizeLabel(usageStatusText(account.usageStatus, t))];
   }
   const windows = account.usage?.windows ?? [];
   if (windows.length === 0) {
-    return t('usage unknown');
+    return [t('usage unknown')];
   }
   const width = windows.length === 1 ? 10 : 6;
-  const bars = windows.map((window) => {
-    const pct = window.pct === undefined ? '?' : formatPercent(window.pct);
-    return `${sanitizeLabel(windowLabel(window.key))} ${usageBar(window.pct ?? 0, width, options.barStyle, { icons: true })} ${pct}`;
-  });
+  const parts = windows.map(
+    (window) => `${sanitizeLabel(windowLabel(window.key))} ${usageBar(window.pct ?? 0, width, options.barStyle, { icons: true })} ${alignedPercent(window.pct, columns)}`,
+  );
   const reset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined && epoch > now);
-  return reset === undefined ? bars.join('   ') : `${bars.join('   ')}   ↻ ${compactDuration(reset - now)}`;
+  return reset === undefined ? parts : [...parts, `↻ ${alignedDuration(reset - now)}`];
 }
 
 function detailLine(account: Account, active: boolean, snapshot: AccountsSnapshot, options: PresentationOptions): string {
@@ -127,12 +130,13 @@ export function buildQuickSwitchItems(snapshot: AccountsSnapshot, options: Prese
   groups.atLimit.sort((a, b) => missingLast(soonestFutureReset(a, now)) - missingLast(soonestFutureReset(b, now)) || a.slot - b.slot);
   groups.other.sort((a, b) => a.slot - b.slot);
 
+  // Same columns as the sidebar: slot, usage and reset first (padded), the name last.
+  const columns = rowColumns(snapshot.accounts);
   const accountItem = (account: Account): QuickSwitchItemModel => {
     const active = snapshot.active.slot === account.slot;
     const detail = detailLine(account, active, snapshot, options);
     return {
-      label: `${account.slot} · ${accountName(account, t)}`,
-      description: usageLine(account, options),
+      label: [padDigits(String(account.slot), columns.slotDigits), ...usageColumns(account, options, columns), sanitizeLabel(accountName(account, t))].join(' · '),
       ...(detail.length > 0 ? { detail } : {}),
       iconId: accountIcon(account, active, options),
       action: { kind: 'account', slot: account.slot, active },

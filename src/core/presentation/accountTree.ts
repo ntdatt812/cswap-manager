@@ -102,7 +102,7 @@ export function rowColumns(accounts: readonly Account[]): RowColumns {
   };
 }
 
-function alignedPercent(pct: number | undefined, columns: RowColumns): string {
+export function alignedPercent(pct: number | undefined, columns: RowColumns): string {
   return padDigits(pct === undefined ? '?' : formatPercent(pct), columns.percentDigits);
 }
 
@@ -277,6 +277,27 @@ export function loginDue(account: Account, now: number): LoginDue | undefined {
   return { expired: expiresAt <= now, expiresAt };
 }
 
+/**
+ * The slot Claude Code was just logged in to again: its login needed renewing (due within cswap's
+ * 7 days, expired, or refused by the server) and it is now the active account with a login that is
+ * no longer due. cswap reads the active account's login from Claude Code itself, so this is what a
+ * `/login` to an account cswap already has looks like. The account is followed by email.
+ */
+export function renewedLoginSlot(previous: AccountsSnapshot | undefined, current: AccountsSnapshot, now: number): number | undefined {
+  const active = current.accounts.find((account) => account.slot === current.active.slot);
+  if (previous === undefined || active?.email === undefined || current.active.activeUnmanaged === true) {
+    return undefined;
+  }
+  const email = active.email.toLowerCase();
+  const before = previous.accounts.find((account) => account.email?.toLowerCase() === email && account.organizationUuid === active.organizationUuid);
+  if (before === undefined) {
+    return undefined;
+  }
+  const neededRenewal = loginDue(before, now) !== undefined || before.usageStatus === 'relogin_required';
+  const renewed = active.loginExpiresAt !== undefined && active.loginExpiresAt !== before.loginExpiresAt && loginDue(active, now) === undefined;
+  return neededRenewal && renewed ? active.slot : undefined;
+}
+
 function loginDueText(due: LoginDue, options: PresentationOptions): string {
   const when = options.formatDateTime(due.expiresAt);
   return due.expired ? options.t('now (expired {0})', when) : options.t('in {0} ({1})', compactDuration(due.expiresAt - options.now), when);
@@ -380,9 +401,6 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
   const rows: TooltipRow[] = [{ label: t('Slot'), value: String(account.slot) }];
   if (account.displayName !== undefined) {
     rows.push({ label: t('Display name'), value: account.displayName });
-  }
-  if (account.alias !== undefined) {
-    rows.push({ label: t('Alias'), value: account.alias });
   }
   if (account.disabled === true) {
     rows.push({ label: t('Rotation'), value: t('disabled (held out of auto-rotation)') });
@@ -540,7 +558,7 @@ export function describeView(state: AccountsState, options: ViewPresentationOpti
     messages.push(t('Data is out of date (updated {0}). Refresh to update it.', updated ?? t('earlier')));
   }
   if (snapshot.active.activeUnmanaged === true) {
-    messages.push(t('The current Claude login is not managed by cswap.'));
+    messages.push(t('Claude Code is logged in to an account cswap does not manage yet. Use + to add it.'));
   } else if (snapshot.active.consistency === 'conflict') {
     messages.push(t('cswap list and status disagree about the active account.'));
   } else if (state.lastWarning !== undefined) {

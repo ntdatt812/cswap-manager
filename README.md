@@ -24,7 +24,7 @@ Click the Cswap Manager icon in the Activity Bar.
 - **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
 - Toolbar: refresh, switch, open dashboard, filter, sort, settings. Diagnostics is in the `…` menu.
 - Right-click an account to switch to it, show details, or manage it.
-- **Display names**: *Set Display Name…* gives an account any name (capitals, spaces, accents), shown everywhere instead of the alias or email. It stays in VS Code and is never sent to cswap; cswap's own alias keeps working in commands.
+- **Display names**: *Set Display Name…* gives an account any name (capitals, spaces, accents), shown everywhere instead of the email. It stays in VS Code and is never sent to cswap.
 
 ### Status bar
 Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near the usage limit and shows a clock icon when the data is out of date. Click it to switch accounts; the ⚙ next to it opens **Quick Settings**. Under **Quick Settings › Status bar** you can pick a ready-made look or tick exactly what to show (usage icon, slot, name, plan, progress bar, percentage, time to reset), choose how warnings are coloured, and add Refresh / Dashboard buttons. Changes preview live on the status bar before you save them. Right-clicking the status bar shows one **Cswap Manager** entry that hides or shows all Cswap items together.
@@ -37,7 +37,7 @@ Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near t
 4. **At limit** — soonest reset first.
 5. **Disabled or usage unknown.**
 
-Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email, alias or plan. The buttons in the picker's title bar open **Auto-Switch** and **Quick Settings**.
+Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email or plan. The buttons in the picker's title bar open **Auto-Switch** and **Quick Settings**.
 
 Switches are confirmed by default; choose **Switch, don't ask again** in the dialog to stop asking (turn it back on under **Quick Settings › Ask before switching**). The extension only reports success after re-reading cswap's state and confirming the new active account.
 
@@ -52,7 +52,6 @@ Switching does not interrupt running Claude Code sessions: cswap replaces the st
 
 ### Managing accounts
 From the account's right-click menu, **Cswap: Manage Account…**, or the dashboard:
-- **Set / remove alias** — a short name for commands such as `cswap switch work`. cswap stores it in lower case (a–z, 0–9, `-`, `_`, `.`); use a display name for anything else.
 - **Disable / enable in rotation** — cswap's automatic switching skips disabled accounts; you can still switch to them directly.
 - **Set / clear switch threshold** — the usage percentage (50–99.9) at which cswap auto-switch leaves this account. This changes cswap's behaviour.
 - **Move to slot** — renumber an account; if the slot is taken, the two accounts trade places.
@@ -63,13 +62,22 @@ From the account's right-click menu, **Cswap: Manage Account…**, or the dashbo
 Disabling, moving and removing ask for confirmation first. Every change is checked against cswap afterwards.
 
 ### Adding accounts
-**Add Current Login…** (sidebar toolbar `…` menu, or the empty sidebar) runs `cswap add` for the account Claude Code is logged in to now. To add another account, log in to it with `/login` in Claude Code first. Only free slots are offered, so cswap never overwrites another account; when the login is already managed you can refresh its stored copy instead.
+**＋ Add Account…** (the first button of the Accounts view, the last row of the switch picker, or the empty sidebar) asks how:
+- **Log in to a new account…** — type `/login` in Claude Code and log in to the new account, then click **I have logged in**. You do not even have to: as soon as the extension sees Claude Code on an account cswap does not manage yet, it offers **Add to cswap…**. Then pick a free slot (the first one is suggested) and confirm; this runs `cswap add`.
+- **Paste a setup-token or API key…** (`cswap add-token`) — Claude Code keeps its current login. Create a setup-token with `claude setup-token` in a terminal and paste it into the password box; add an email to recognise the account by if you like (one another account already uses is refused, since cswap would move that account). The token goes to cswap on its standard input only: it is never a command-line argument, never logged and never stored by the extension. cswap cannot read a setup-token account's usage unless **Quick Settings › Usage of token accounts** is on (each reading spends 1 Haiku token, optionally 1 Fable token). An API key is billed per token, and by default cswap auto-switch does not move onto API-key accounts.
+- **Refresh the stored login of slot N** — after logging in to the account Claude Code uses again.
+
+**Logging in again** to an account cswap already has (its login expired, is about to, or was refused) needs nothing else: when the extension sees Claude Code on that account with a renewed login, it runs `cswap add --slot N` once to store the new login and tells you (bound to that account: if Claude Code has moved on to another one, cswap cancels without changes). Only the VS Code window in front does this, so several open windows do not repeat it.
+
+Only free slots are offered, so cswap never overwrites another account.
 
 ### Per-project accounts
 cswap can tie a folder to an account (`cswap map`) and start Claude Code with that account in a terminal (`cswap run`), without changing the account used everywhere else:
 - **Assign to a Project Folder…** (account right-click menu, or *Quick Settings › Account for this project*) maps the open folder.
 - **Open Claude Code for This Project** (sidebar toolbar `…` menu) starts Claude Code in a terminal with the folder's account.
 - **Open Claude Code as This Account…** (account right-click menu) starts it with any account.
+
+**Quick Settings › Chat history across accounts** is cswap's `run.shareHistory`: shared (cswap default) lets every account opened this way see the same conversations (`/resume`); separate keeps each account's own.
 
 The terminal runs `cswap run` directly (no shell). The folder must be trusted (Workspace Trust); on Windows the terminal never runs a `claude` program from the project folder itself. Claude Code must be on `PATH`, and cswap refuses API-key accounts here.
 
@@ -82,7 +90,7 @@ The terminal runs `cswap run` directly (no shell). The folder must be trusted (W
 ### cswap updates
 Once a day the extension asks PyPI for the latest claude-swap release and offers to update when a newer one exists (*Update* opens a terminal with `uv tool upgrade claude-swap` or `pipx upgrade claude-swap`, depending on how cswap was installed). Turn it off with `cswapManager.checkCswapUpdates`; *Quick Settings › cswap version* checks on demand.
 
-Not available in the extension (use the CLI): `purge`, `add-token`, `unclaimed`, `tui`/`watch` and the macOS `menubar`.
+Not available in the extension (use the CLI): `purge`, `unclaimed`, `tui`/`watch` and the macOS `menubar`.
 
 ### Automatic switching
 **Cswap: Auto-Switch…** (also in the sidebar `…` menu, the switch picker and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
@@ -99,7 +107,7 @@ Not available in the extension (use the CLI): `purge`, `add-token`, `unclaimed`,
   | By account priority (`priority-consume-first`) | Highest account priority first (set with `cswap priority`), then soonest weekly reset. |
 - **Per-model limits** (*Quick Settings*) — cswap's `autoswitch.model`: also count one model's weekly limit (for example Fable), or all of them, when picking an account. Applies to *Most quota left* / *Next available* switching and to `cswap auto`.
 - **Preview now** shows what cswap would do at this moment (dry run).
-- **Rules…** edits cswap's other settings: switch threshold (default 90%), weekly threshold, cooldown (300 s) and check interval (60 s). They also apply to `cswap auto` in a terminal.
+- **Rules…** edits cswap's other settings: switch threshold (default 90%), weekly threshold, cooldown (300 s), check interval (60 s), minimum advantage (a target must have at least this many percentage points more quota left, default 10) and failed checks before an account is skipped (default 3). They also apply to `cswap auto` in a terminal.
 
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
@@ -127,7 +135,7 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 
 ## Privacy and security
 - No telemetry. The only network request the extension makes itself is the daily version check against `pypi.org` (no data about you or your accounts is sent; turn it off with `cswapManager.checkCswapUpdates`). Everything else is done by `cswap`.
-- It never reads Claude Code or cswap credential files and never sees tokens. Export and import files are written and read by cswap only, and their path is always a real file (never a pipe through the extension).
+- It never reads Claude Code or cswap credential files. The only token it ever handles is one you paste for **Paste a setup-token or API key…**: it stays in memory for that one command and goes to cswap on standard input, never as an argument, in a log or in settings. Export and import files are written and read by cswap only, and their path is always a real file (never a pipe through the extension).
 - `cswap` is started directly (never through a shell), from your home folder, with fixed arguments.
 - Logs (**Output › Cswap Manager**) and the diagnostics report contain no CLI output, emails, account IDs or home-folder paths.
 - The dashboard runs with a strict Content Security Policy and accepts only a small fixed set of requests.
@@ -139,7 +147,7 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | Path points to a `.cmd`/`.bat` shim | Point the setting at the real `cswap.exe`; shims would need a shell, which the extension does not use. |
 | "Stale" / clock icon | The last refresh failed or the data is old. Hover for the reason, then **Refresh**. Older data stays visible but is marked. |
 | "list and status disagree about the active account" | cswap reported two different active accounts; run `cswap status` in a terminal. The extension shows the active account as unknown instead of guessing. |
-| "The current Claude login is not managed by cswap" | Add it with **Add Current Login…** (sidebar `…` menu) or `cswap add`. |
+| "Claude Code is logged in to an account cswap does not manage yet" | Add it with **＋ Add Account…** (Accounts view) or `cswap add`. |
 | Slanted bars in the sidebar look coarse | Sidebar rows cannot show icons, so **Slanted** draws whole cells there (about 10% each); the switcher, status bar and tooltips show eighths. Pick **Blocks** for steps of about 1% everywhere. |
 | "Re-login due" / usage `relogin_required` | The account's stored login expired. Log in to it with `/login` in Claude Code, then run `cswap add`. |
 | A switch or change "could not be confirmed" | cswap ran, but the re-read state did not show the expected result. Refresh and check with `cswap list`. |

@@ -13,6 +13,11 @@ const COLLAPSIBLE: Record<NodeModel['collapsible'], vscode.TreeItemCollapsibleSt
  * escapes Markdown and, with theme icons on, `$(…)` too, so account data cannot inject links,
  * command URIs, HTML or icons. Only a usage bar made of slant icons is appended as Markdown.
  */
+/** Text from cswap inside a table cell: a `|` would end the cell and a line break the row. */
+function tableCell(text: string): string {
+  return text.replace(/\|/g, '∣').replace(/[\r\n]+/g, ' ');
+}
+
 export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString(undefined, true);
   markdown.isTrusted = false;
@@ -20,18 +25,23 @@ export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
   markdown.appendMarkdown('**');
   markdown.appendText(model.title);
   markdown.appendMarkdown('**\n\n');
+  // A two-column table, so labels and values line up (Markdown tables need a header row: it is empty).
+  if (model.rows.length > 0) {
+    markdown.appendMarkdown('| | |\n|:--|:--|\n');
+  }
   for (const row of model.rows) {
-    markdown.appendMarkdown('- ');
-    markdown.appendText(`${row.label}: `);
+    markdown.appendMarkdown('| ');
+    markdown.appendText(tableCell(row.label));
+    markdown.appendMarkdown(' | ');
     if (row.bar !== undefined) {
       if (SLANT_BAR_PATTERN.test(row.bar)) {
         markdown.appendMarkdown(`${row.bar} `);
       } else {
-        markdown.appendText(`${row.bar} `);
+        markdown.appendText(`${tableCell(row.bar)} `);
       }
     }
-    markdown.appendText(row.value);
-    markdown.appendMarkdown('\n');
+    markdown.appendText(tableCell(row.value));
+    markdown.appendMarkdown(' |\n');
   }
   for (const note of model.notes ?? []) {
     markdown.appendMarkdown('\n_');

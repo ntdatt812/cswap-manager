@@ -15,6 +15,7 @@ export function fixture(name: string): string {
 export const manageCliStubs = {
   priorities: (): Promise<CliOutcome<PriorityEntry[]>> => Promise.resolve(ok('priority', [])),
   addAccount: (): Promise<CliOutcome<AddResult>> => Promise.resolve(ok('manage', { kind: 'cancelled' })),
+  addToken: (): Promise<CliOutcome<AddResult>> => Promise.resolve(ok('manage', { kind: 'cancelled' })),
 };
 
 export function ok<T>(command: CliCommandId, value: T): CliOutcome<T> {

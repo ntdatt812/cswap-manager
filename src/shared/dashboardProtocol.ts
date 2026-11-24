@@ -58,8 +58,6 @@ export interface Badge {
 /** Account-management actions verified against the CLI (Phase 5). */
 export type AccountActionId =
   | 'setDisplayName'
-  | 'setAlias'
-  | 'removeAlias'
   | 'disable'
   | 'enable'
   | 'setThreshold'
@@ -74,8 +72,6 @@ export type AccountActionId =
  */
 export const ACCOUNT_ACTION_IDS: readonly AccountActionId[] = [
   'setDisplayName',
-  'setAlias',
-  'removeAlias',
   'disable',
   'enable',
   'setThreshold',

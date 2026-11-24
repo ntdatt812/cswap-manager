@@ -18,6 +18,7 @@ export const SETTING_KEYS = [
   'language',
   'confirmSwitch',
   'projectAccount',
+  'shareHistory',
   'refresh',
   'autoSwitch',
   'autoStrategy',
@@ -27,6 +28,7 @@ export const SETTING_KEYS = [
   'barStyle',
   'thresholds',
   'sortOrder',
+  'tokenUsage',
   'cliPath',
   'cswapVersion',
   'timeout',
@@ -49,6 +51,10 @@ export interface QuickSettingsValues {
   readonly autoSwitchModel: string | null | undefined;
   /** Short summary of cswap's other auto-switch rules; undefined while not loaded. */
   readonly autoSwitchRules: string | undefined;
+  /** cswap's `run.shareHistory`; undefined while the settings are not loaded. */
+  readonly shareHistory: boolean | undefined;
+  /** cswap's `usage.headerProbe` / `usage.fableProbe`; undefined while not loaded. */
+  readonly tokenUsage: TokenUsageLevel | undefined;
   /** Parts the status bar item shows; empty when it is hidden. */
   readonly statusBarParts: readonly StatusBarPart[];
   readonly statusBarButtons: readonly StatusBarButton[];
@@ -204,7 +210,7 @@ export function statusBarPartLabel(part: StatusBarPart, t: Translate): string {
     case 'slot':
       return t('Slot number');
     case 'name':
-      return t('Name (alias or email)');
+      return t('Name (display name or email)');
     case 'plan':
       return t('Plan');
     case 'bar':
@@ -282,6 +288,32 @@ export function thresholdsLabel(thresholds: UsageThresholds, t: Translate): stri
   return t('yellow {0} · red {1}', formatPercent(thresholds.warning), formatPercent(thresholds.critical));
 }
 
+/** How cswap reads setup-token accounts' usage: not at all, 1-token Haiku probes, or Haiku + Fable probes. */
+export type TokenUsageLevel = 'off' | 'haiku' | 'fable';
+
+export function tokenUsageLevel(settings: { readonly headerProbe?: boolean; readonly fableProbe?: boolean } | undefined): TokenUsageLevel | undefined {
+  if (settings === undefined) {
+    return undefined;
+  }
+  if (settings.headerProbe !== true) {
+    return 'off';
+  }
+  return settings.fableProbe === true ? 'fable' : 'haiku';
+}
+
+export function tokenUsageLabel(level: TokenUsageLevel | undefined, t: Translate): string {
+  switch (level) {
+    case undefined:
+      return t('rules not loaded');
+    case 'off':
+      return t('Off');
+    case 'haiku':
+      return t('5-hour and weekly');
+    case 'fable':
+      return t('5-hour, weekly and Fable');
+  }
+}
+
 export function modelLabel(model: string | null | undefined, t: Translate): string {
   if (model === undefined) {
     return t('rules not loaded');
@@ -297,6 +329,12 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
     { key: 'language', iconId: 'globe', label: t('Language'), value: languageLabel(values.language, t) },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
     { key: 'projectAccount', iconId: 'folder', label: t('Account for this project'), value: values.projectAccount ?? t('no folder open') },
+    {
+      key: 'shareHistory',
+      iconId: 'comment-discussion',
+      label: t('Chat history across accounts'),
+      value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
+    },
     { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
     { separator: true, label: t('Auto-switch') },
     { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: autoSwitchModeLabel(values.autoSwitchMode, t) },
@@ -314,6 +352,7 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
     { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
     { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
     { separator: true, label: t('Advanced') },
+    { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t) },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
     {
       key: 'cswapVersion',

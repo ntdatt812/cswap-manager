@@ -1,6 +1,6 @@
 import type { CliError } from '../cli/cliErrors';
 import type { AddResult, CliOutcome, ManageOperation } from '../cli/cswapCli';
-import { hasIdentity, identityOf, normalizeAlias } from '../model/accountPolicy';
+import { hasIdentity, identityOf } from '../model/accountPolicy';
 import { priorityOf, type PriorityEntry } from '../model/priorities';
 import type { AccountsSnapshot } from '../model/types';
 import { Emitter } from './emitter';
@@ -27,7 +27,8 @@ export interface ManageCli {
   manage(operation: ManageOperation): Promise<CliOutcome<void>>;
   /** Reads `cswap priority` back: `list --json` carries no priority, so this is how a change is verified. */
   priorities(): Promise<CliOutcome<PriorityEntry[]>>;
-  addAccount(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>>;
+  addAccount(options: { readonly slot?: number }): Promise<CliOutcome<AddResult>>;
+  addToken(token: string, options: { readonly slot?: number; readonly email?: string }): Promise<CliOutcome<AddResult>>;
 }
 
 /** What a change cswap accepted means for priorities, which `list --json` does not carry. */
@@ -72,15 +73,6 @@ export function expectationFor(operation: ManageOperation, before: AccountsSnaps
   const findSubject = (after: AccountsSnapshot) => after.accounts.find((account) => hasIdentity(account, identity));
 
   switch (operation.kind) {
-    case 'setAlias': {
-      const alias = normalizeAlias(operation.alias);
-      return (after) => alias.ok && findSubject(after)?.alias === alias.value;
-    }
-    case 'removeAlias':
-      return (after) => {
-        const account = findSubject(after);
-        return account !== undefined && account.alias === undefined;
-      };
     case 'setDisabled':
       return (after) => {
         const account = findSubject(after);
@@ -198,9 +190,28 @@ export class ManagementService {
    * Stores the current Claude Code login with `cswap add`, then verifies that the active account is
    * now managed (and in the requested slot).
    */
-  async addCurrent(options: { readonly slot?: number; readonly alias?: string }): Promise<AddOutcome> {
+  addCurrent(options: { readonly slot?: number }): Promise<AddOutcome> {
+    // `cswap add` makes the stored login the active account in that slot.
+    return this.add(
+      () => this.cli.addAccount(options),
+      (snapshot, slot) => snapshot.active.slot === slot && snapshot.accounts.some((account) => account.slot === slot),
+    );
+  }
+
+  /**
+   * Registers a setup-token or API key with `cswap add-token`, then verifies the slot is listed. The
+   * active account does not change. The token is passed straight through and not kept.
+   */
+  addToken(token: string, options: { readonly slot?: number; readonly email?: string }): Promise<AddOutcome> {
+    return this.add(
+      () => this.cli.addToken(token, options),
+      (snapshot, slot) => snapshot.accounts.some((account) => account.slot === slot),
+    );
+  }
+
+  private async add(run: () => Promise<CliOutcome<AddResult>>, landed: (snapshot: AccountsSnapshot, slot: number) => boolean): Promise<AddOutcome> {
     const outcome = await this.gate.run(async (): Promise<AddOutcome> => {
-      const result = await this.cli.addAccount(options);
+      const result = await run();
       const refresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true, verifyActive: true });
       if (!result.ok) {
         return { kind: 'failed', error: result.error };
@@ -213,9 +224,7 @@ export class ManagementService {
       if (!refresh.ok) {
         return { kind: 'added', result: added, verification: 'unverified', refreshError: refresh.error };
       }
-      // `cswap add` makes the stored login the active account in that slot.
-      const confirmed = refresh.snapshot.active.slot === added.slot && refresh.snapshot.accounts.some((account) => account.slot === added.slot);
-      return { kind: 'added', result: added, verification: confirmed ? 'confirmed' : 'mismatch' };
+      return { kind: 'added', result: added, verification: landed(refresh.snapshot, added.slot) ? 'confirmed' : 'mismatch' };
     });
     return outcome ?? { kind: 'busy' };
   }
