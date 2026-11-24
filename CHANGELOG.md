@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 — 2026-11-24
+- **Cswap: Quick Settings…** (gear in the Accounts view and in the switch picker): language, ask before switching, auto-switch and its strategy, status bar, account order and refresh interval, in the extension's own language, without opening VS Code's Settings page.
+- The switch confirmation has a **Switch, don't ask again** button.
+- cswap's auto-switch strategies (`best`, `weekly-first`, `consume-first`, `priority-consume-first`) are explained and picked from **Auto-Switch › Strategy…**; **Switch automatically, use quota before it resets** turns on automatic switching with `consume-first` in one step.
+- Dialogs now say that running Claude Code sessions pick up a new account by themselves, without a restart.
+
 ## 0.3.1 — 2026-11-24
 - Auto-switch hardening after an independent security review: a mode change can no longer let a real tick through, cswap config values are type-checked, lease-file failures are reported, every real switch is notified, CLI error text is redacted, real ticks get a 10-minute safety timeout, and the mode is not synced across machines.
 

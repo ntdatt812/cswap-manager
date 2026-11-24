@@ -10,6 +10,7 @@ import type { SwitchOutcome, SwitchService } from '../core/service/switchService
 import type { ExtensionConfiguration } from './configuration';
 import { describeCliError, describeNoSwitchReason } from './messages';
 import { presentationOptions, t } from './presentation';
+import { pickOne } from './quickPick';
 
 export interface SwitchFlowDependencies {
   readonly refreshService: RefreshService;
@@ -39,12 +40,26 @@ async function confirm(deps: SwitchFlowDependencies, target: SwitchTarget): Prom
     return true;
   }
   const proceed = t('Switch');
+  const always = t("Switch, don't ask again");
   const choice = await vscode.window.showWarningMessage(
     neutralizeLinks(t('Switch Claude Code to {0}?', targetLabel(deps, target))),
-    { modal: true, detail: t('cswap replaces the active Claude Code login. Running Claude Code sessions will use the new account.') },
+    {
+      modal: true,
+      detail: `${t('cswap replaces the active Claude Code login.')} ${t('Running Claude Code sessions keep running and pick up the new account by themselves; no restart needed.')}`,
+    },
     proceed,
+    always,
   );
-  return choice === proceed;
+  if (choice === always) {
+    try {
+      await deps.configuration.setConfirmSwitch(false);
+      vscode.window.setStatusBarMessage(t('Cswap: switching without asking from now on. Turn it back on in Cswap Settings.'), 10_000);
+    } catch {
+      // The switch the user asked for still goes ahead; only the preference was not saved.
+      void vscode.window.showWarningMessage(t('The setting could not be saved. Check your VS Code user settings file.'));
+    }
+  }
+  return choice === proceed || choice === always;
 }
 
 function verificationNote(outcome: Extract<SwitchOutcome, { verification: unknown }>): string {
@@ -154,11 +169,15 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
         },
   );
   const active = snapshot.active.slot === undefined ? t('unknown') : `#${snapshot.active.slot}`;
-  const picked = await vscode.window.showQuickPick(items, {
+  const picked = await pickOne(items, {
     title: t('Cswap: switch account (active: {0})', active),
-    placeHolder: stale ? t('Data may be out of date. Type to search by slot, email, alias or plan.') : t('Type to search by slot, email, alias or plan.'),
+    placeholder: stale ? t('Data may be out of date. Type to search by slot, email, alias or plan.') : t('Type to search by slot, email, alias or plan.'),
     matchOnDescription: true,
     matchOnDetail: true,
+    buttons: [
+      { iconId: 'sync', tooltip: t('Cswap Auto-Switch'), run: () => vscode.commands.executeCommand('cswapManager.autoSwitch') },
+      { iconId: 'gear', tooltip: t('Cswap Settings'), run: () => vscode.commands.executeCommand('cswapManager.quickSettings') },
+    ],
   });
   const action = picked?.action;
   if (action === undefined) {

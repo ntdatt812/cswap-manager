@@ -55,5 +55,6 @@
   "config.autoSwitch.description": "Tự động chuyển tài khoản bằng `cswap auto`, do extension chạy khi VS Code đang mở. `notify` chỉ kiểm tra và báo khi cswap sẽ chuyển; `switch` để cswap tự chuyển tài khoản Claude Code đang dùng. Các luật (ngưỡng, cooldown, chiến lược) là cài đặt của cswap, chỉnh trong **Cswap: Tự động chuyển tài khoản…**. Chỉ đọc từ user settings.",
   "config.autoSwitch.off": "Tắt.",
   "config.autoSwitch.notify": "Kiểm tra định kỳ và báo khi cswap sẽ chuyển (chạy thử, không bao giờ chuyển).",
-  "config.autoSwitch.switch": "Để cswap tự chuyển tài khoản."
+  "config.autoSwitch.switch": "Để cswap tự chuyển tài khoản.",
+  "command.quickSettings.title": "Cài đặt nhanh…"
 }

@@ -55,5 +55,6 @@
   "config.autoSwitch.description": "Automatic account switching with `cswap auto`, run by the extension while VS Code is open. `notify` only checks and tells you when cswap would switch; `switch` lets cswap switch the active Claude Code account by itself. The rules (threshold, cooldown, strategy) are cswap settings, editable from **Cswap: Auto-Switch…**. Only your user settings are honoured.",
   "config.autoSwitch.off": "Off.",
   "config.autoSwitch.notify": "Check regularly and notify me when cswap would switch (dry run, never switches).",
-  "config.autoSwitch.switch": "Let cswap switch accounts automatically."
+  "config.autoSwitch.switch": "Let cswap switch accounts automatically.",
+  "command.quickSettings.title": "Quick Settings…"
 }

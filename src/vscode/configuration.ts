@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { CliRunSettings } from '../core/cli/cswapCli';
 import { isSortOrder, normalizeThresholds, type SortOrder, type UsageThresholds } from '../core/presentation/format';
+import { isLanguageSetting, type LanguageSetting } from '../core/presentation/quickSettings';
 import { isStatusBarMode, type StatusBarMode } from '../core/presentation/statusBar';
 import { isAutoSwitchMode, type AutoSwitchMode } from '../core/service/autoSwitchService';
 import { normalizeIntervalMs } from '../core/service/refreshScheduler';
@@ -87,8 +88,35 @@ export class ExtensionConfiguration {
     return this.config.get<string>('language', 'auto');
   }
 
+  languageSetting(): LanguageSetting {
+    const value = this.language();
+    return isLanguageSetting(value) ? value : 'auto';
+  }
+
+  /** Effective automatic refresh interval in whole seconds; 0 when off. */
+  refreshIntervalSeconds(): number {
+    return Math.round(this.refreshIntervalMs() / 1000);
+  }
+
   /** User scope only: a workspace must not be able to silence switch confirmations. */
   confirmSwitch(): boolean {
     return this.config.inspect<boolean>('confirmSwitch')?.globalValue !== false;
   }
+
+  async setConfirmSwitch(confirm: boolean): Promise<void> {
+    await this.config.update('confirmSwitch', confirm, vscode.ConfigurationTarget.Global);
+  }
+
+  /**
+   * Writes a user setting. Returns true when a workspace value still overrides it in this window,
+   * so the caller can say why nothing seems to change.
+   */
+  async setUserSetting(key: UserSettingKey, value: unknown): Promise<boolean> {
+    await this.config.update(key, value, vscode.ConfigurationTarget.Global);
+    const inspected = this.config.inspect(key);
+    return inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
+  }
 }
+
+/** Window-scoped settings the quick settings menu writes to the user scope. */
+export type UserSettingKey = 'language' | 'statusBar.mode' | 'sidebar.sortOrder' | 'refreshIntervalSeconds';

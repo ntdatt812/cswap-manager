@@ -139,6 +139,13 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - Rules editor: only `autoswitch.threshold`, `weeklyThreshold`, `cooldownSeconds`, `intervalSeconds` and `strategy`, validated like cswap before `cswap config set/unset`, then re-read to confirm.
 - Limitation: auto-switch only runs while VS Code is open (Windows has no cswap background service; the macOS menu bar app is out of scope).
 
+## Quick settings and strategies (0.4.0)
+- `src/vscode/quickSettings.ts` is a QuickPick over the common settings, labelled by the extension's own l10n (VS Code's Settings page only follows VS Code's display language). Row models and labels are pure (`src/core/presentation/quickSettings.ts`) and unit-tested. Toggles change in place; enum rows open a sub-picker with the current value highlighted and return to the list. Writes go to the user scope; if a workspace value still overrides a window-scoped setting, the user is told.
+- `confirmSwitch` and `autoSwitch.mode` keep their user-scope-only reads; "Switch, don't ask again" writes `confirmSwitch=false` to user settings.
+- Auto-switch strategies are cswap's (`cswap auto --strategy` choices, verified in the 1.2.0 source). The extension never ranks accounts for automatic switching itself; it stores `autoswitch.strategy` through `cswap config set` (verified by reading it back). The one-step "use quota before it resets" preset saves `consume-first` before turning `switch` mode on, so no tick runs with the old strategy.
+- A manual one-shot `cswap auto --once --strategy …` from the switch picker was considered and left out: such a tick is subject to cswap's cooldown and thresholds, so a click would often end in "no action".
+- Session impact (from cswap's source, `_print_switch_followup`): a restart is never required; Claude Code drops its cached token when the credentials file changes (next request) or after the macOS Keychain cache TTL (~30 s).
+
 ## Auto-switch security review (0.3.1)
 An independent read-only review of the 0.3.0 auto-switch code found 1 medium, 7 low and 6 info issues (no critical/high). All are fixed, each with a regression test in `test/unit/autoSwitch.test.ts`:
 - **M1** A mode change while the lease file was being acquired could still start a real (non-dry-run) tick. The mode is now re-read inside the operation gate immediately before cswap starts, and only `switch` runs without `--dry-run`.

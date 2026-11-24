@@ -30,6 +30,7 @@ const COMMANDS = [
   'cswapManager.moveAccount',
   'cswapManager.autoSwitch',
   'cswapManager.autoSwitchPreview',
+  'cswapManager.quickSettings',
 ];
 
 suite('Cswap Manager (extension host)', () => {
@@ -157,6 +158,53 @@ suite('Cswap Manager (extension host)', () => {
       assert.ok(await waitFor(() => activeDescription().startsWith('Active')), activeDescription());
     } finally {
       await config.update('language', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('toggles "Ask before switching" in place from Quick Settings', async () => {
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const confirmValue = () => config().inspect<boolean>('confirmSwitch')?.globalValue;
+    const waitFor = async (predicate: () => boolean) => {
+      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return predicate();
+    };
+    const before = confirmValue();
+    let opened: Thenable<unknown> | undefined;
+    try {
+      await config().update('confirmSwitch', true, vscode.ConfigurationTarget.Global);
+      opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'confirmSwitch');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => confirmValue() === false), `confirmSwitch is ${String(confirmValue())}`);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => confirmValue() === true), `confirmSwitch is ${String(confirmValue())}`);
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await opened;
+      await config().update('confirmSwitch', before, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('highlights the current value in a Quick Settings sub-picker, so Enter changes nothing', async () => {
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const before = config().inspect<number>('refreshIntervalSeconds')?.globalValue;
+    let opened: Thenable<unknown> | undefined;
+    try {
+      await config().update('refreshIntervalSeconds', 300, vscode.ConfigurationTarget.Global);
+      opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'refresh');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(config().get<number>('refreshIntervalSeconds'), 300);
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await opened;
+      await config().update('refreshIntervalSeconds', before, vscode.ConfigurationTarget.Global);
     }
   });
 

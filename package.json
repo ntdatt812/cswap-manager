@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -116,6 +116,12 @@
         "title": "%command.openSettings.title%",
         "category": "Cswap",
         "icon": "$(gear)"
+      },
+      {
+        "command": "cswapManager.quickSettings",
+        "title": "%command.quickSettings.title%",
+        "category": "Cswap",
+        "icon": "$(settings-gear)"
       },
       {
         "command": "cswapManager.filterAccounts",
@@ -254,9 +260,14 @@
           "group": "navigation@5"
         },
         {
-          "command": "cswapManager.openSettings",
+          "command": "cswapManager.quickSettings",
           "when": "view == cswapManager.accounts",
           "group": "navigation@9"
+        },
+        {
+          "command": "cswapManager.openSettings",
+          "when": "view == cswapManager.accounts",
+          "group": "z_support@2"
         },
         {
           "command": "cswapManager.showDiagnostics",

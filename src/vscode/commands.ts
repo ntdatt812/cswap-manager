@@ -4,7 +4,8 @@ import { localize } from './l10n';
 import type { CswapCli } from '../core/cli/cswapCli';
 import type { CachedExecutableResolver } from '../core/cli/executableResolver';
 import { collectDiagnostics, formatDiagnosticsReport } from '../core/diagnostics/diagnostics';
-import { SORT_ORDERS, type SortOrder } from '../core/presentation/format';
+import { SORT_ORDERS } from '../core/presentation/format';
+import { isSettingKey, sortOrderLabel } from '../core/presentation/quickSettings';
 import type { NodeModel } from '../core/presentation/accountTree';
 import type { RefreshService } from '../core/service/refreshService';
 import type { ManagementService } from '../core/service/managementService';
@@ -17,6 +18,8 @@ import type { DashboardController } from './dashboardPanel';
 import type { ExtensionConfiguration } from './configuration';
 import { describeCliError } from './messages';
 import { runAccountAction } from './manageFlow';
+import { t } from './presentation';
+import { openQuickSettings } from './quickSettings';
 import { runQuickSwitch, runSwitch } from './switchFlow';
 
 export interface CommandDependencies {
@@ -38,13 +41,6 @@ function extensionVersion(context: vscode.ExtensionContext): string {
   const version = (context.extension.packageJSON as { version?: unknown }).version;
   return typeof version === 'string' ? version : 'unknown';
 }
-
-const SORT_LABELS: Record<SortOrder, () => string> = {
-  slot: () => localize('By slot number'),
-  mostUsed: () => localize('Highest usage first'),
-  leastUsed: () => localize('Most remaining quota first'),
-  soonestReset: () => localize('Soonest reset first'),
-};
 
 async function refreshCommand(deps: CommandDependencies): Promise<void> {
   const result = await deps.refreshService.refresh({ trigger: 'manual' });
@@ -113,7 +109,7 @@ async function sortCommand(deps: CommandDependencies): Promise<void> {
   const current = deps.configuration.sortOrder();
   const picked = await vscode.window.showQuickPick(
     SORT_ORDERS.map((order) => ({
-      label: SORT_LABELS[order](),
+      label: sortOrderLabel(order, t),
       description: order === current ? localize('current') : undefined,
       order,
     })),
@@ -147,6 +143,9 @@ export function registerCommands(deps: CommandDependencies): vscode.Disposable[]
     vscode.commands.registerCommand('cswapManager.showDiagnostics', () => diagnosticsCommand(deps)),
     vscode.commands.registerCommand('cswapManager.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${deps.context.extension.id}`),
+    ),
+    vscode.commands.registerCommand('cswapManager.quickSettings', (focus?: unknown) =>
+      openQuickSettings(deps, isSettingKey(focus) ? focus : undefined),
     ),
     vscode.commands.registerCommand('cswapManager.filterAccounts', () => filterCommand(deps)),
     vscode.commands.registerCommand('cswapManager.clearFilter', () => deps.accountsView.setFilter(undefined)),

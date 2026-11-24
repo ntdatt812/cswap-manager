@@ -1,11 +1,12 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { AUTO_SWITCH_STRATEGIES, ruleMatches, validateRuleInput, type AutoSwitchRuleKey } from '../core/cli/autoSwitchRules';
+import { AUTO_SWITCH_STRATEGIES, ruleMatches, validateRuleInput, type AutoSwitchRuleKey, type AutoSwitchStrategy } from '../core/cli/autoSwitchRules';
 import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
+import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel } from '../core/presentation/quickSettings';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
   AutoSwitchService,
@@ -24,6 +25,7 @@ import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 import type { Logger } from './logger';
 import { describeCliError } from './messages';
 import { CLOCK_TICK_MS, formatDateTime, t } from './presentation';
+import { pickOne } from './quickPick';
 import { runSwitch } from './switchFlow';
 
 export interface AutoSwitchDependencies {
@@ -73,32 +75,11 @@ export function describeAutoReason(reason: string | undefined): string {
   }
 }
 
-function modeLabel(mode: AutoSwitchMode): string {
-  switch (mode) {
-    case 'off':
-      return t('Off');
-    case 'notify':
-      return t('Notify only');
-    case 'switch':
-      return t('Switch automatically');
-  }
-}
+const modeLabel = (mode: AutoSwitchMode): string => autoSwitchModeLabel(mode, t);
+const strategyLabel = (strategy: string | undefined): string => autoSwitchStrategyLabel(strategy, t);
 
-function strategyLabel(strategy: string | undefined): string {
-  switch (strategy) {
-    case 'best':
-      return t('most quota left');
-    case 'weekly-first':
-      return t('soonest weekly reset, at the threshold');
-    case 'consume-first':
-      return t('use the account whose week resets soonest first');
-    case 'priority-consume-first':
-      return t('highest priority first');
-    default:
-      // Only cswap-style strategy codes are shown; anything else in the config file is not echoed.
-      return strategy !== undefined && /^[a-z0-9-]{1,40}$/.test(strategy) ? strategy : t('unknown');
-  }
-}
+/** The strategy that spends quota before it resets instead of letting it expire unused. */
+const CONSUME_FIRST: AutoSwitchStrategy = 'consume-first';
 
 function rulesSummary(rules: AutoSwitchRules | undefined): string {
   if (rules === undefined) {
@@ -185,50 +166,128 @@ export class AutoSwitchController implements vscode.Disposable {
   // ---- Menu -----------------------------------------------------------------------------------
 
   async openMenu(): Promise<void> {
+    if (this.service.getState().rules === undefined) {
+      // Rules are only loaded once auto-switch runs; read them so the menu shows the real strategy.
+      await this.service.reloadRules();
+    }
     const state = this.service.getState();
-    type Item = vscode.QuickPickItem & { action: () => Promise<unknown> };
+    type Item = vscode.QuickPickItem & { action: () => Promise<unknown>; mode?: AutoSwitchMode };
     const modeItem = (mode: AutoSwitchMode, icon: string, description: string): Item => ({
       label: `$(${icon}) ${modeLabel(mode)}`,
       description: mode === state.mode ? `${t('current')} · ${description}` : description,
+      mode,
       action: () => this.chooseMode(mode),
     });
+    const consuming = state.mode === 'switch' && state.rules?.strategy === CONSUME_FIRST;
     const items: Array<Item | vscode.QuickPickItem> = [
+      {
+        label: `$(flame) ${t('Switch automatically, use quota before it resets')}`,
+        description: consuming ? t('current') : t('recommended'),
+        detail: autoSwitchStrategyDetail(CONSUME_FIRST, t),
+        action: () => this.useConsumeFirst(),
+      },
       { label: t('Mode'), kind: vscode.QuickPickItemKind.Separator },
       modeItem('off', 'circle-slash', t('nothing runs')),
       modeItem('notify', 'eye', t('check regularly and tell me when cswap would switch')),
       modeItem('switch', 'sync', t('let cswap switch accounts by itself')),
       { label: t('Tools'), kind: vscode.QuickPickItemKind.Separator },
+      { label: `$(lightbulb) ${t('Strategy…')}`, description: strategyLabel(state.rules?.strategy), action: () => this.chooseStrategy() },
       { label: `$(beaker) ${t('Preview now')}`, description: t('what cswap would do right now (dry run)'), action: () => this.preview() },
       { label: `$(settings-gear) ${t('Rules…')}`, description: rulesSummary(state.rules), action: () => this.editRules() },
       { label: `$(output) ${t('Show log')}`, action: () => Promise.resolve(this.deps.logger.show()) },
     ];
-    const picked = await vscode.window.showQuickPick(items, { title: t('Cswap Auto-Switch ({0})', modeLabel(state.mode)) });
+    // The current mode is highlighted, so Enter on an unchanged menu never changes anything.
+    const picked = await pickOne(items, {
+      title: t('Cswap Auto-Switch ({0})', modeLabel(state.mode)),
+      isActive: (item) => 'mode' in item && item.mode === state.mode,
+    });
     if (picked !== undefined && 'action' in picked) {
       await picked.action();
     }
   }
 
-  async chooseMode(mode: AutoSwitchMode): Promise<void> {
-    if (mode === 'switch' && this.deps.configuration.autoSwitchMode() !== 'switch') {
-      const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
-      const proceed = t('Turn on');
-      const choice = await vscode.window.showWarningMessage(
-        t('Let cswap switch accounts automatically?'),
-        {
-          modal: true,
-          detail: [
-            t('While VS Code is open, cswap checks usage every {0} seconds and switches the active Claude Code account when it reaches the limit. Running Claude Code sessions will use the new account.', Math.round(this.service.intervalMs() / 1000)),
-            t('Rules: {0}.', rulesSummary(rules)),
-            t('You get a notification for every switch and can turn this off at any time.'),
-          ].join('\n\n'),
-        },
-        proceed,
-      );
-      if (choice !== proceed) {
-        return;
-      }
+  /** Returns false when the user declined turning automatic switching on. */
+  async chooseMode(mode: AutoSwitchMode): Promise<boolean> {
+    if (mode === 'switch' && this.deps.configuration.autoSwitchMode() !== 'switch' && !(await this.confirmAutomaticSwitching())) {
+      return false;
     }
     await this.deps.configuration.setAutoSwitchMode(mode);
+    return true;
+  }
+
+  /**
+   * One step to the "don't waste quota" setup: cswap's own `consume-first` strategy plus automatic
+   * switching. The strategy is saved before the mode, so no tick runs with the old strategy.
+   */
+  async useConsumeFirst(): Promise<void> {
+    const enabling = this.deps.configuration.autoSwitchMode() !== 'switch';
+    if (enabling && !(await this.confirmAutomaticSwitching(CONSUME_FIRST))) {
+      return;
+    }
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    if (rules?.strategy !== CONSUME_FIRST && !(await this.applyRule('autoswitch.strategy', CONSUME_FIRST))) {
+      if (enabling) {
+        void vscode.window.showWarningMessage(t('Automatic switching was not turned on.'));
+      }
+      return;
+    }
+    if (enabling) {
+      await this.deps.configuration.setAutoSwitchMode('switch');
+    }
+  }
+
+  /**
+   * Picks one of cswap's auto-switch strategies (or cswap's default) and saves it in cswap's config.
+   * Returns false when the picker was dismissed.
+   */
+  async chooseStrategy(): Promise<boolean> {
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    const current = rules?.strategy;
+    const customized = (rules?.customized ?? []).includes('autoswitch.strategy');
+    type StrategyItem = vscode.QuickPickItem & { readonly value: string };
+    const items: StrategyItem[] = [
+      ...AUTO_SWITCH_STRATEGIES.map((value) => ({
+        label: `${value === CONSUME_FIRST ? '$(flame)' : '$(circle-large-outline)'} ${strategyLabel(value)}`,
+        description: value === current ? t('current') : value,
+        detail: autoSwitchStrategyDetail(value, t),
+        value,
+      })),
+      ...(customized ? [{ label: `$(discard) ${t('Reset to default')}`, value: '' }] : []),
+    ];
+    const picked = await pickOne(items, {
+      title: t('Auto-switch strategy'),
+      placeholder: t('These are cswap settings; they also apply to `cswap auto` in a terminal.'),
+      isActive: (item) => item.value === current,
+    });
+    if (picked === undefined) {
+      return false;
+    }
+    if (picked.value !== current) {
+      await this.applyRule('autoswitch.strategy', picked.value);
+    }
+    return true;
+  }
+
+  private async confirmAutomaticSwitching(strategy?: AutoSwitchStrategy): Promise<boolean> {
+    const loaded = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    const rules = loaded !== undefined && strategy !== undefined ? { ...loaded, strategy } : loaded;
+    const proceed = t('Turn on');
+    const choice = await vscode.window.showWarningMessage(
+      t('Let cswap switch accounts automatically?'),
+      {
+        modal: true,
+        detail: [
+          (strategy ?? rules?.strategy) === CONSUME_FIRST
+            ? t('While VS Code is open, cswap checks usage every {0} seconds and moves early to an account with quota left whose week resets sooner, so that quota is not wasted.', Math.round(this.service.intervalMs() / 1000))
+            : t('While VS Code is open, cswap checks usage every {0} seconds and switches the active Claude Code account when it reaches the limit.', Math.round(this.service.intervalMs() / 1000)),
+          t('Running Claude Code sessions keep running and pick up the new account by themselves; no restart needed.'),
+          t('Rules: {0}.', rulesSummary(rules)),
+          t('You get a notification for every switch and can turn this off at any time.'),
+        ].join('\n\n'),
+      },
+      proceed,
+    );
+    return choice === proceed;
   }
 
   async preview(): Promise<AutoTickResult | undefined> {
@@ -285,28 +344,22 @@ export class AutoSwitchController implements vscode.Disposable {
       return;
     }
     const key = picked.entry.key;
-    const reset = t('Reset to default');
-    let newValue: string | undefined;
     if (key === 'autoswitch.strategy') {
-      const strategy = await vscode.window.showQuickPick(
-        [...AUTO_SWITCH_STRATEGIES.map((value) => ({ label: strategyLabel(value), description: value, value })), { label: reset, description: '', value: '' }],
-        { title: picked.entry.label },
-      );
-      newValue = strategy?.value;
-    } else {
-      newValue = await vscode.window.showInputBox({
-        title: picked.entry.label,
-        prompt: `${picked.entry.help} ${t('Leave empty to reset to the default.')}`,
-        value: '',
-        validateInput: (input) => {
-          if (input.trim() === '') {
-            return undefined;
-          }
-          const result = validateRuleInput(key, input);
-          return result.ok ? undefined : t('Enter a value in {0}.', result.range);
-        },
-      });
+      await this.chooseStrategy();
+      return;
     }
+    const newValue = await vscode.window.showInputBox({
+      title: picked.entry.label,
+      prompt: `${picked.entry.help} ${t('Leave empty to reset to the default.')}`,
+      value: '',
+      validateInput: (input) => {
+        if (input.trim() === '') {
+          return undefined;
+        }
+        const result = validateRuleInput(key, input);
+        return result.ok ? undefined : t('Enter a value in {0}.', result.range);
+      },
+    });
     if (newValue === undefined) {
       return;
     }
@@ -315,7 +368,8 @@ export class AutoSwitchController implements vscode.Disposable {
 
   // ---- Internals ------------------------------------------------------------------------------
 
-  private async applyRule(key: AutoSwitchRuleKey, value: string): Promise<void> {
+  /** Saves one rule in cswap's config and verifies it by reading the config back. */
+  private async applyRule(key: AutoSwitchRuleKey, value: string): Promise<boolean> {
     const outcome = await this.deps.gate.run(async () => {
       if (value === '') {
         return this.deps.cli.resetAutoSwitchRule(key);
@@ -332,24 +386,25 @@ export class AutoSwitchController implements vscode.Disposable {
     });
     if (outcome === undefined) {
       void vscode.window.showInformationMessage(t('Another cswap operation is in progress. Try again when it finishes.'));
-      return;
+      return false;
     }
     if (!outcome.ok) {
       const detail = outcome.error.detail ? ` ${outcome.error.detail}` : '';
       void vscode.window.showErrorMessage(neutralizeLinks(`${describeCliError(outcome.error)}${detail}`));
-      return;
+      return false;
     }
     const rules = await this.service.reloadRules();
     if (rules === undefined) {
       void vscode.window.showWarningMessage(t('The rule was saved, but cswap settings could not be read back.'));
-      return;
+      return false;
     }
     this.render();
     if (!ruleMatches(rules, key, value)) {
       void vscode.window.showWarningMessage(t('cswap accepted the change, but reading the settings back shows a different value.'));
-      return;
+      return false;
     }
     void vscode.window.showInformationMessage(neutralizeLinks(t('Cswap auto-switch rules: {0}.', rulesSummary(rules))));
+    return true;
   }
 
   private switchDeps() {

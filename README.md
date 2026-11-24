@@ -35,9 +35,11 @@ Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near t
 4. **At limit** — soonest reset first.
 5. **Disabled or usage unknown.**
 
-Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email, alias or plan.
+Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email, alias or plan. The buttons in the picker's title bar open **Auto-Switch** and **Quick Settings**.
 
-You confirm every switch. The extension only reports success after re-reading cswap's state and confirming the new active account. Switching changes the login used by running Claude Code sessions.
+Switches are confirmed by default; choose **Switch, don't ask again** in the dialog to stop asking (turn it back on under **Quick Settings › Ask before switching**). The extension only reports success after re-reading cswap's state and confirming the new active account.
+
+Switching does not interrupt running Claude Code sessions: cswap replaces the stored login and Claude Code picks it up by itself on its next request, with no restart (per cswap; on macOS with the Keychain this can take up to ~30 seconds).
 
 ### Dashboard
 **Cswap: Open Dashboard** opens a tab inside VS Code with a summary, a searchable and sortable account table, and full details for the selected account (all usage windows, pace and forecast when cswap provides them, last known usage, plan, settings and freshness).
@@ -54,15 +56,26 @@ Disabling and moving ask for confirmation first. Every change is checked against
 Not available in the extension (use the CLI): adding, removing, importing and exporting accounts, priorities, directory mappings, `cswap run`, and `purge`.
 
 ### Automatic switching
-**Cswap: Auto-Switch…** (also in the sidebar `…` menu and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
+**Cswap: Auto-Switch…** (also in the sidebar `…` menu, the switch picker and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
+- **Switch automatically, use quota before it resets** — one step to turn on automatic switching with cswap's `consume-first` strategy, so quota that is about to reset gets used instead of wasted.
 - **Notify only** — checks regularly with a dry run and tells you when cswap *would* switch, with a **Switch now** button. Nothing is switched.
-- **Switch automatically** — cswap switches the active Claude Code account when it reaches the limit. You confirm once when turning it on, and get a notification for every switch.
+- **Switch automatically** — cswap switches the active Claude Code account by itself, following the chosen strategy. You confirm once when turning it on, and get a notification for every switch.
+- **Strategy…** picks one of cswap's strategies (the extension does not choose accounts itself):
+
+  | Strategy | What cswap does |
+  |---|---|
+  | Most quota left (`best`, cswap default) | Switches at the threshold, to the account with the most quota left. |
+  | Soonest weekly reset, at the limit (`weekly-first`) | Switches at the threshold, to the account whose weekly quota resets soonest. |
+  | Use quota that resets soonest first (`consume-first`) | Moves early to an account with quota left whose week resets sooner, so that quota is not wasted. |
+  | By account priority (`priority-consume-first`) | Highest account priority first (set with `cswap priority`), then soonest weekly reset. |
 - **Preview now** shows what cswap would do at this moment (dry run).
-- **Rules…** edits cswap's own settings: switch threshold (default 90%), weekly threshold, cooldown (300 s), check interval (60 s) and strategy (most quota left, soonest weekly reset, …). They also apply to `cswap auto` in a terminal.
+- **Rules…** edits cswap's other settings: switch threshold (default 90%), weekly threshold, cooldown (300 s) and check interval (60 s). They also apply to `cswap auto` in a terminal.
 
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
+**Cswap: Quick Settings…** (the gear in the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, auto-switch and its strategy, status bar, account order and refresh interval. **All settings…** at the bottom opens VS Code's Settings page for the rest.
+
 | Setting | Default | Description |
 |---|---|---|
 | `cswapManager.cliPath` | empty (auto-detect) | Full path to `cswap.exe`. User settings only — a workspace cannot change it. `.cmd`/`.bat` shims are not supported. |
