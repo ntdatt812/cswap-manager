@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   AUTO_SWITCH_STRATEGIES,
+  THRESHOLD_RANGE,
   ruleMatches,
   ruleUpdate,
   validateRuleInput,
@@ -211,7 +212,17 @@ export class AutoSwitchController implements vscode.Disposable {
       action: async () => ((await this.chooseMode(mode)) ? 'done' : 'closed'),
     });
     const consuming = state.mode === 'switch' && state.rules?.strategy === CONSUME_FIRST;
+    const atLimit = this.isSwitchingAtLimit();
     const items: Array<Item | vscode.QuickPickItem> = [
+      {
+        label: atLimit ? `$(debug-pause) ${t('Turn off switching when used up')}` : `$(zap) ${t('Switch when an account is used up')}`,
+        description: atLimit ? t('on') : `${THRESHOLD_RANGE.max}%`,
+        detail: t('Moves to another account as soon as the active one reaches {0}%, so a session is not stopped by the limit.', THRESHOLD_RANGE.max),
+        action: async () => {
+          await this.toggleSwitchAtLimit();
+          return 'done';
+        },
+      },
       {
         label: `$(flame) ${t('Switch automatically, use quota before it resets')}`,
         description: consuming ? t('current') : t('recommended'),
@@ -290,6 +301,49 @@ export class AutoSwitchController implements vscode.Disposable {
         void vscode.window.showWarningMessage(t('Automatic switching was not turned on.'));
       }
       return;
+    }
+    if (enabling) {
+      await this.deps.configuration.setAutoSwitchMode('switch');
+    }
+  }
+
+  /** Automatic switching at cswap's highest threshold, with the weekly line following it. */
+  isSwitchingAtLimit(): boolean {
+    const rules = this.service.getState().rules;
+    return (
+      this.deps.configuration.autoSwitchMode() === 'switch' &&
+      rules?.threshold === THRESHOLD_RANGE.max &&
+      (rules.weeklyThreshold === undefined || rules.weeklyThreshold === THRESHOLD_RANGE.max)
+    );
+  }
+
+  /**
+   * **Switch when an account is used up** (on/off in one step). On: cswap's switch threshold goes to
+   * its highest value (99.9%), the weekly threshold follows it, and automatic switching starts (the
+   * strategy stays as chosen). Off: automatic switching stops; the threshold stays for next time.
+   * The rules are saved before the mode, so no tick runs with the old ones.
+   */
+  async toggleSwitchAtLimit(): Promise<void> {
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    if (this.isSwitchingAtLimit()) {
+      await this.deps.configuration.setAutoSwitchMode('off');
+      void vscode.window.showInformationMessage(t('Automatic switching is off.'));
+      return;
+    }
+    const enabling = this.deps.configuration.autoSwitchMode() !== 'switch';
+    if (enabling && !(await this.confirmAutomaticSwitching())) {
+      return;
+    }
+    const fail = () => {
+      if (enabling) {
+        void vscode.window.showWarningMessage(t('Automatic switching was not turned on.'));
+      }
+    };
+    if (rules?.threshold !== THRESHOLD_RANGE.max && !(await this.applyRule('autoswitch.threshold', String(THRESHOLD_RANGE.max)))) {
+      return fail();
+    }
+    if (rules?.weeklyThreshold !== undefined && rules.weeklyThreshold !== THRESHOLD_RANGE.max && !(await this.applyRule('autoswitch.weeklyThreshold', ''))) {
+      return fail();
     }
     if (enabling) {
       await this.deps.configuration.setAutoSwitchMode('switch');

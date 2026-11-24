@@ -275,6 +275,11 @@
         "icon": "$(sync)"
       },
       {
+        "command": "cswapManager.toggleSwitchAtLimit",
+        "title": "%command.toggleSwitchAtLimit.title%",
+        "category": "Cswap"
+      },
+      {
         "command": "cswapManager.autoSwitchPreview",
         "title": "%command.autoSwitchPreview.title%",
         "category": "Cswap"
@@ -345,6 +350,18 @@
         }
       }
     },
+    "keybindings": [
+      {
+        "command": "cswapManager.quickSwitch",
+        "key": "ctrl+alt+s",
+        "mac": "ctrl+alt+s"
+      },
+      {
+        "command": "cswapManager.switchNextAvailable",
+        "key": "ctrl+alt+shift+s",
+        "mac": "ctrl+alt+shift+s"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -370,7 +387,7 @@
         {
           "command": "cswapManager.filterAccounts",
           "when": "view == cswapManager.accounts && !cswapManager.filterActive",
-          "group": "navigation@4"
+          "group": "w_view@1"
         },
         {
           "command": "cswapManager.clearFilter",
@@ -380,7 +397,7 @@
         {
           "command": "cswapManager.sortAccounts",
           "when": "view == cswapManager.accounts",
-          "group": "navigation@5"
+          "group": "w_view@2"
         },
         {
           "command": "cswapManager.quickSettings",
@@ -740,6 +757,13 @@
           "scope": "application",
           "order": 8.6,
           "markdownDescription": "%config.checkCswapUpdates.description%"
+        },
+        "cswapManager.notifyOnWeeklyReset": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "order": 8.7,
+          "markdownDescription": "%config.notifyOnWeeklyReset.description%"
         },
         "cswapManager.displayNames": {
           "type": "object",

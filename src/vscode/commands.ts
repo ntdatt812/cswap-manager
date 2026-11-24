@@ -157,6 +157,7 @@ const ACTION_COMMANDS: ReadonlyArray<[string, AccountActionId]> = [
 export function registerCommands(deps: CommandDependencies): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('cswapManager.autoSwitch', () => deps.autoSwitch.openMenu()),
+    vscode.commands.registerCommand('cswapManager.toggleSwitchAtLimit', () => deps.autoSwitch.toggleSwitchAtLimit()),
     vscode.commands.registerCommand('cswapManager.autoSwitchPreview', () => deps.autoSwitch.preview()),
     vscode.commands.registerCommand('cswapManager.manageAccount', (node?: NodeModel) => runAccountAction(deps, undefined, node?.slot)),
     ...ACTION_COMMANDS.map(([command, action]) =>

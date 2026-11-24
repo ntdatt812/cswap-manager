@@ -34,6 +34,8 @@ export const SETTING_KEYS = [
   'timeout',
   'transfer',
   'allSettings',
+  'notifyReset',
+  'advanced',
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 
@@ -41,9 +43,14 @@ export function isSettingKey(value: unknown): value is SettingKey {
   return typeof value === 'string' && (SETTING_KEYS as readonly string[]).includes(value);
 }
 
+/** The main list fits without scrolling; rarely changed settings sit on the "Advanced…" page. */
+export type QuickSettingsPage = 'main' | 'advanced';
+
 export interface QuickSettingsValues {
   readonly language: LanguageSetting;
   readonly confirmSwitch: boolean;
+  /** Tell when an account's weekly limit resets (`cswapManager.notifyOnWeeklyReset`). */
+  readonly notifyReset: boolean;
   readonly autoSwitchMode: AutoSwitchMode;
   /** cswap's `autoswitch.strategy`; undefined while the rules are not loaded. */
   readonly autoSwitchStrategy: string | undefined;
@@ -324,17 +331,22 @@ export function modelLabel(model: string | null | undefined, t: Translate): stri
   return model.toLowerCase() === 'all' ? t('All per-model limits') : model;
 }
 
-export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
+/** Which page a row is on, so a link straight to a setting opens the right page. */
+export function quickSettingsPageOf(key: SettingKey): QuickSettingsPage {
+  return (ADVANCED_KEYS as readonly SettingKey[]).includes(key) ? 'advanced' : 'main';
+}
+
+const ADVANCED_KEYS = ['shareHistory', 'notifyReset', 'tokenUsage', 'cliPath', 'cswapVersion', 'timeout', 'transfer', 'allSettings'] as const;
+
+export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate, page: QuickSettingsPage = 'main'): QuickSettingsRow[] {
+  return page === 'main' ? mainRows(values, t) : advancedRows(values, t);
+}
+
+function mainRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
     { key: 'language', iconId: 'globe', label: t('Language'), value: languageLabel(values.language, t) },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
     { key: 'projectAccount', iconId: 'folder', label: t('Account for this project'), value: values.projectAccount ?? t('no folder open') },
-    {
-      key: 'shareHistory',
-      iconId: 'comment-discussion',
-      label: t('Chat history across accounts'),
-      value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
-    },
     { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
     { separator: true, label: t('Auto-switch') },
     { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: autoSwitchModeLabel(values.autoSwitchMode, t) },
@@ -351,8 +363,22 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
     { key: 'barStyle', iconId: 'symbol-numeric', label: t('Progress bar style'), value: `${barStyleLabel(values.barStyle, t)} ${barStyleSample(values.barStyle)}` },
     { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
     { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
-    { separator: true, label: t('Advanced') },
+    { separator: true, label: t('More') },
+    { key: 'advanced', iconId: 'ellipsis', label: t('Advanced…'), value: t('chat history, reset alerts, token usage, cswap, another computer') },
+  ];
+}
+
+function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
+  return [
+    {
+      key: 'shareHistory',
+      iconId: 'comment-discussion',
+      label: t('Chat history across accounts'),
+      value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
+    },
+    { key: 'notifyReset', iconId: 'bell', label: t('Tell me when a weekly limit resets'), value: values.notifyReset ? t('On') : t('Off') },
     { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t) },
+    { separator: true, label: t('cswap') },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
     {
       key: 'cswapVersion',
@@ -366,6 +392,7 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
             : values.cswapVersion,
     },
     { key: 'timeout', iconId: 'watch', label: t('Command time limit'), value: t('{0} s', values.timeoutSeconds) },
+    { separator: true, label: t('Other') },
     { key: 'transfer', iconId: 'arrow-swap', label: t('Another computer'), value: t('export, import, usage readings') },
     { key: 'allSettings', iconId: 'settings-gear', label: t('All settings…'), value: t('VS Code settings page') },
   ];

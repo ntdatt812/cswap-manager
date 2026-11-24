@@ -21,8 +21,10 @@ import {
   statusBarColorsLabel,
   statusBarLookLabel,
   statusBarPartLabel,
+  quickSettingsPageOf,
   timeoutChoices,
   tokenUsageLevel,
+  type QuickSettingsPage,
   type QuickSettingsValues,
   type SettingKey,
   type StatusBarLook,
@@ -102,6 +104,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
   return {
     language: configuration.languageSetting(),
     confirmSwitch: configuration.confirmSwitch(),
+    notifyReset: configuration.notifyOnWeeklyReset(),
     autoSwitchMode: configuration.autoSwitchMode(),
     autoSwitchStrategy: rules?.strategy,
     autoSwitchModel: rules === undefined ? undefined : (rules.model ?? null),
@@ -122,34 +125,47 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
   };
 }
 
-function rowItems(deps: QuickSettingsDependencies): RowItem[] {
-  return buildQuickSettingsRows(currentValues(deps), t).map((row) =>
+function rowItems(deps: QuickSettingsDependencies, page: QuickSettingsPage): RowItem[] {
+  return buildQuickSettingsRows(currentValues(deps), t, page).map((row) =>
     row.separator === true
       ? { label: row.label, kind: vscode.QuickPickItemKind.Separator }
       : { key: row.key, label: `$(${row.iconId}) ${row.label}`, description: row.value },
   );
 }
 
+/** On/off rows that switch in place, without a screen of their own. */
+const TOGGLES: Partial<Record<SettingKey, (deps: QuickSettingsDependencies) => Promise<void>>> = {
+  confirmSwitch: (deps) => deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch()),
+  notifyReset: (deps) => deps.configuration.setNotifyOnWeeklyReset(!deps.configuration.notifyOnWeeklyReset()),
+};
+
 /**
- * The settings list. Toggling "Ask before switching" happens in place; every other row closes the
- * list and resolves to its key so its own screen can open.
+ * One page of the settings list. On/off rows switch in place; every other row closes the list and
+ * resolves to its key so its own screen can open. The "Advanced…" page has a ← Back button.
  */
-function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined): Promise<SettingKey | undefined> {
+function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined, page: QuickSettingsPage): Promise<SettingKey | typeof BACK | undefined> {
   return new Promise((resolve) => {
     const picker = vscode.window.createQuickPick<RowItem>();
+    if (page === 'advanced') {
+      picker.buttons = [vscode.QuickInputButtons.Back];
+      picker.onDidTriggerButton(() => {
+        result = BACK;
+        picker.hide();
+      });
+    }
     // Re-rendered after each change; titles follow the language setting.
     const render = (key: SettingKey | undefined) => {
-      picker.title = t('Cswap Settings');
+      picker.title = page === 'advanced' ? t('Cswap Settings › Advanced') : t('Cswap Settings');
       picker.placeholder = t('Pick a setting to change it. Esc closes.');
-      picker.items = rowItems(deps);
+      picker.items = rowItems(deps, page);
       const active = picker.items.find((item) => item.key !== undefined && item.key === key);
       if (active !== undefined) {
         picker.activeItems = [active];
       }
     };
-    render(focus);
-    let result: SettingKey | undefined;
+    let result: SettingKey | typeof BACK | undefined;
     let open = true;
+    render(focus);
     // Data read on demand: auto-switch rules (loaded once auto-switch runs) and the project mapping.
     const loads: Array<Promise<unknown>> = [];
     if (deps.autoSwitch.service.getState().rules === undefined) {
@@ -165,24 +181,25 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined)
         }
       });
     }
-    const toggleConfirm = async () => {
+    const toggle = async (key: SettingKey, flip: (deps: QuickSettingsDependencies) => Promise<void>) => {
       picker.busy = true;
       try {
-        await deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch());
+        await flip(deps);
       } catch (error) {
         showSaveFailed(error);
       } finally {
         picker.busy = false;
       }
-      render('confirmSwitch');
+      render(key);
     };
     picker.onDidAccept(() => {
       const key = picker.activeItems[0]?.key;
       if (key === undefined || picker.busy) {
         return;
       }
-      if (key === 'confirmSwitch') {
-        void toggleConfirm();
+      const flip = TOGGLES[key];
+      if (flip !== undefined) {
+        void toggle(key, flip);
         return;
       }
       result = key;
@@ -603,6 +620,12 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
     case 'confirmSwitch':
       await configuration.setConfirmSwitch(!configuration.confirmSwitch());
       return 'list';
+    case 'notifyReset':
+      await configuration.setNotifyOnWeeklyReset(!configuration.notifyOnWeeklyReset());
+      return 'list';
+    case 'advanced':
+      // Opened by the list itself (a page, not a screen).
+      return 'list';
     case 'refresh': {
       const current = configuration.refreshIntervalSeconds();
       return editValue(
@@ -701,10 +724,21 @@ export async function openQuickSettings(deps: QuickSettingsDependencies, focus?:
     void offerReload();
   }
   let active = focus;
+  let page: QuickSettingsPage = focus === undefined ? 'main' : quickSettingsPageOf(focus);
   for (;;) {
-    const key = await pickRow(deps, active);
+    const key = await pickRow(deps, active, page);
     if (key === undefined) {
       return;
+    }
+    if (key === BACK) {
+      page = 'main';
+      active = 'advanced';
+      continue;
+    }
+    if (key === 'advanced') {
+      page = 'advanced';
+      active = undefined;
+      continue;
     }
     active = key;
     try {

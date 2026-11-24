@@ -160,8 +160,8 @@ export function buildQuickSwitchItems(snapshot: AccountsSnapshot, options: Prese
       action: { kind: 'strategy', strategy: 'next-available' },
     },
     ...section(t('Current account'), groups.current),
-    ...section(t('Available — most headroom first'), groups.available),
-    ...section(t('At limit — soonest reset first'), groups.atLimit),
-    ...section(t('Disabled or usage unknown'), groups.other),
+    ...section(t('Available'), groups.available),
+    ...section(t('At limit'), groups.atLimit),
+    ...section(t('Disabled or unknown'), groups.other),
   ];
 }

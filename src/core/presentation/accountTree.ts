@@ -283,6 +283,18 @@ export function loginDue(account: Account, now: number): LoginDue | undefined {
  * no longer due. cswap reads the active account's login from Claude Code itself, so this is what a
  * `/login` to an account cswap already has looks like. The account is followed by email.
  */
+/**
+ * The organization worth showing: none for the default organization of a personal account, which
+ * Anthropic names "<email>'s Organization" and so only repeats the email.
+ */
+export function shownOrganization(account: Account): string | undefined {
+  const name = account.organizationName;
+  if (name === undefined || account.email === undefined) {
+    return name;
+  }
+  return name.toLowerCase() === `${account.email.toLowerCase()}'s organization` ? undefined : name;
+}
+
 export function renewedLoginSlot(previous: AccountsSnapshot | undefined, current: AccountsSnapshot, now: number): number | undefined {
   const active = current.accounts.find((account) => account.slot === current.active.slot);
   if (previous === undefined || active?.email === undefined || current.active.activeUnmanaged === true) {
@@ -343,8 +355,9 @@ function accountChildren(account: Account, snapshot: AccountsSnapshot, options: 
   if (age !== undefined) {
     children.push(detailNode(`${base}:fetched`, t('Usage updated'), relativeAge(age, t), { id: 'history' }, slot));
   }
-  if (account.isOrganization === true && account.organizationName !== undefined) {
-    children.push(detailNode(`${base}:org`, t('Organization'), account.organizationName, { id: 'organization' }, slot));
+  const organization = account.isOrganization === true ? shownOrganization(account) : undefined;
+  if (organization !== undefined) {
+    children.push(detailNode(`${base}:org`, t('Organization'), organization, { id: 'organization' }, slot));
   }
   return children;
 }
@@ -408,8 +421,9 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
   if (account.email !== undefined) {
     rows.push({ label: t('Email'), value: account.email });
   }
-  if (account.isOrganization === true && account.organizationName !== undefined) {
-    rows.push({ label: t('Organization'), value: account.organizationName });
+  const organization = account.isOrganization === true ? shownOrganization(account) : undefined;
+  if (organization !== undefined) {
+    rows.push({ label: t('Organization'), value: organization });
   }
   const plan = planText(account, t);
   if (plan !== undefined) {

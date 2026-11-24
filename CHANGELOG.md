@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+- **Switch when an account is used up** (on/off in one step: first item of *Auto-Switch…*, or **Cswap: Switch When an Account Is Used Up (On/Off)**): automatic switching at cswap's highest threshold, 99.9%, with the weekly threshold following it, so a session moves to another account instead of stopping at the limit. The strategy you chose stays. Checks run every 60 s by default (*Rules… › Check interval*, from 15 s), so one request can still meet the limit just before the switch; Claude Code uses the new account from its next request, without a restart.
+- **Tidier screens** after a pass through the whole UI:
+  - Dashboard: when every account has the same plan it is said once next to *Accounts* and the plan column goes away, so emails are no longer cut off. The reset date sits on each bar's title line (`7d · resets in 6d 18h (15:00 1 Dec)`) instead of a row of its own. The active account's details no longer repeat the bars of the *Active account* card.
+  - The default organization of a personal account ("…'s Organization", which only repeats the email) is no longer shown.
+  - Accounts view: *Filter* and *Sort* moved to the `…` menu (Clear filter still appears while a filter is on), so the view's title has room.
+  - Quick Settings fits without scrolling: rarely changed settings (chat history across accounts, weekly-reset alerts, usage of token accounts, cswap path and version, command time limit, another computer, all settings) are on an **Advanced…** page with ← Back.
+  - Switch picker: shorter group names (*Available*, *At limit*, *Disabled or unknown*), so the first account of a group is not cut off.
+  - Vietnamese: "cooldown" is now "thời gian nghỉ", seconds are written out.
+- **Keyboard shortcuts**: `Ctrl+Alt+S` opens the switch picker, `Ctrl+Alt+Shift+S` switches to the next available account (same keys on macOS; change them in Keyboard Shortcuts).
+- **Weekly reset alerts** (`cswapManager.notifyOnWeeklyReset`, off by default; *Quick Settings › Advanced…*): a notification when an account's weekly limit resets, with a **Switch** button. Only the window in front shows it.
 - **Adding accounts is easy to find**: a **＋** button opens the Accounts view's toolbar, and the switch picker ends with **＋ Add Account…**. It asks how: log in to a new account with `/login` (the usual way), paste a setup-token or API key, or refresh the stored login of the active account. After `/login` with an account cswap does not manage yet, the extension notices by itself and offers **Add to cswap…**.
 - **Setup-token and API-key accounts** (`cswap add-token`): paste the token into a password box; it goes to cswap on its standard input only (never an argument, never logged or stored by the extension). Confirmed first; only free slots are offered.
 - **Logging in again** to an account cswap already has (expired, about to expire or refused) is detected: the extension runs `cswap add --slot N` once to store the new login (cswap cancels if Claude Code is no longer on that account) and says so. Only the window in front acts.

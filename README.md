@@ -22,7 +22,7 @@ Click the Cswap Manager icon in the Activity Bar.
 - Accounts are listed by slot; the active account is marked and expanded.
 - Each account row reads `slot · 7d 40% · ↻ 2d 4h · name`: usage per window and the time until reset, padded so the numbers line up in columns, then the name and (dimmed) the plan. The active account has a green check. Expand an account for per-window bars, per-model scopes, plan and how old the data is.
 - **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
-- Toolbar: refresh, switch, open dashboard, filter, sort, settings. Diagnostics is in the `…` menu.
+- Toolbar: add account, refresh, switch, open dashboard, settings. Filter, sort and diagnostics are in the `…` menu (a clear-filter button appears while a filter is on).
 - Right-click an account to switch to it, show details, or manage it.
 - **Display names**: *Set Display Name…* gives an account any name (capitals, spaces, accents), shown everywhere instead of the email. It stays in VS Code and is never sent to cswap.
 
@@ -38,6 +38,8 @@ Shows the active account, for example `#5 · 7d 40%`. It turns yellow/red near t
 5. **Disabled or usage unknown.**
 
 Each account shows a usage bar per window and the time to the next reset; plan, per-model usage and data age are on the second line. Type to filter by slot, email or plan. The buttons in the picker's title bar open **Auto-Switch** and **Quick Settings**.
+
+Shortcuts: `Ctrl+Alt+S` opens the picker and `Ctrl+Alt+Shift+S` switches to the next available account (change them in **Keyboard Shortcuts**).
 
 Switches are confirmed by default; choose **Switch, don't ask again** in the dialog to stop asking (turn it back on under **Quick Settings › Ask before switching**). The extension only reports success after re-reading cswap's state and confirming the new active account.
 
@@ -94,6 +96,7 @@ Not available in the extension (use the CLI): `purge`, `unclaimed`, `tui`/`watch
 
 ### Automatic switching
 **Cswap: Auto-Switch…** (also in the sidebar `…` menu, the switch picker and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
+- **Switch when an account is used up** — one step on and off (also **Cswap: Switch When an Account Is Used Up (On/Off)**): automatic switching at cswap's highest threshold, 99.9%, with the weekly threshold following it, so a session moves to another account instead of stopping at the limit. Checks run every 60 s by default (*Rules… › Check interval*, from 15 s), so one request can still meet the limit just before the switch; Claude Code uses the new account from its next request.
 - **Switch automatically, use quota before it resets** — one step to turn on automatic switching with cswap's `consume-first` strategy, so quota that is about to reset gets used instead of wasted.
 - **Notify only** — checks regularly with a dry run and tells you when cswap *would* switch, with a **Switch now** button. Nothing is switched.
 - **Switch automatically** — cswap switches the active Claude Code account by itself, following the chosen strategy. You confirm once when turning it on, and get a notification for every switch.
@@ -112,7 +115,7 @@ Not available in the extension (use the CLI): `purge`, `unclaimed`, `tui`/`watch
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
-**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, the account for this project, refresh interval, auto-switch with its strategy, per-model limits and rules, status bar, progress bar style, usage colours, account order, cswap path and version, command time limit, and moving accounts to another computer. Each screen has a **← Back** button. **All settings…** opens VS Code's Settings page.
+**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, the account for this project, refresh interval, auto-switch with its strategy, per-model limits and rules, status bar, progress bar style, usage colours and account order. **Advanced…** holds the rest: chat history across accounts, weekly-reset alerts, usage of token accounts, cswap path and version, command time limit, moving accounts to another computer and **All settings…** (VS Code's Settings page). Each screen has a **← Back** button.
 
 | Setting | Default | Description |
 |---|---|---|

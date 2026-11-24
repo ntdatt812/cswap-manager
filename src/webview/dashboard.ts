@@ -162,6 +162,7 @@ const insights = el('section', { className: 'insights' });
 const overview = el('section', { className: 'overview' });
 const accountsHeading = el('h2', { attrs: { id: 'accounts-heading' } });
 const accountCount = el('span', { className: 'count' });
+const commonPlan = el('span', { className: 'muted' });
 const searchLabel = el('label', { className: 'visually-hidden', attrs: { for: 'search' } });
 const search = el('input', { className: 'search', attrs: { id: 'search', type: 'search', autocomplete: 'off', spellcheck: 'false' } });
 const matchCount = el('span', { className: 'match-count', attrs: { 'aria-live': 'polite' } });
@@ -186,7 +187,7 @@ app.replaceChildren(
   el('div', { className: 'layout' }, [
     el('div', { className: 'main-column' }, [
       el('section', { className: 'panel accounts-panel', attrs: { 'aria-labelledby': 'accounts-heading' } }, [
-        el('div', { className: 'panel-head' }, [el('div', { className: 'heading-row' }, [accountsHeading, accountCount]), el('div', { className: 'search-row' }, [searchLabel, search, matchCount])]),
+        el('div', { className: 'panel-head' }, [el('div', { className: 'heading-row' }, [accountsHeading, accountCount, commonPlan]), el('div', { className: 'search-row' }, [searchLabel, search, matchCount])]),
         el('div', { className: 'table-scroll' }, [table]),
       ]),
       el('section', { className: 'panel timeline-panel', attrs: { 'aria-labelledby': 'timeline-heading' } }, [timelineHeading, timeline]),
@@ -225,6 +226,7 @@ function renderHeader(current: DashboardModel): void {
   message.hidden = current.message === undefined;
   accountsHeading.textContent = s.accountsHeading;
   accountCount.textContent = current.rows.length > 0 ? String(current.rows.length) : '';
+  commonPlan.textContent = current.commonPlan === undefined ? '' : `· ${current.commonPlan}`;
   searchLabel.textContent = s.searchLabel;
   search.placeholder = s.searchPlaceholder;
   detailHeading.textContent = s.detailHeading;
@@ -394,10 +396,12 @@ function renderTable(): void {
   const rows = sortRows(filterRows(current.rows, ui.query), ui.sortKey, ui.sortDirection);
   matchCount.textContent = ui.query.trim() ? current.strings.matchCount.replace('{0}', String(rows.length)).replace('{1}', String(current.rows.length)) : '';
 
-  const head = el('thead', {}, [el('tr', {}, COLUMNS.map((column) => sortHeader(current, column.key, column.label(current), column.className)))]);
+  // With one plan for every account the plan column says nothing: it is left out, the heading says it.
+  const columns = current.commonPlan === undefined ? COLUMNS : COLUMNS.filter((column) => column.key !== 'plan');
+  const head = el('thead', {}, [el('tr', {}, columns.map((column) => sortHeader(current, column.key, column.label(current), column.className)))]);
   const body = el('tbody');
   if (rows.length === 0) {
-    body.append(el('tr', {}, [el('td', { className: 'empty', text: current.rows.length === 0 ? '' : current.strings.noMatches, attrs: { colspan: String(COLUMNS.length) } })]));
+    body.append(el('tr', {}, [el('td', { className: 'empty', text: current.rows.length === 0 ? '' : current.strings.noMatches, attrs: { colspan: String(columns.length) } })]));
   }
   for (const row of rows) {
     const selected = row.slot === ui.selectedSlot;
@@ -413,7 +417,7 @@ function renderTable(): void {
         el('div', { className: 'name-line' }, [nameButton, row.active && el('span', { className: 'chip active', text: current.strings.activeBadge }), row.flag !== undefined && el('span', { className: `flag tone-${row.flag.tone}`, text: row.flag.text })]),
         row.secondary !== undefined && el('div', { className: 'muted ellipsis', text: row.secondary, attrs: { title: row.secondary } }),
       ]),
-      el('td', { className: 'col-plan' }, [row.plan === undefined ? el('span', { className: 'muted', text: '—' }) : el('span', { className: 'chip', text: row.plan })]),
+      current.commonPlan === undefined && el('td', { className: 'col-plan' }, [row.plan === undefined ? el('span', { className: 'muted', text: '—' }) : el('span', { className: 'chip', text: row.plan })]),
       usageCell(row),
       el('td', { className: 'col-reset muted', text: row.resetText ?? '—' }),
     ]);
@@ -424,7 +428,7 @@ function renderTable(): void {
     });
     body.append(tr);
   }
-  const colgroup = el('colgroup', {}, COLUMNS.map((column) => el('col', { className: column.className })));
+  const colgroup = el('colgroup', {}, columns.map((column) => el('col', { className: column.className })));
   table.replaceChildren(colgroup, head, body);
 }
 

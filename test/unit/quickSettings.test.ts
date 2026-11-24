@@ -14,6 +14,7 @@ import {
   refreshChoices,
   refreshLabel,
   SETTING_KEYS,
+  quickSettingsPageOf,
   type QuickSettingsValues,
 } from '../../src/core/presentation/quickSettings';
 
@@ -22,6 +23,7 @@ const t = (message: string, ...args: Array<string | number | boolean>) => format
 const values: QuickSettingsValues = {
   language: 'vi',
   confirmSwitch: false,
+  notifyReset: false,
   autoSwitchMode: 'switch',
   autoSwitchStrategy: 'consume-first',
   autoSwitchModel: 'Fable',
@@ -39,13 +41,20 @@ const values: QuickSettingsValues = {
 };
 
 describe('quick settings rows', () => {
-  it('lists every setting once with its current value, grouped by separators', () => {
-    const rows = buildQuickSettingsRows(values, t);
+  it('lists every setting once over the two pages, with its current value, grouped by separators', () => {
+    const main = buildQuickSettingsRows(values, t, 'main');
+    const advanced = buildQuickSettingsRows(values, t, 'advanced');
+    const rows = [...main, ...advanced];
     const settings = rows.flatMap((row) => (row.separator === true ? [] : [row]));
     assert.deepEqual(
-      settings.map((row) => row.key),
-      [...SETTING_KEYS],
+      settings.map((row) => row.key).sort(),
+      [...SETTING_KEYS].sort(),
     );
+    // The main page fits without scrolling; each key opens on the page that lists it.
+    assert.ok(main.filter((row) => row.separator !== true).length <= 13);
+    for (const row of settings) {
+      assert.equal(quickSettingsPageOf(row.key), advanced.includes(row) ? 'advanced' : 'main', row.key);
+    }
     const value = (key: string) => settings.find((row) => row.key === key)?.value;
     assert.equal(value('language'), 'Tiếng Việt');
     assert.equal(value('confirmSwitch'), 'Off');

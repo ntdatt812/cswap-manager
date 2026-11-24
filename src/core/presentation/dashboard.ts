@@ -22,6 +22,7 @@ import {
   describeView,
   hasUnavailableUsage,
   relativeAge,
+  shownOrganization,
   type PresentationOptions,
   type Translate,
 } from './accountTree';
@@ -100,7 +101,7 @@ function resetCaption(resetsAt: string | undefined, options: PresentationOptions
   }
   return epoch <= options.now
     ? options.t('reset time passed — refresh to update')
-    : options.t('resets in {0}', compactDuration(epoch - options.now));
+    : options.t('resets in {0} ({1})', compactDuration(epoch - options.now), options.formatDateTime(epoch));
 }
 
 function moneyText(metrics: UsageMetrics): string | undefined {
@@ -130,10 +131,6 @@ function meter(id: string, label: string, metrics: UsageMetrics, options: Presen
   }
   if (metrics.willLastToReset !== undefined) {
     facts.push({ label: t('Lasts until reset'), value: metrics.willLastToReset ? t('yes') : t('no') });
-  }
-  const reset = epochOf(metrics.resetsAt);
-  if (reset !== undefined) {
-    facts.push({ label: t('Resets'), value: options.formatDateTime(reset) });
   }
   const caption = resetCaption(metrics.resetsAt, options);
   return {
@@ -182,7 +179,7 @@ function statusOf(account: Account, active: boolean, t: Translate): { text: stri
   return parts.length === 0 ? { text: t('OK'), tone: 'ok' } : { text: parts.join(' · '), tone: worstTone(tones, 'ok') };
 }
 
-function usageSection(account: Account, options: PresentationOptions): DetailSection[] {
+function usageSection(account: Account, active: boolean, options: PresentationOptions): DetailSection[] {
   const { t } = options;
   const sections: DetailSection[] = [];
   const notes: string[] = [];
@@ -204,13 +201,18 @@ function usageSection(account: Account, options: PresentationOptions): DetailSec
   if (account.usage === undefined && notes.length === 0) {
     notes.push(t('cswap did not report usage for this account.'));
   }
-  sections.push({
-    key: 'usage',
-    title: t('Usage'),
-    ...(notes.length > 0 ? { note: notes.join(' '), noteTone: account.usage === undefined ? 'warning' : 'neutral' } : {}),
-    meters: account.usage === undefined ? [] : usageMeters('', account.usage, options),
-    facts: [],
-  });
+  const meters = account.usage === undefined ? [] : usageMeters('', account.usage, options);
+  // The active account's bars are on the "Active account" card already; only bars with more to say stay.
+  const shown = active ? meters.filter((entry) => entry.facts.length > 0) : meters;
+  if (shown.length > 0 || notes.length > 0) {
+    sections.push({
+      key: 'usage',
+      title: t('Usage'),
+      ...(notes.length > 0 ? { note: notes.join(' '), noteTone: account.usage === undefined ? 'warning' : 'neutral' } : {}),
+      meters: shown,
+      facts: [],
+    });
+  }
 
   if (account.usage === undefined && account.lastGoodUsage !== undefined) {
     const fetched = epochOf(account.lastGoodFetchedAt);
@@ -262,8 +264,9 @@ function accountSection(account: Account, options: PresentationOptions): DetailS
   if (account.email !== undefined) {
     facts.push({ label: t('Email'), value: account.email });
   }
-  if (account.organizationName !== undefined) {
-    facts.push({ label: t('Organization'), value: account.organizationName });
+  const organization = shownOrganization(account);
+  if (organization !== undefined) {
+    facts.push({ label: t('Organization'), value: organization });
   }
   return { key: 'account', title: t('Manage account'), meters: [], facts, manage: manageRows(account, t), collapsible: true };
 }
@@ -306,7 +309,7 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
   if (account.usageStatus !== undefined && hasUnavailableUsage(account)) {
     badges.push({ text: usageStatusText(account.usageStatus, t), tone: usageStatusTone(account.usageStatus) });
   }
-  const subtitle = [t('Slot {0}', account.slot), hasCustomName(account) ? account.email : undefined, account.organizationName]
+  const subtitle = [t('Slot {0}', account.slot), hasCustomName(account) ? account.email : undefined, shownOrganization(account)]
     .filter((part): part is string => part !== undefined)
     .join(' · ');
   const plan = planSection(account, options);
@@ -316,7 +319,7 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
     subtitle,
     badges,
     sections: [
-      ...usageSection(account, options),
+      ...usageSection(account, active, options),
       ...(plan === undefined ? [] : [plan]),
       accountSection(account, options),
       freshnessSection(account, snapshot, options),
@@ -443,6 +446,8 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
     };
   }
   const view = describeView(state, { now: options.now, t, freshness: options.freshness, visibleCount: rows.length, describeError: options.describeError });
+  const plans = new Set(rows.map((row) => row.plan));
+  const commonPlan = plans.size === 1 ? rows[0]?.plan : undefined;
   const stale = options.freshness.freshness === 'stale';
   const active = activeOverview(snapshot, options);
   const capacity = buildCapacity(snapshot, options);
@@ -455,6 +460,7 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
     ...(capacity === undefined ? {} : { capacity }),
     timeline: buildTimeline(snapshot, options),
     rows,
+    ...(commonPlan === undefined ? {} : { commonPlan }),
     canSwitch: !options.switching,
   };
 }

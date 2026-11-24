@@ -29,6 +29,7 @@ const COMMANDS = [
   'cswapManager.clearThreshold',
   'cswapManager.moveAccount',
   'cswapManager.autoSwitch',
+  'cswapManager.toggleSwitchAtLimit',
   'cswapManager.autoSwitchPreview',
   'cswapManager.quickSettings',
 ];

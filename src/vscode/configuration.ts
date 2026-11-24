@@ -156,6 +156,15 @@ export class ExtensionConfiguration {
     await this.config.update('confirmSwitch', confirm, vscode.ConfigurationTarget.Global);
   }
 
+  /** A notification when an account's weekly limit resets (user scope only; off by default). */
+  notifyOnWeeklyReset(): boolean {
+    return this.config.inspect<boolean>('notifyOnWeeklyReset')?.globalValue === true;
+  }
+
+  async setNotifyOnWeeklyReset(notify: boolean): Promise<void> {
+    await this.config.update('notifyOnWeeklyReset', notify, vscode.ConfigurationTarget.Global);
+  }
+
   /** Daily check of PyPI for a newer cswap (user scope only). */
   checkCswapUpdates(): boolean {
     return this.config.inspect<boolean>('checkCswapUpdates')?.globalValue !== false;

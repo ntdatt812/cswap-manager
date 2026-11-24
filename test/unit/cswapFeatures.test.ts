@@ -25,7 +25,8 @@ import { PriorityStore } from '../../src/core/service/priorityStore';
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
 import { draggedSlot, dropMove, previewMove, resolveDropTarget } from '../../src/core/presentation/accountDrag';
-import { renewedLoginSlot, type NodeModel } from '../../src/core/presentation/accountTree';
+import { renewedLoginSlot, shownOrganization, type NodeModel } from '../../src/core/presentation/accountTree';
+import { weeklyResets } from '../../src/core/presentation/weeklyResets';
 import { SLANT_BAR_PATTERN, usageBar } from '../../src/core/presentation/format';
 import { tokenUsageLevel } from '../../src/core/presentation/quickSettings';
 import { manageCliStubs, ok } from '../helpers/fixtures';
@@ -618,5 +619,56 @@ describe('logging in again to an account cswap already has', () => {
     const healthy = snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(100 * DAY) }], 2);
     assert.equal(renewedLoginSlot(healthy, snapshot([{ number: 2, email: 'b@example.com', loginExpiresAt: at(365 * DAY) }], 2), NOW), undefined);
     assert.equal(renewedLoginSlot(undefined, healthy, NOW), undefined);
+  });
+});
+
+describe('weekly resets and default organizations', () => {
+  const DAY = 86_400_000;
+  const base = Date.parse('2026-11-24T12:00:00Z');
+  type Row = { number: number; email: string; pct?: number; resetsAt?: number; organizationName?: string };
+  function snapshot(rows: Row[]): AccountsSnapshot {
+    const list = parseListOutput(
+      JSON.stringify({
+        schemaVersion: 1,
+        activeAccountNumber: 1,
+        accounts: rows.map((row) => ({
+          number: row.number,
+          email: row.email,
+          active: row.number === 1,
+          usageStatus: 'ok',
+          ...(row.organizationName === undefined ? {} : { organizationName: row.organizationName }),
+          usage: row.resetsAt === undefined ? null : { sevenDay: { pct: row.pct ?? 0, resetsAt: new Date(row.resetsAt).toISOString() } },
+        })),
+      }),
+    );
+    assert.ok(list.ok);
+    return buildSnapshot(list.value, undefined, 1);
+  }
+
+  it('finds accounts whose weekly window started a new period after being used', () => {
+    const before = snapshot([
+      { number: 1, email: 'a@example.com', pct: 60, resetsAt: base + DAY },
+      { number: 2, email: 'b@example.com', pct: 0, resetsAt: base + DAY },
+      { number: 3, email: 'c@example.com', pct: 30, resetsAt: base + 3 * DAY },
+    ]);
+    const after = snapshot([
+      { number: 1, email: 'a@example.com', pct: 0, resetsAt: base + 8 * DAY },
+      { number: 2, email: 'b@example.com', pct: 0, resetsAt: base + 8 * DAY },
+      { number: 3, email: 'c@example.com', pct: 31, resetsAt: base + 3 * DAY + 60_000 },
+    ]);
+    assert.deepEqual(weeklyResets(before, after).map((account) => account.slot), [1], 'unused (2) and a slightly moved reset time (3) are not resets');
+    assert.deepEqual(weeklyResets(undefined, after), []);
+    const moved = snapshot([{ number: 1, email: 'other@example.com', pct: 0, resetsAt: base + 8 * DAY }]);
+    assert.deepEqual(weeklyResets(before, moved), [], 'another account in the slot is not a reset');
+  });
+
+  it('hides the default organization of a personal account', () => {
+    const [own, team] = snapshot([
+      { number: 1, email: 'Me@example.com', organizationName: "me@example.com's Organization" },
+      { number: 2, email: 'b@example.com', organizationName: 'Acme Corp' },
+    ]).accounts;
+    assert.ok(own && team);
+    assert.equal(shownOrganization(own), undefined);
+    assert.equal(shownOrganization(team), 'Acme Corp');
   });
 });

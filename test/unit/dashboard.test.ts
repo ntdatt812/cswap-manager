@@ -105,6 +105,10 @@ describe('buildDashboardModel', () => {
       model.rows.map((row) => row.slot),
       [1, 2, 3],
     );
+    // Plans differ (or are missing) here, so the plan column stays.
+    assert.equal(model.commonPlan, undefined);
+    const samePlan = new Set(model.rows.map((row) => row.plan));
+    assert.ok(samePlan.size > 1);
     assert.equal(alice?.name, 'work');
     assert.equal(alice?.secondary, 'alice@example.com');
     assert.deepEqual(
@@ -125,21 +129,25 @@ describe('buildDashboardModel', () => {
     const sevenDay = usage?.meters.find((meter) => meter.id === 'window:sevenDay');
     assert.deepEqual(
       sevenDay?.facts.map((fact) => fact.label),
-      ['Even pace by now', 'Ahead of pace', 'Lasts until reset', 'Resets'],
+      ['Even pace by now', 'Ahead of pace', 'Lasts until reset'],
     );
     // The even-pace mark is drawn on the bar only when cswap supplies it.
     assert.equal(typeof sevenDay?.pace?.pct, 'number');
     assert.match(sevenDay?.pace?.text ?? '', /^Even pace by now: /);
     const fiveHour = usage?.meters.find((meter) => meter.id === 'window:fiveHour');
-    assert.deepEqual(
-      fiveHour?.facts.map((fact) => fact.label),
-      ['Resets'],
-    );
-    assert.equal(fiveHour?.pace, undefined);
+    // Alice is the active account: her bars are on the card above, so her detail keeps only the
+    // bars with more to say (pace, spend); the 5-hour bar is left to the card.
+    assert.equal(fiveHour, undefined);
+    const cardFiveHour = model.activeOverview?.meters.find((meter) => meter.id === 'active:window:fiveHour');
+    // The reset date sits on the bar's title line, not in a row of its own.
+    assert.deepEqual(cardFiveHour?.facts, []);
+    assert.match(cardFiveHour?.caption ?? '', /^resets in 2h 0m \(.+\)$/);
+    assert.equal(cardFiveHour?.pace, undefined);
     const spend = usage?.meters.find((meter) => meter.id === 'window:spend');
     assert.equal(spend?.facts[0]?.value, '12.5 / 50 USD');
     assert.match(usage?.note ?? '', /refused this account for quota until/);
-    assert.equal(usage?.meters.find((meter) => meter.id === 'scope:0')?.label, 'ModelA');
+    assert.equal(usage?.meters.find((meter) => meter.id === 'scope:0'), undefined, 'on the active card instead');
+    assert.equal(model.activeOverview?.meters.find((meter) => meter.id === 'active:scope:0')?.label, 'ModelA');
   });
 
   it('marks last-known usage as not current and explains the fetch error', () => {
