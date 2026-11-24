@@ -104,15 +104,36 @@ function button(text: string, onClick: () => void, options: { className?: string
   return node;
 }
 
-function bar(label: string, pct: number | undefined, level: string, valueText: string, className = 'bar'): HTMLElement {
+function bar(
+  label: string,
+  pct: number | undefined,
+  level: string,
+  valueText: string,
+  className = 'bar',
+  pace?: { readonly pct: number; readonly text: string },
+): HTMLElement {
   const fill = el('span', { className: 'bar-fill' });
   const clamped = pct === undefined ? 0 : Math.max(0, Math.min(100, pct));
   fill.style.width = `${clamped}%`;
-  const attrs: Record<string, string> = { role: 'meter', 'aria-label': label, 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuetext': valueText };
+  const attrs: Record<string, string> = {
+    role: 'meter',
+    'aria-label': label,
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+    'aria-valuetext': pace === undefined ? valueText : `${valueText}; ${pace.text}`,
+  };
   if (pct !== undefined) {
     attrs['aria-valuenow'] = String(clamped);
   }
-  return el('div', { className: `${className} level-${level}`, attrs }, [fill]);
+  const node = el('div', { className: `${className} level-${level}`, attrs }, [fill]);
+  if (pace !== undefined) {
+    // A thin tick where an even pace would be by now; hovering the bar explains it.
+    const tick = el('span', { className: 'bar-pace', attrs: { 'aria-hidden': 'true' } });
+    tick.style.left = `${Math.max(0, Math.min(100, pace.pct))}%`;
+    node.append(tick);
+    node.title = pace.text;
+  }
+  return node;
 }
 
 /** A folded section that remembers being opened across re-renders. */
@@ -234,7 +255,7 @@ function renderInsights(current: DashboardModel): void {
 function meterBlock(meter: Meter, compact = false): HTMLElement {
   return el('div', { className: `meter level-${meter.level}${compact ? ' compact' : ''}` }, [
     el('div', { className: 'meter-head' }, [el('span', { className: 'meter-label', text: meter.label }), el('span', { className: 'meter-value', text: meter.pctText })]),
-    bar(meter.label, meter.pct, meter.level, meter.caption ? `${meter.pctText}, ${meter.caption}` : meter.pctText),
+    bar(meter.label, meter.pct, meter.level, meter.caption ? `${meter.pctText}, ${meter.caption}` : meter.pctText, 'bar', meter.pace),
     meter.caption !== undefined && el('div', { className: 'meter-caption', text: meter.caption }),
   ]);
 }
@@ -245,21 +266,27 @@ function activeCard(current: DashboardModel, active: ActiveOverview | undefined)
   if (active === undefined) {
     return el('div', { className: 'card active-card' }, [el('div', { className: 'card-label', text: s.activeHeading }), el('p', { className: 'muted', text: s.noActive })]);
   }
+  // Two columns to save height: the account and its switch buttons on the left, its usage meters
+  // stacked on the right (one column, so the first meter sits beside the name).
   return el('div', { className: `card active-card level-${active.level}` }, [
     el('div', { className: 'card-label', text: s.activeHeading }),
-    el('div', { className: 'active-name' }, [
-      el('span', { className: 'slot-badge filled', text: String(active.slot) }),
-      el('div', { className: 'name-stack' }, [
-        el('span', { className: 'strong', text: active.name }),
-        active.secondary !== undefined && el('span', { className: 'muted ellipsis', text: active.secondary, attrs: { title: active.secondary } }),
+    el('div', { className: 'active-body' }, [
+      el('div', { className: 'active-side' }, [
+        el('div', { className: 'active-name' }, [
+          el('span', { className: 'slot-badge filled', text: String(active.slot) }),
+          el('div', { className: 'name-stack' }, [
+            el('span', { className: 'strong', text: active.name }),
+            active.secondary !== undefined && el('span', { className: 'muted ellipsis', text: active.secondary, attrs: { title: active.secondary } }),
+          ]),
+          active.plan !== undefined && el('span', { className: 'chip', text: active.plan }),
+        ]),
+        active.flag !== undefined && el('span', { className: `flag tone-${active.flag.tone}`, text: active.flag.text }),
+        el('div', { className: 'card-actions' }, [
+          button(s.switchBest, () => post({ type: 'switchStrategy', strategy: 'best' }), { disabled: !canSwitch, focusKey: 'action:best', className: 'button secondary small' }),
+          button(s.switchNext, () => post({ type: 'switchStrategy', strategy: 'next-available' }), { disabled: !canSwitch, focusKey: 'action:next', className: 'button ghost small' }),
+        ]),
       ]),
-      active.plan !== undefined && el('span', { className: 'chip', text: active.plan }),
-    ]),
-    active.flag !== undefined && el('span', { className: `flag tone-${active.flag.tone}`, text: active.flag.text }),
-    el('div', { className: 'active-meters' }, active.meters.map((meter) => meterBlock(meter, true))),
-    el('div', { className: 'card-actions' }, [
-      button(s.switchBest, () => post({ type: 'switchStrategy', strategy: 'best' }), { disabled: !canSwitch, focusKey: 'action:best', className: 'button secondary small' }),
-      button(s.switchNext, () => post({ type: 'switchStrategy', strategy: 'next-available' }), { disabled: !canSwitch, focusKey: 'action:next', className: 'button ghost small' }),
+      el('div', { className: 'active-meters' }, active.meters.map((meter) => meterBlock(meter, true))),
     ]),
   ]);
 }
@@ -326,6 +353,9 @@ function selectRow(slot: number): void {
   saveUiState();
   preservingFocus(() => {
     renderTable();
+    if (model !== undefined) {
+      renderTimeline(model);
+    }
     renderDetail();
   });
 }
@@ -399,18 +429,34 @@ function renderTimeline(current: DashboardModel): void {
     el('div', { className: 'axis-labels' }, [el('span', { text: s.timelineStart }), el('span', { text: s.timelineEnd })]),
     el('span'),
   ]);
+  // Each row is a button: clicking a dot (or anywhere on its row) opens that account's details.
   const items = current.timeline.map((item: TimelineItem) => {
     const dot = el('span', { className: `timeline-dot level-${item.level}${item.active ? ' active' : ''}` });
     dot.style.left = `${item.position}%`;
-    return el('li', { className: `timeline-row${item.active ? ' active' : ''}` }, [
-      el('span', { className: 'timeline-when', text: item.whenText }),
-      el('div', { className: 'timeline-track', attrs: { 'aria-hidden': 'true' } }, [dot]),
-      el('span', { className: 'timeline-label' }, [
-        el('span', { className: `slot-badge small${item.active ? ' filled' : ''}`, text: String(item.slot) }),
-        el('span', { className: 'ellipsis', text: item.name }),
-        el('span', { className: `muted level-text level-${item.level}`, text: item.remainingText }),
-      ]),
-    ]);
+    const selected = item.slot === ui.selectedSlot;
+    const row = el(
+      'button',
+      {
+        className: `timeline-row${item.active ? ' active' : ''}${selected ? ' selected' : ''}`,
+        attrs: { type: 'button', 'aria-pressed': String(selected), 'aria-label': `${item.slot} ${item.name}, ${item.whenText}, ${item.remainingText}` },
+      },
+      [
+        el('span', { className: 'timeline-when', text: item.whenText }),
+        el('div', { className: 'timeline-track', attrs: { 'aria-hidden': 'true' } }, [dot]),
+        el('span', { className: 'timeline-label' }, [
+          el('span', { className: `slot-badge small${item.active ? ' filled' : ''}`, text: String(item.slot) }),
+          el('span', { className: 'ellipsis', text: item.name }),
+          el('span', { className: `muted level-text level-${item.level}`, text: item.remainingText }),
+        ]),
+      ],
+    );
+    row.dataset['focusKey'] = `timeline:${item.slot}`;
+    row.addEventListener('click', () => {
+      selectRow(item.slot);
+      // In the one-column layout the details are below; bring them into view.
+      detail.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return el('li', {}, [row]);
   });
   timeline.replaceChildren(axis, el('ul', { className: 'timeline-list' }, items));
 }

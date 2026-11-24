@@ -72,16 +72,27 @@ const BAR_GLYPHS: Record<BarStyle, BarGlyphs> = {
 };
 
 /**
- * Text progress bar (`cswapManager.display.barStyle`); the CLI value is clamped to 0–100 only for
- * drawing. The last cell is drawn partly filled where the style has glyphs for it (eighths for
- * blocks, halves for dots and squares). Below 100% the bar never looks full, and above 0% it
- * never looks empty, so a nearly used-up account is not shown as used up.
+ * Slanted cells drawn by `media/usage-bars.woff` (contributed as icons): `$(cswap-slant-0)` is empty,
+ * `$(cswap-slant-8)` full, 1–7 that many eighths. Unicode has no partly filled parallelogram.
  */
-export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks'): string {
-  const { full, empty, partial } = BAR_GLYPHS[style];
-  const value = clamp(pct, 0, 100);
+export function slantIcon(eighths: number): string {
+  return `$(cswap-slant-${eighths})`;
+}
+
+/** A bar made only of slant icons: the one kind of `$(…)` text an icon-capable surface may render. */
+export const SLANT_BAR_PATTERN = /^(?:\$\(cswap-slant-[0-8]\))+$/;
+
+export interface BarOptions {
+  /**
+   * The bar is shown where `$(icon)` renders (status bar, quick picks, tooltips with theme icons).
+   * Tree items cannot, so they get Unicode glyphs only.
+   */
+  readonly icons?: boolean;
+}
+
+/** Whole cells and the partly filled cell's step (out of `steps`), with the never-full/never-empty rules. */
+function splitCells(value: number, width: number, steps: number): { whole: number; step: number } {
   const cells = (value / 100) * width;
-  const steps = partial.length + 1;
   let whole = Math.floor(cells);
   let step = Math.round((cells - whole) * steps);
   if (step === steps) {
@@ -99,6 +110,23 @@ export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks'): s
       whole = 1;
     }
   }
+  return { whole, step };
+}
+
+/**
+ * Progress bar (`cswapManager.display.barStyle`); the CLI value is clamped to 0–100 only for
+ * drawing. The last cell is drawn partly filled where the style can: eighths for blocks, and for
+ * slanted cells where icons render; halves for dots and squares. Below 100% the bar never looks
+ * full, and above 0% it never looks empty, so a nearly used-up account is not shown as used up.
+ */
+export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks', options: BarOptions = {}): string {
+  const value = clamp(pct, 0, 100);
+  if (style === 'parallelograms' && options.icons === true) {
+    const { whole, step } = splitCells(value, width, 8);
+    return slantIcon(8).repeat(whole) + (step > 0 ? slantIcon(step) : '') + slantIcon(0).repeat(width - whole - (step > 0 ? 1 : 0));
+  }
+  const { full, empty, partial } = BAR_GLYPHS[style];
+  const { whole, step } = splitCells(value, width, partial.length + 1);
   const partGlyph = step > 0 ? (partial[step - 1] ?? '') : '';
   return full.repeat(whole) + partGlyph + empty.repeat(width - whole - (partGlyph === '' ? 0 : 1));
 }

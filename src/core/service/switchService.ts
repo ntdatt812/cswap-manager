@@ -2,7 +2,9 @@ import type { CliError } from '../cli/cliErrors';
 import type { CliOutcome, SwitchTarget } from '../cli/cswapCli';
 import type { AccountsSnapshot, SwitchResult } from '../model/types';
 import { Emitter, type Disposable } from './emitter';
-import { sameAccountsAt } from './managementService';
+import { CONFIRMED_FRESH_MS, sameAccountsAt } from './managementService';
+
+export { CONFIRMED_FRESH_MS };
 import { OperationGate } from './operationGate';
 import type { AccountsState, RefreshRequest, RefreshResult } from './refreshService';
 
@@ -56,9 +58,6 @@ export function verifyActive(refresh: RefreshResult, expectedSlot: number | unde
  * Runs one switch at a time and always follows it with a fresh, status-verified refresh, so the
  * UI reports what the CLI state actually is rather than what the switch command claimed.
  */
-/** A snapshot this recent is trusted as what the user confirmed, without re-reading it. */
-export const CONFIRMED_FRESH_MS = 15_000;
-
 export class SwitchService implements Disposable {
   private readonly changed = new Emitter<boolean>();
   /** Fires `true` when a switch starts and `false` when it (and its verification) finishes. */

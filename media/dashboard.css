@@ -368,10 +368,28 @@ h4 {
   margin-top: 4px;
 }
 
+.active-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  align-items: start;
+  gap: 10px 24px;
+}
+
+.active-side {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.active-side .card-actions {
+  margin-top: 0;
+}
+
 .active-meters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px 16px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .active-name {
@@ -465,11 +483,23 @@ h4 {
 /* ---- Bars and meters ---- */
 
 .bar {
+  position: relative;
   height: 6px;
   border-radius: 1px;
   background: var(--track);
   overflow: hidden;
   border: 1px solid var(--vscode-contrastBorder, transparent);
+}
+
+/* Even-pace mark: where usage would be if spent evenly over the window. Neutral, not a level colour. */
+.bar-pace {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--vscode-editor-foreground);
+  opacity: 0.8;
 }
 
 .bar.thick {
@@ -806,6 +836,32 @@ td.col-name {
   font-size: 0.8em;
 }
 
+button.timeline-row {
+  width: 100%;
+  margin: 0;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 2px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.timeline-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+button.timeline-row.selected {
+  background: var(--vscode-list-inactiveSelectionBackground);
+}
+
+button.timeline-row:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
 .axis-labels {
   display: flex;
   justify-content: space-between;
@@ -968,6 +1024,9 @@ td.col-name {
 }
 
 @media (max-width: 620px) {
+  .active-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .strip-item + .strip-item {
     padding-left: 0;
     border-left: none;
@@ -994,6 +1053,9 @@ td.col-name {
   .bar-fill,
   .timeline-dot {
     background: Highlight;
+  }
+  .bar-pace {
+    background: CanvasText;
   }
   .insight,
   .note,

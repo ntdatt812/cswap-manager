@@ -119,7 +119,7 @@ function meter(id: string, label: string, metrics: UsageMetrics, options: Presen
     facts.push({ label: t('Spent / limit'), value: money });
   }
   if (metrics.expectedPct !== undefined) {
-    facts.push({ label: t('Expected by now'), value: formatPercent(metrics.expectedPct) });
+    facts.push({ label: t('Even pace by now'), value: formatPercent(metrics.expectedPct) });
   }
   if (metrics.aheadOfPace !== undefined) {
     facts.push({ label: t('Ahead of pace'), value: metrics.aheadOfPace ? t('yes') : t('no') });
@@ -143,6 +143,9 @@ function meter(id: string, label: string, metrics: UsageMetrics, options: Presen
     pctText: metrics.pct === undefined ? t('unknown') : formatPercent(metrics.pct),
     level: usageLevel(metrics.pct, options.thresholds),
     ...(caption === undefined ? {} : { caption }),
+    ...(metrics.expectedPct === undefined
+      ? {}
+      : { pace: { pct: metrics.expectedPct, text: t('Even pace by now: {0} (the share of this window already passed)', formatPercent(metrics.expectedPct)) } }),
     facts,
   };
 }

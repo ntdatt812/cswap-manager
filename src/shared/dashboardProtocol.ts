@@ -21,6 +21,11 @@ export interface Meter {
   readonly level: Level;
   /** Short line under the bar, e.g. "resets in 4d 0h". */
   readonly caption?: string;
+  /**
+   * cswap's even-pace mark (`expectedPct`): the share of the window's time already passed, drawn as
+   * a tick on the bar. Not a usage forecast.
+   */
+  readonly pace?: { readonly pct: number; readonly text: string };
   readonly facts: readonly Fact[];
 }
 
@@ -51,8 +56,34 @@ export interface Badge {
 }
 
 /** Account-management actions verified against the CLI (Phase 5). */
-export type AccountActionId = 'setDisplayName' | 'setAlias' | 'removeAlias' | 'disable' | 'enable' | 'setThreshold' | 'clearThreshold' | 'move';
-export const ACCOUNT_ACTION_IDS: readonly AccountActionId[] = ['setDisplayName', 'setAlias', 'removeAlias', 'disable', 'enable', 'setThreshold', 'clearThreshold', 'move'];
+export type AccountActionId =
+  | 'setDisplayName'
+  | 'setAlias'
+  | 'removeAlias'
+  | 'disable'
+  | 'enable'
+  | 'setThreshold'
+  | 'clearThreshold'
+  | 'setPriority'
+  | 'clearPriority'
+  | 'move'
+  | 'remove';
+/**
+ * Actions the dashboard webview may request. `remove` is deliberately absent: a destructive action
+ * is only offered in native VS Code UI (sidebar menu, Manage Account…), never from the webview.
+ */
+export const ACCOUNT_ACTION_IDS: readonly AccountActionId[] = [
+  'setDisplayName',
+  'setAlias',
+  'removeAlias',
+  'disable',
+  'enable',
+  'setThreshold',
+  'clearThreshold',
+  'setPriority',
+  'clearPriority',
+  'move',
+];
 
 export interface AccountAction {
   readonly id: AccountActionId;

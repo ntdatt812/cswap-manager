@@ -10,6 +10,7 @@ export const AUTO_SWITCH_RULE_KEYS = [
   'autoswitch.cooldownSeconds',
   'autoswitch.intervalSeconds',
   'autoswitch.strategy',
+  'autoswitch.model',
 ] as const;
 export type AutoSwitchRuleKey = (typeof AUTO_SWITCH_RULE_KEYS)[number];
 
@@ -24,7 +25,30 @@ export const INTERVAL_MAX_SECONDS = 3_600;
 export type AutoSwitchRuleUpdate =
   | { readonly key: 'autoswitch.threshold' | 'autoswitch.weeklyThreshold'; readonly value: number }
   | { readonly key: 'autoswitch.cooldownSeconds' | 'autoswitch.intervalSeconds'; readonly value: number }
-  | { readonly key: 'autoswitch.strategy'; readonly value: AutoSwitchStrategy };
+  | { readonly key: 'autoswitch.strategy'; readonly value: AutoSwitchStrategy }
+  | { readonly key: 'autoswitch.model'; readonly value: string };
+
+/**
+ * `autoswitch.model`: "all" or comma-separated per-model window names (e.g. "Fable"). cswap accepts
+ * any non-empty string and matches names case-insensitively; the extension only lets plain names
+ * through, so nothing that could be read as a flag or contain control characters reaches the CLI.
+ */
+const MODEL_NAME = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,39}$/u;
+const MODEL_RANGE = 'all | Fable, Opus, …';
+
+function validateModels(text: string): RuleValidation {
+  if (text.toLowerCase() === 'all') {
+    return { ok: true, value: 'all' };
+  }
+  const names = text
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+  if (names.length === 0 || names.length > 10 || names.some((name) => !MODEL_NAME.test(name))) {
+    return { ok: false, range: MODEL_RANGE };
+  }
+  return { ok: true, value: names.join(',') };
+}
 
 export type RuleValidation = { readonly ok: true; readonly value: string } | { readonly ok: false; readonly range: string };
 
@@ -54,6 +78,8 @@ export function validateRuleInput(key: AutoSwitchRuleKey, input: string): RuleVa
     }
     case 'autoswitch.strategy':
       return (AUTO_SWITCH_STRATEGIES as readonly string[]).includes(text) ? { ok: true, value: text } : { ok: false, range: AUTO_SWITCH_STRATEGIES.join(', ') };
+    case 'autoswitch.model':
+      return validateModels(text);
   }
 }
 
@@ -74,10 +100,14 @@ export function ruleMatches(rules: AutoSwitchRules, key: AutoSwitchRuleKey, writ
     'autoswitch.cooldownSeconds': 'cooldownSeconds',
     'autoswitch.intervalSeconds': 'intervalSeconds',
     'autoswitch.strategy': 'strategy',
+    'autoswitch.model': 'model',
   } as const;
   if (written === '') {
     return !rules.customized.includes(key);
   }
   const actual = rules[fields[key]];
-  return key === 'autoswitch.strategy' ? actual === written : typeof actual === 'number' && Math.abs(actual - Number(written)) < 1e-9;
+  if (key === 'autoswitch.strategy' || key === 'autoswitch.model') {
+    return actual === written;
+  }
+  return typeof actual === 'number' && Math.abs(actual - Number(written)) < 1e-9;
 }

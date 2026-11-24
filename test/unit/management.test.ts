@@ -255,8 +255,9 @@ describe('account actions and context values', () => {
 
   it('offers only the actions that apply', () => {
     assert.ok(alice && bob);
-    assert.deepEqual(availableActions(alice), ['setDisplayName', 'setAlias', 'removeAlias', 'enable', 'setThreshold', 'clearThreshold', 'move']);
-    assert.deepEqual(availableActions(bob), ['setDisplayName', 'setAlias', 'disable', 'setThreshold', 'move']);
+    assert.deepEqual(availableActions(alice), ['setDisplayName', 'setAlias', 'removeAlias', 'enable', 'setThreshold', 'clearThreshold', 'setPriority', 'move', 'remove']);
+    assert.deepEqual(availableActions(bob), ['setDisplayName', 'setAlias', 'disable', 'setThreshold', 'setPriority', 'move', 'remove']);
+    assert.ok(availableActions({ ...bob, priority: 5 }).includes('clearPriority'));
   });
 
   it('encodes state flags for menu when-clauses', () => {

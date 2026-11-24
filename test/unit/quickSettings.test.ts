@@ -24,6 +24,7 @@ const values: QuickSettingsValues = {
   confirmSwitch: false,
   autoSwitchMode: 'switch',
   autoSwitchStrategy: 'consume-first',
+  autoSwitchModel: 'Fable',
   autoSwitchRules: 'switch at 90% · cooldown 300s · every 60s',
   statusBarParts: ['icon', 'slot', 'bar', 'usage'],
   statusBarButtons: ['settings'],
@@ -50,8 +51,10 @@ describe('quick settings rows', () => {
     assert.equal(value('autoStrategy'), 'Use quota that resets soonest first');
     assert.equal(value('statusBar'), 'With progress bar · 1 button(s)');
     assert.equal(value('thresholds'), 'yellow 80% · red 95%');
-    assert.equal(value('barStyle'), 'Slanted ▰▰▰▰▰▱▱▱');
+    // Slanted cells are icons in pickers: 60% of 8 cells = 4 full + 6/8.
+    assert.equal(value('barStyle'), `Slanted ${'$(cswap-slant-8)'.repeat(4)}$(cswap-slant-6)${'$(cswap-slant-0)'.repeat(3)}`);
     assert.equal(value('autoRules'), 'switch at 90% · cooldown 300s · every 60s');
+    assert.equal(value('autoModel'), 'Fable');
     assert.equal(value('sortOrder'), 'By slot number');
     assert.equal(value('refresh'), 'every 2 min');
     assert.equal(value('cliPath'), 'auto-detect');

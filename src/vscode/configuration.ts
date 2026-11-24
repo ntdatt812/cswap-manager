@@ -148,6 +148,11 @@ export class ExtensionConfiguration {
     await this.config.update('confirmSwitch', confirm, vscode.ConfigurationTarget.Global);
   }
 
+  /** Daily check of PyPI for a newer cswap (user scope only). */
+  checkCswapUpdates(): boolean {
+    return this.config.inspect<boolean>('checkCswapUpdates')?.globalValue !== false;
+  }
+
   /** Saved display names, keyed by `displayNameKey`; anything malformed is ignored. */
   displayNameMap(): Record<string, string> {
     const value = this.config.get<unknown>('displayNames');

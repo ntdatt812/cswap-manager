@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { NodeModel, TooltipModel } from '../core/presentation/accountTree';
+import { SLANT_BAR_PATTERN } from '../core/presentation/format';
 
 const COLLAPSIBLE: Record<NodeModel['collapsible'], vscode.TreeItemCollapsibleState> = {
   none: vscode.TreeItemCollapsibleState.None,
@@ -9,10 +10,11 @@ const COLLAPSIBLE: Record<NodeModel['collapsible'], vscode.TreeItemCollapsibleSt
 
 /**
  * Builds an untrusted Markdown tooltip. Every CLI-derived string goes through `appendText`, which
- * escapes Markdown, so account data cannot inject links, command URIs or HTML.
+ * escapes Markdown and, with theme icons on, `$(…)` too, so account data cannot inject links,
+ * command URIs, HTML or icons. Only a usage bar made of slant icons is appended as Markdown.
  */
 export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
-  const markdown = new vscode.MarkdownString(undefined, false);
+  const markdown = new vscode.MarkdownString(undefined, true);
   markdown.isTrusted = false;
   markdown.supportHtml = false;
   markdown.appendMarkdown('**');
@@ -20,7 +22,15 @@ export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
   markdown.appendMarkdown('**\n\n');
   for (const row of model.rows) {
     markdown.appendMarkdown('- ');
-    markdown.appendText(`${row.label}: ${row.value}`);
+    markdown.appendText(`${row.label}: `);
+    if (row.bar !== undefined) {
+      if (SLANT_BAR_PATTERN.test(row.bar)) {
+        markdown.appendMarkdown(`${row.bar} `);
+      } else {
+        markdown.appendText(`${row.bar} `);
+      }
+    }
+    markdown.appendText(row.value);
     markdown.appendMarkdown('\n');
   }
   for (const note of model.notes ?? []) {

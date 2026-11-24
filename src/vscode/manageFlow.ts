@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { AccountActionId } from '../shared/dashboardProtocol';
 import type { ManageOperation } from '../core/cli/cswapCli';
-import { THRESHOLD_MAX, THRESHOLD_MIN, normalizeAlias, parseThreshold, type AliasProblem } from '../core/model/accountPolicy';
+import { THRESHOLD_MAX, THRESHOLD_MIN, isValidSlot, normalizeAlias, parseThreshold, type AliasProblem } from '../core/model/accountPolicy';
 import type { Account, AccountsSnapshot } from '../core/model/types';
 import { actionLabel, availableActions } from '../core/presentation/accountActions';
 import { accountName } from '../core/presentation/accountTree';
@@ -12,10 +12,12 @@ import type { ManageOutcome, ManagementService } from '../core/service/managemen
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
 import { DISPLAY_NAME_MAX, cleanDisplayName, displayNameKey } from '../core/model/displayNames';
+import { PRIORITY_MAX, PRIORITY_MIN, parsePriority } from '../core/model/priorities';
 import type { ExtensionConfiguration } from './configuration';
 import { describeCliError } from './messages';
 import { t } from './presentation';
 import { showSaveFailed } from './settingErrors';
+import { ACCOUNTS_VIEW_ID } from './accountsView';
 
 export interface ManageFlowDependencies {
   readonly refreshService: RefreshService;
@@ -172,27 +174,29 @@ async function promptMove(account: Account, snapshot: AccountsSnapshot): Promise
     });
   }
   const picked = await vscode.window.showQuickPick(items, { title: t('Move {0} to…', label(account)) });
-  if (picked === undefined) {
-    return undefined;
-  }
-  const occupant = snapshot.accounts.find((candidate) => candidate.slot === picked.slot);
+  return picked === undefined ? undefined : confirmMove(account, picked.slot, snapshot);
+}
+
+/** The move confirmation shared by "Move to slot…" and drag and drop in the Accounts view. */
+async function confirmMove(account: Account, targetSlot: number, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
+  const occupant = snapshot.accounts.find((candidate) => candidate.slot === targetSlot);
   const consequence =
     occupant === undefined
       ? t('Slot {0} becomes free.', account.slot)
       : neutralizeLinks(sanitizeLabel(t('{0} moves to slot {1}.', accountName(occupant, t), account.slot)));
   const proceed = t('Move');
   const choice = await vscode.window.showWarningMessage(
-    t('Move {0} to slot {1}?', label(account), picked.slot),
+    t('Move {0} to slot {1}?', label(account), targetSlot),
     {
       modal: true,
       detail: [
         consequence,
-        t('Aliases, stored logins and session history move with their accounts. Slot numbers used in commands or scripts (for example "cswap switch {0}") will then refer to a different account.', picked.slot),
+        t('Aliases, stored logins and session history move with their accounts. Slot numbers used in commands or scripts (for example "cswap switch {0}") will then refer to a different account.', targetSlot),
       ].join('\n\n'),
     },
     proceed,
   );
-  return choice === proceed ? { kind: 'move', slot: account.slot, targetSlot: picked.slot } : undefined;
+  return choice === proceed ? { kind: 'move', slot: account.slot, targetSlot } : undefined;
 }
 
 async function operationFor(action: AccountActionId, account: Account, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
@@ -211,10 +215,48 @@ async function operationFor(action: AccountActionId, account: Account, snapshot:
       return { kind: 'clearThreshold', slot: account.slot };
     case 'move':
       return promptMove(account, snapshot);
+    case 'remove':
+      return confirmRemove(account, snapshot);
+    case 'setPriority':
+      return promptPriority(account);
+    case 'clearPriority':
+      return { kind: 'clearPriority', slot: account.slot };
     case 'setDisplayName':
       // Handled before this point: a display name is a VS Code setting, not a cswap change.
       return undefined;
   }
+}
+
+async function confirmRemove(account: Account, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
+  const active = snapshot.active.slot === account.slot;
+  const remove = t('Remove');
+  const choice = await vscode.window.showWarningMessage(
+    t('Remove {0} from cswap?', label(account)),
+    {
+      modal: true,
+      detail: [
+        t('cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using "Add Current Login".'),
+        ...(active ? [t('This is the active account: Claude Code stays logged in to it, but cswap will no longer manage it.')] : []),
+      ].join('\n\n'),
+    },
+    remove,
+  );
+  return choice === remove ? { kind: 'remove', slot: account.slot } : undefined;
+}
+
+async function promptPriority(account: Account): Promise<ManageOperation | undefined> {
+  const value = await vscode.window.showInputBox({
+    title: t('Priority for {0}', label(account)),
+    prompt: t(
+      'Higher tiers are used first by the auto-switch strategy "By account priority" ({0}–{1}; default 0). Other strategies ignore it.',
+      PRIORITY_MIN,
+      PRIORITY_MAX,
+    ),
+    value: account.priority === undefined ? '' : String(account.priority),
+    validateInput: (input) => (parsePriority(input) === undefined ? t('Enter a whole number from {0} to {1}.', PRIORITY_MIN, PRIORITY_MAX) : undefined),
+  });
+  const priority = value === undefined ? undefined : parsePriority(value);
+  return priority === undefined ? undefined : { kind: 'setPriority', slot: account.slot, priority };
 }
 
 function successText(operation: ManageOperation, account: Account): string {
@@ -229,6 +271,12 @@ function successText(operation: ManageOperation, account: Account): string {
       return t('Switch threshold of slot {0} set to {1}.', account.slot, formatPercent(operation.threshold));
     case 'clearThreshold':
       return t('Slot {0} now uses the global switch threshold.', account.slot);
+    case 'setPriority':
+      return t('Priority of slot {0} set to {1}.', account.slot, operation.priority);
+    case 'clearPriority':
+      return t('Priority of slot {0} reset to 0.', account.slot);
+    case 'remove':
+      return t('{0} was removed from cswap.', accountName(account, t));
     case 'move':
       return t('{0} is now in slot {1}.', accountName(account, t), operation.targetSlot);
   }
@@ -312,4 +360,48 @@ export async function runAccountAction(deps: ManageFlowDependencies, action: Acc
   );
   report(deps, operation, account, outcome);
   return outcome;
+}
+
+/**
+ * Drag and drop in the Accounts view: the dragged account takes the slot of the account it was
+ * dropped on, and the two trade places (`cswap move`). A drop is a deliberate gesture and a swap is
+ * undone by swapping back, so instead of a modal the result offers **Undo**; progress shows in the
+ * view itself. The move is re-checked and verified like "Move to slot…", and Undo only runs while
+ * both slots still hold what the move left there.
+ */
+export async function runDropMove(deps: ManageFlowDependencies, slot: number, targetSlot: number, undoing = false): Promise<void> {
+  if (!isValidSlot(slot) || !isValidSlot(targetSlot) || slot === targetSlot) {
+    return;
+  }
+  if (deps.gate.isBusy()) {
+    reportBusy();
+    return;
+  }
+  const snapshot = await snapshotOrRefresh(deps);
+  const account = snapshot?.accounts.find((candidate) => candidate.slot === slot);
+  const occupant = snapshot?.accounts.find((candidate) => candidate.slot === targetSlot);
+  if (snapshot === undefined || account === undefined || occupant === undefined) {
+    return;
+  }
+  const operation: ManageOperation = { kind: 'move', slot, targetSlot };
+  const outcome = await vscode.window.withProgress({ location: { viewId: ACCOUNTS_VIEW_ID } }, () => deps.managementService.apply(operation, snapshot));
+  if (outcome.kind !== 'applied' || outcome.verification !== 'confirmed') {
+    report(deps, operation, account, outcome);
+    return;
+  }
+  const text = neutralizeLinks(
+    sanitizeLabel(t('{0} is now slot {1}, {2} is now slot {3}.', accountName(account, t), targetSlot, accountName(occupant, t), slot)),
+  );
+  if (undoing) {
+    void vscode.window.showInformationMessage(text);
+    return;
+  }
+  const undo = t('Undo');
+  void vscode.window.showInformationMessage(text, undo).then((choice) => {
+    if (choice === undo) {
+      // The dragged account now sits in targetSlot; moving it back swaps the two again. The re-check
+      // against the state after this move refuses if anything changed in between.
+      void runDropMove(deps, targetSlot, slot, true);
+    }
+  });
 }

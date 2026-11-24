@@ -87,6 +87,8 @@ export interface Account extends AccountFields {
   readonly slot: number;
   /** Name the user gave the account in VS Code (never from or sent to cswap). */
   readonly displayName?: string;
+  /** `cswap priority` tier (read separately: `list --json` does not carry it). */
+  readonly priority?: number;
 }
 
 /** `status.active` may describe an unmanaged login, so its slot is optional. */

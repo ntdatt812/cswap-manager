@@ -47,8 +47,8 @@ Switching does not interrupt running Claude Code sessions: cswap replaces the st
 **Cswap: Open Dashboard** opens a tab inside VS Code with:
 - **Suggestions** with one-click actions, computed from cswap's numbers only: switch before the active account runs out, use quota that resets soon before it is lost, renew logins.
 - **Active account**, **Quota left** (in full accounts) and **Auto-switch** cards.
-- A searchable, sortable account table and a **7-day reset timeline**.
-- Full details for the selected account (all usage windows, pace and forecast when cswap provides them, last known usage), with plan, settings, freshness and account management folded away.
+- A searchable, sortable account table and a **7-day reset timeline**; click an account in either to see its details.
+- Full details for the selected account (all usage windows, pace and forecast when cswap provides them, last known usage), with plan, settings, freshness and account management folded away. A thin mark on a usage bar is the **even pace** point: the share of that window's time already passed. Usage left of the mark is slower than an even pace.
 
 ### Managing accounts
 From the account's right-click menu, **Cswap: Manage Account…**, or the dashboard:
@@ -56,10 +56,33 @@ From the account's right-click menu, **Cswap: Manage Account…**, or the dashbo
 - **Disable / enable in rotation** — cswap's automatic switching skips disabled accounts; you can still switch to them directly.
 - **Set / clear switch threshold** — the usage percentage (50–99.9) at which cswap auto-switch leaves this account. This changes cswap's behaviour.
 - **Move to slot** — renumber an account; if the slot is taken, the two accounts trade places.
+- **Priority** (0–1000, default 0) — used by the auto-switch strategy *By account priority*: higher first. Read back from `cswap priority` after every change.
+- **Remove from cswap…** (right-click menu only) — cswap deletes its stored login, session profile and folder mappings for that account. Your Claude account itself is not affected.
+- **Drag and drop** in the sidebar: drop an account onto another one to give it that slot; the two trade places. There is no dialog; the result has **Undo**.
 
-Disabling and moving ask for confirmation first. Every change is checked against cswap afterwards.
+Disabling, moving and removing ask for confirmation first. Every change is checked against cswap afterwards.
 
-Not available in the extension (use the CLI): adding, removing, importing and exporting accounts, priorities, directory mappings, `cswap run`, and `purge`.
+### Adding accounts
+**Add Current Login…** (sidebar toolbar `…` menu, or the empty sidebar) runs `cswap add` for the account Claude Code is logged in to now. To add another account, log in to it with `/login` in Claude Code first. Only free slots are offered, so cswap never overwrites another account; when the login is already managed you can refresh its stored copy instead.
+
+### Per-project accounts
+cswap can tie a folder to an account (`cswap map`) and start Claude Code with that account in a terminal (`cswap run`), without changing the account used everywhere else:
+- **Assign to a Project Folder…** (account right-click menu, or *Quick Settings › Account for this project*) maps the open folder.
+- **Open Claude Code for This Project** (sidebar toolbar `…` menu) starts Claude Code in a terminal with the folder's account.
+- **Open Claude Code as This Account…** (account right-click menu) starts it with any account.
+
+The terminal runs `cswap run` directly (no shell). The folder must be trusted (Workspace Trust); on Windows the terminal never runs a `claude` program from the project folder itself. Claude Code must be on `PATH`, and cswap refuses API-key accounts here.
+
+### Another computer
+*Quick Settings › Another computer*, or the sidebar `…` menu:
+- **Export Accounts to a File…** / **Export This Account to a File…** — `cswap export`. The file holds the logins in plain text, so the extension asks first, warns when the file would land inside the open project, and never opens the file itself (cswap writes it with owner-only access).
+- **Import Accounts from a File…** — `cswap import`, confirmed first. Accounts already here are kept unless you choose *Import and Replace Existing* (`--force`).
+- **Save Usage Readings for Another Computer…** writes this computer's `cswap list --json` (emails and usage, no logins), and **Import Usage Readings from Another Computer…** feeds such a file to `cswap import-usage`, optionally pausing this computer's own fetching for those accounts for 10 minutes or 1 hour. Computers sharing accounts can so let one of them poll for usage.
+
+### cswap updates
+Once a day the extension asks PyPI for the latest claude-swap release and offers to update when a newer one exists (*Update* opens a terminal with `uv tool upgrade claude-swap` or `pipx upgrade claude-swap`, depending on how cswap was installed). Turn it off with `cswapManager.checkCswapUpdates`; *Quick Settings › cswap version* checks on demand.
+
+Not available in the extension (use the CLI): `purge`, `add-token`, `unclaimed`, `tui`/`watch` and the macOS `menubar`.
 
 ### Automatic switching
 **Cswap: Auto-Switch…** (also in the sidebar `…` menu, the switch picker and on the status bar while it is on) runs cswap's own auto-switch (`cswap auto --once`) on a schedule while VS Code is open. It is **off by default**.
@@ -74,13 +97,14 @@ Not available in the extension (use the CLI): adding, removing, importing and ex
   | Soonest weekly reset, at the limit (`weekly-first`) | Switches at the threshold, to the account whose weekly quota resets soonest. |
   | Use quota that resets soonest first (`consume-first`) | Moves early to an account with quota left whose week resets sooner, so that quota is not wasted. |
   | By account priority (`priority-consume-first`) | Highest account priority first (set with `cswap priority`), then soonest weekly reset. |
+- **Per-model limits** (*Quick Settings*) — cswap's `autoswitch.model`: also count one model's weekly limit (for example Fable), or all of them, when picking an account. Applies to *Most quota left* / *Next available* switching and to `cswap auto`.
 - **Preview now** shows what cswap would do at this moment (dry run).
 - **Rules…** edits cswap's other settings: switch threshold (default 90%), weekly threshold, cooldown (300 s) and check interval (60 s). They also apply to `cswap auto` in a terminal.
 
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
-**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, refresh interval, auto-switch with its strategy and rules, status bar, progress bar style, usage colours, account order, cswap path and command time limit. Each screen has a **← Back** button. **All settings…** opens VS Code's Settings page.
+**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, the account for this project, refresh interval, auto-switch with its strategy, per-model limits and rules, status bar, progress bar style, usage colours, account order, cswap path and version, command time limit, and moving accounts to another computer. Each screen has a **← Back** button. **All settings…** opens VS Code's Settings page.
 
 | Setting | Default | Description |
 |---|---|---|
@@ -95,13 +119,15 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | `cswapManager.autoSwitch.mode` | `off` | `off`, `notify` (dry runs, tell me) or `switch` (switch automatically). User settings only — a workspace cannot turn it on. |
 | `cswapManager.sidebar.sortOrder` | `slot` | `slot`, `mostUsed`, `leastUsed` or `soonestReset`. |
 | `cswapManager.display.warningThreshold` / `criticalThreshold` | `80` / `95` | Usage colours only; they do not change cswap. |
-| `cswapManager.display.barStyle` | `blocks` | Every usage bar (sidebar, switcher, status bar): `blocks` █░, `parallelograms` ▰▱, `circles` ●○, `squares` ■□. |
+| `cswapManager.display.barStyle` | `blocks` | Every usage bar (sidebar, switcher, status bar): `blocks` █░ (eighths of a cell, steps of about 1%), `parallelograms` ▰▱ (eighths too in the switcher, status bar and tooltips, drawn with the extension's own icons; whole cells in the sidebar), `circles` ●○ and `squares` ■□ (half cells, about 5%). |
+| `cswapManager.displayNames` | empty | Display names set with *Set Display Name…*, keyed by a hash of the account's identity. Stays in VS Code. |
+| `cswapManager.checkCswapUpdates` | `true` | Check PyPI once a day for a newer claude-swap release. |
 | `cswapManager.commandTimeoutSeconds` | `30` | Time limit for reading commands (switching and account changes always get at least 120 s). |
 | `cswapManager.maxOutputKilobytes` | `2048` | Maximum CLI output the extension reads. |
 
 ## Privacy and security
-- No telemetry. The extension makes no network requests itself; it only runs `cswap`.
-- It never reads Claude Code or cswap credential files and never sees tokens.
+- No telemetry. The only network request the extension makes itself is the daily version check against `pypi.org` (no data about you or your accounts is sent; turn it off with `cswapManager.checkCswapUpdates`). Everything else is done by `cswap`.
+- It never reads Claude Code or cswap credential files and never sees tokens. Export and import files are written and read by cswap only, and their path is always a real file (never a pipe through the extension).
 - `cswap` is started directly (never through a shell), from your home folder, with fixed arguments.
 - Logs (**Output › Cswap Manager**) and the diagnostics report contain no CLI output, emails, account IDs or home-folder paths.
 - The dashboard runs with a strict Content Security Policy and accepts only a small fixed set of requests.
@@ -113,7 +139,8 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | Path points to a `.cmd`/`.bat` shim | Point the setting at the real `cswap.exe`; shims would need a shell, which the extension does not use. |
 | "Stale" / clock icon | The last refresh failed or the data is old. Hover for the reason, then **Refresh**. Older data stays visible but is marked. |
 | "list and status disagree about the active account" | cswap reported two different active accounts; run `cswap status` in a terminal. The extension shows the active account as unknown instead of guessing. |
-| "The current Claude login is not managed by cswap" | Add it with `cswap add` in a terminal. |
+| "The current Claude login is not managed by cswap" | Add it with **Add Current Login…** (sidebar `…` menu) or `cswap add`. |
+| Slanted bars in the sidebar look coarse | Sidebar rows cannot show icons, so **Slanted** draws whole cells there (about 10% each); the switcher, status bar and tooltips show eighths. Pick **Blocks** for steps of about 1% everywhere. |
 | "Re-login due" / usage `relogin_required` | The account's stored login expired. Log in to it with `/login` in Claude Code, then run `cswap add`. |
 | A switch or change "could not be confirmed" | cswap ran, but the re-read state did not show the expected result. Refresh and check with `cswap list`. |
 | Anything else | Run **Cswap: Show Diagnostics** and copy the report; it is safe to share. |

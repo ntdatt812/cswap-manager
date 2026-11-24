@@ -3,7 +3,7 @@ import type { SwitchTarget } from '../core/cli/cswapCli';
 import type { Account } from '../core/model/types';
 import { accountName } from '../core/presentation/accountTree';
 import { buildQuickSwitchItems, type QuickSwitchAction } from '../core/presentation/quickSwitch';
-import { sanitizeLabel } from '../core/presentation/statusBar';
+import { sanitizeLabel, sanitizeLabelKeepingBars } from '../core/presentation/statusBar';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
 import type { SwitchOutcome, SwitchService } from '../core/service/switchService';
@@ -164,7 +164,7 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
       ? { label: model.label, kind: vscode.QuickPickItemKind.Separator }
       : {
           label: `${model.iconId ? `$(${model.iconId}) ` : ''}${sanitizeLabel(model.label)}`,
-          ...(model.description === undefined ? {} : { description: sanitizeLabel(model.description) }),
+          ...(model.description === undefined ? {} : { description: sanitizeLabelKeepingBars(model.description) }),
           ...(model.detail === undefined ? {} : { detail: sanitizeLabel(model.detail) }),
           ...(model.action === undefined ? {} : { action: model.action }),
         },

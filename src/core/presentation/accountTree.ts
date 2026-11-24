@@ -33,6 +33,8 @@ export interface IconSpec {
 export interface TooltipRow {
   readonly label: string;
   readonly value: string;
+  /** A usage bar from `usageBar` (never CLI text), shown before the value; may be slant icons. */
+  readonly bar?: string;
 }
 
 /** Plain data; the VS Code layer escapes every string before rendering Markdown. */
@@ -138,11 +140,24 @@ export function metricsDescription(metrics: UsageMetrics, options: PresentationO
   return parts.join(' · ');
 }
 
+/** A tooltip row for a usage window or scope: its bar (icons where the style needs them), percent and reset. */
+export function metricsRow(label: string, metrics: UsageMetrics, options: PresentationOptions): TooltipRow {
+  if (metrics.pct === undefined) {
+    return { label, value: metricsDescription(metrics, options) };
+  }
+  const reset = resetText(metrics.resetsAt, options);
+  return {
+    label,
+    bar: usageBar(metrics.pct, 10, options.barStyle, { icons: true }),
+    value: [formatPercent(metrics.pct), ...(reset === undefined ? [] : [reset])].join(' · '),
+  };
+}
+
 function metricsRows(metrics: UsageMetrics, options: PresentationOptions): TooltipRow[] {
   const { t } = options;
   const rows: TooltipRow[] = [{ label: t('Used'), value: percentText(metrics.pct, t) }];
   if (metrics.expectedPct !== undefined) {
-    rows.push({ label: t('Expected by now'), value: formatPercent(metrics.expectedPct) });
+    rows.push({ label: t('Even pace by now'), value: formatPercent(metrics.expectedPct) });
   }
   if (metrics.aheadOfPace !== undefined) {
     rows.push({ label: t('Ahead of pace'), value: metrics.aheadOfPace ? t('yes') : t('no') });
@@ -343,10 +358,10 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
     rows.push({ label: t('Usage status'), value: account.usageStatus });
   }
   for (const window of account.usage?.windows ?? []) {
-    rows.push({ label: windowLabel(window.key), value: metricsDescription(window, options) });
+    rows.push(metricsRow(windowLabel(window.key), window, options));
   }
   for (const scope of account.usage?.scoped ?? []) {
-    rows.push({ label: scope.name, value: metricsDescription(scope, options) });
+    rows.push(metricsRow(scope.name, scope, options));
   }
   const due = loginDue(account, options.now);
   if (due !== undefined) {

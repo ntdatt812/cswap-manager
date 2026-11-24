@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { CliError } from '../core/cli/cliErrors';
 import { buildAccountNodes, describeView, visibleAccounts, type NodeModel } from '../core/presentation/accountTree';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
+import { AccountsDragAndDrop } from './accountsDragAndDrop';
 import { AccountsTreeProvider } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
@@ -26,7 +27,11 @@ export class AccountsView implements vscode.Disposable {
   private progressDone: (() => void) | undefined;
 
   constructor(private readonly deps: AccountsViewDependencies) {
-    this.treeView = vscode.window.createTreeView(ACCOUNTS_VIEW_ID, { treeDataProvider: this.provider, showCollapseAll: true });
+    this.treeView = vscode.window.createTreeView(ACCOUNTS_VIEW_ID, {
+      treeDataProvider: this.provider,
+      showCollapseAll: true,
+      dragAndDropController: new AccountsDragAndDrop(),
+    });
     this.disposables.push(
       this.treeView,
       this.provider,

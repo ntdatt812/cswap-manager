@@ -1,4 +1,6 @@
 import { isValidSlot, normalizeAlias, parseThreshold } from '../model/accountPolicy';
+import { parsePriority, parsePriorityList, type PriorityEntry } from '../model/priorities';
+import { parseMappingList, type MappingEntry } from '../model/mappings';
 import { buildTickResult, parseAutoSwitchRules, type AutoSwitchRules, type AutoTickResult } from '../model/autoSwitch';
 import { AUTO_SWITCH_RULE_KEYS, autoSwitchRuleArgs, type AutoSwitchRuleKey, type AutoSwitchRuleUpdate } from './autoSwitchRules';
 import { parseErrorEnvelope, parseListOutput, parseStatusOutput, parseSwitchOutput, type ParseResult } from '../model/parsers';
@@ -14,6 +16,18 @@ import {
 } from './cliErrors';
 import type { ExecutableResolution, ExecutableSource } from './executableResolver';
 import type { ProcessRunner } from './processRunner';
+import {
+  exportArgs,
+  importArgs,
+  importUsageArgs,
+  isSafePathArgument,
+  parseExportOutput,
+  parseImportOutput,
+  parseImportUsageOutput,
+  type ExportResult,
+  type ImportResult,
+  type UsageImportResult,
+} from './transfer';
 import { parseCliVersion, type CliVersion } from './version';
 
 /**
@@ -53,7 +67,65 @@ export type ManageOperation =
   | { readonly kind: 'setDisabled'; readonly slot: number; readonly disabled: boolean }
   | { readonly kind: 'setThreshold'; readonly slot: number; readonly threshold: number }
   | { readonly kind: 'clearThreshold'; readonly slot: number }
+  | { readonly kind: 'setPriority'; readonly slot: number; readonly priority: number }
+  | { readonly kind: 'clearPriority'; readonly slot: number }
+  | { readonly kind: 'remove'; readonly slot: number }
   | { readonly kind: 'move'; readonly slot: number; readonly targetSlot: number };
+
+/** What `cswap add` reported (cswap 1.2.0 has no JSON for it; texts verified in switcher.py). */
+export type AddResult =
+  | { readonly kind: 'added' | 'updated' | 'moved'; readonly slot: number }
+  | { readonly kind: 'cancelled' };
+
+export function parseAddOutput(stdout: string): ParseResult<AddResult> {
+  // A move prints "Moved from slot X → N" and then "Added Account N", so it is checked first.
+  const moved = /Moved from slot \d+ \S+ (\d+)/.exec(stdout);
+  if (moved !== null) {
+    return { ok: true, value: { kind: 'moved', slot: Number(moved[1]) } };
+  }
+  const updated = /Updated credentials for Account (\d+)/.exec(stdout);
+  if (updated !== null) {
+    return { ok: true, value: { kind: 'updated', slot: Number(updated[1]) } };
+  }
+  const added = /Added Account (\d+)/.exec(stdout);
+  if (added !== null) {
+    return { ok: true, value: { kind: 'added', slot: Number(added[1]) } };
+  }
+  // The overwrite prompt has no trailing newline, so "Cancelled" can follow it on the same line.
+  if (/\bCancelled\b/.test(stdout)) {
+    return { ok: true, value: { kind: 'cancelled' } };
+  }
+  return { ok: false, reason: 'unexpected-shape', message: 'cswap add did not report a result.' };
+}
+
+/** `cswap remove` prints this on success; a prompt that was not confirmed prints "Cancelled". */
+export function parseRemoveOutput(stdout: string): ParseResult<void> {
+  return /Removed Account-\d+/.test(stdout)
+    ? { ok: true, value: undefined }
+    : { ok: false, reason: 'unexpected-shape', message: 'cswap did not confirm the removal.' };
+}
+
+/**
+ * `cswap add` arguments from validated values only. A slot is passed only when the caller checked it
+ * is free: an occupied slot would make cswap prompt to overwrite another account.
+ */
+export function addArgs(options: { readonly slot?: number; readonly alias?: string }): readonly string[] | undefined {
+  const args = ['add'];
+  if (options.slot !== undefined) {
+    if (!isValidSlot(options.slot)) {
+      return undefined;
+    }
+    args.push('--slot', String(options.slot));
+  }
+  if (options.alias !== undefined) {
+    const alias = normalizeAlias(options.alias);
+    if (!alias.ok) {
+      return undefined;
+    }
+    args.push('--alias', alias.value);
+  }
+  return args;
+}
 
 /**
  * Builds arguments only from validated values: positive integer slots, an alias that passed the
@@ -79,6 +151,14 @@ export function manageArgs(operation: ManageOperation): readonly string[] | unde
     }
     case 'clearThreshold':
       return ['threshold', slot, '--unset'];
+    case 'setPriority': {
+      const priority = parsePriority(String(operation.priority));
+      return priority === undefined ? undefined : ['priority', slot, String(priority)];
+    }
+    case 'clearPriority':
+      return ['priority', slot, '--unset'];
+    case 'remove':
+      return ['remove', slot];
     case 'move':
       return isValidSlot(operation.targetSlot) ? ['move', slot, String(operation.targetSlot)] : undefined;
   }
@@ -140,7 +220,8 @@ export function cliEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 /** Only a plausible exception class name from the CLI's error envelope is kept for display. */
 const ERROR_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9_.]{0,63}$/;
 
-type OutputParser<T> = (stdout: string, exitCode: number | null) => ParseResult<T>;
+/** `stderr` is for commands that report only there (export/import); it is never logged raw. */
+type OutputParser<T> = (stdout: string, exitCode: number | null, stderr: string) => ParseResult<T>;
 
 interface ExecuteOptions {
   readonly signal?: AbortSignal;
@@ -149,6 +230,8 @@ interface ExecuteOptions {
   readonly acceptExitCodes?: readonly number[];
   /** Lower bound for the timeout (a real auto-switch tick may legitimately take long). */
   readonly minTimeoutMs?: number;
+  /** Answer for a CLI prompt, written to stdin (see ProcessRunOptions.input). */
+  readonly input?: string;
 }
 
 function parseVersionOutput(stdout: string): ParseResult<CliVersion> {
@@ -231,12 +314,100 @@ export class CswapCli {
    * Runs an account-policy command. These commands print human text only, so success is the exit
    * code; callers verify the effect with a fresh `list --json`.
    */
+  /** `cswap priority` (text only; no JSON exists in cswap 1.2.0). */
+  priorities(): Promise<CliOutcome<PriorityEntry[]>> {
+    return this.execute(
+      'priority',
+      ['priority'],
+      (stdout) => {
+        const entries = parsePriorityList(stdout);
+        return entries === undefined
+          ? { ok: false, reason: 'unexpected-shape', message: 'cswap priority output did not have the expected header.' }
+          : { ok: true, value: entries };
+      },
+      {},
+    );
+  }
+
   manage(operation: ManageOperation): Promise<CliOutcome<void>> {
     const args = manageArgs(operation);
     if (args === undefined) {
       return Promise.resolve(this.fail({ command: 'manage' }, cliError('invalid-request', { command: 'manage' })));
     }
+    if (operation.kind === 'remove') {
+      // cswap always asks "[y/N]" and has no flag to skip it; the user already confirmed in VS Code.
+      return this.execute('manage', args, (stdout) => parseRemoveOutput(stdout), { mutating: true, input: 'y\n' });
+    }
     return this.execute('manage', args, () => ({ ok: true, value: undefined }), { mutating: true });
+  }
+
+  /** `cswap map` (list; text only). */
+  mappings(): Promise<CliOutcome<MappingEntry[]>> {
+    return this.execute(
+      'map',
+      ['map'],
+      (stdout) => {
+        const entries = parseMappingList(stdout);
+        return entries === undefined ? { ok: false, reason: 'unexpected-shape', message: 'cswap map output was not recognised.' } : { ok: true, value: entries };
+      },
+      {},
+    );
+  }
+
+  /** `cswap map <slot> <folder>` / `cswap unmap <folder>`: which account a bare `cswap run` uses there. */
+  setMapping(folder: string, slot: number | undefined): Promise<CliOutcome<void>> {
+    if (!isSafePathArgument(folder) || (slot !== undefined && !isValidSlot(slot))) {
+      return Promise.resolve(this.fail({ command: 'map' }, cliError('invalid-request', { command: 'map' })));
+    }
+    const args = slot === undefined ? ['unmap', folder] : ['map', String(slot), folder];
+    return this.execute('map', args, () => ({ ok: true, value: undefined }), { mutating: true });
+  }
+
+  /** `cswap add`: stores the current Claude Code login (or refreshes it when already managed). */
+  addAccount(options: { readonly slot?: number; readonly alias?: string }): Promise<CliOutcome<AddResult>> {
+    const args = addArgs(options);
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command: 'manage' }, cliError('invalid-request', { command: 'manage' })));
+    }
+    return this.execute('manage', args, (stdout) => parseAddOutput(stdout), { mutating: true });
+  }
+
+  /** `cswap export <file> [--account N]`: cswap writes the file (owner-only); the extension never reads it. */
+  exportAccounts(path: string, slot?: number): Promise<CliOutcome<ExportResult>> {
+    const args = exportArgs(path, slot);
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
+    }
+    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseExportOutput(stderr), { mutating: true });
+  }
+
+  /** `cswap import <file> [--force]`. */
+  importAccounts(path: string, replaceExisting: boolean): Promise<CliOutcome<ImportResult>> {
+    const args = importArgs(path, replaceExisting);
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
+    }
+    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseImportOutput(stderr), { mutating: true });
+  }
+
+  /** `cswap import-usage <file> [--hold S]`: adopts another machine's `list --json` readings. */
+  importUsage(path: string, holdSeconds?: number): Promise<CliOutcome<UsageImportResult>> {
+    const args = importUsageArgs(path, holdSeconds);
+    if (args === undefined) {
+      return Promise.resolve(this.fail({ command: 'transfer' }, cliError('invalid-request', { command: 'transfer' })));
+    }
+    return this.execute('transfer', args, (_stdout, _exitCode, stderr) => parseImportUsageOutput(stderr), { mutating: true });
+  }
+
+  /**
+   * This machine's `list --json` exactly as cswap printed it, for `import-usage` on another machine
+   * (usage, emails and slots; no logins). Checked to be a list document before it is handed out.
+   */
+  usageDocument(): Promise<CliOutcome<string>> {
+    return this.execute('list', COMMAND_ARGS.list, (stdout) => {
+      const parsed = parseListOutput(stdout);
+      return parsed.ok ? { ok: true, value: stdout } : parsed;
+    }, {});
   }
 
   private async execute<T>(
@@ -257,6 +428,7 @@ export class CswapCli {
       cwd: this.deps.workingDirectory,
       env: cliEnvironment(this.deps.baseEnv),
       ...(options.signal === undefined || options.mutating ? {} : { signal: options.signal }),
+      ...(options.input === undefined ? {} : { input: options.input }),
     });
 
     const baseMeta: CommandMeta = {
@@ -297,7 +469,7 @@ export class CswapCli {
 
     const stderrNotice = redactLine(result.stderr, 'first', redaction);
     const successMeta: CommandMeta = stderrNotice ? { ...meta, stderrNotice } : meta;
-    const parsed = parse(result.stdout, result.exitCode);
+    const parsed = parse(result.stdout, result.exitCode, result.stderr);
     if (!parsed.ok) {
       const kind = parsed.reason === 'invalid-json' ? 'invalid-output' : 'unexpected-shape';
       return this.fail(successMeta, cliError(kind, { command, exitCode: result.exitCode }));

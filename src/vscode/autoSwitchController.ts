@@ -1,7 +1,14 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { AUTO_SWITCH_STRATEGIES, ruleMatches, validateRuleInput, type AutoSwitchRuleKey, type AutoSwitchStrategy } from '../core/cli/autoSwitchRules';
+import {
+  AUTO_SWITCH_STRATEGIES,
+  ruleMatches,
+  validateRuleInput,
+  type AutoSwitchRuleKey,
+  type AutoSwitchRuleUpdate,
+  type AutoSwitchStrategy,
+} from '../core/cli/autoSwitchRules';
 import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
@@ -292,6 +299,42 @@ export class AutoSwitchController implements vscode.Disposable {
   /**
    * Picks one of cswap's auto-switch strategies (or cswap's default) and saves it in cswap's config.
    */
+  /**
+   * `autoswitch.model`: whether per-model weekly limits (e.g. Fable) count when cswap picks an
+   * account. Used by manual "most headroom" / "next available" switches and by auto-switch alike.
+   */
+  async chooseModel(options: MenuOptions = {}): Promise<MenuResult> {
+    const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
+    const current = rules?.model ?? '';
+    const known = [
+      ...new Set(
+        (this.deps.refreshService.getState().snapshot?.accounts ?? []).flatMap((account) => (account.usage?.scoped ?? []).map((scope) => scope.name)),
+      ),
+    ].filter((name) => validateRuleInput('autoswitch.model', name).ok && name.toLowerCase() !== 'all');
+    type ModelItem = vscode.QuickPickItem & { readonly value: string };
+    const items: ModelItem[] = [
+      { label: t('Overall limits only'), detail: t('Compare accounts by their 5-hour and weekly limits only. cswap default.'), value: '' },
+      { label: t('All per-model limits'), detail: t('Also count every per-model weekly limit when picking an account.'), value: 'all' },
+      ...known.map((name) => ({ label: name, detail: t('Also count the {0} weekly limit when picking an account.', name), value: name })),
+    ].map((item) => (item.value === current ? { ...item, description: t('current') } : item));
+    const picked = await pickOne(items, {
+      title: t('Per-model limits'),
+      placeholder: t('These are cswap settings; they also apply to `cswap auto` in a terminal.'),
+      isActive: (item) => item.value === current,
+      back: options.back === true,
+    });
+    if (picked === BACK) {
+      return 'back';
+    }
+    if (picked === undefined) {
+      return 'closed';
+    }
+    if (picked.value !== current) {
+      await this.applyRule('autoswitch.model', picked.value);
+    }
+    return 'done';
+  }
+
   async chooseStrategy(options: MenuOptions = {}): Promise<MenuResult> {
     const rules = (await this.service.reloadRules()) ?? this.service.getState().rules;
     const current = rules?.strategy;
@@ -450,10 +493,12 @@ export class AutoSwitchController implements vscode.Disposable {
       if (!validated.ok) {
         return undefined;
       }
-      const update =
+      const update: AutoSwitchRuleUpdate =
         key === 'autoswitch.strategy'
           ? { key, value: validated.value as (typeof AUTO_SWITCH_STRATEGIES)[number] }
-          : { key, value: Number(validated.value) };
+          : key === 'autoswitch.model'
+            ? { key, value: validated.value }
+            : { key, value: Number(validated.value) };
       return this.deps.cli.setAutoSwitchRule(update);
     });
     if (outcome === undefined) {

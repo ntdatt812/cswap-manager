@@ -10,6 +10,11 @@ export interface ProcessRunOptions {
   readonly signal?: AbortSignal;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
+  /**
+   * Text written to stdin, which is then closed (answers a CLI prompt such as `[y/N]`). Without it,
+   * stdin is not connected, so any prompt sees end-of-input and cancels.
+   */
+  readonly input?: string;
 }
 
 export type ProcessFailureKind =
@@ -128,7 +133,7 @@ export class NodeProcessRunner implements ProcessRunner {
         child = this.spawnFn(file, [...args], {
           shell: false,
           windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe'],
+          stdio: [options.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
           cwd: options.cwd,
           env: options.env,
         });
@@ -142,6 +147,11 @@ export class NodeProcessRunner implements ProcessRunner {
           durationMs: elapsed(),
         });
         return;
+      }
+
+      if (options.input !== undefined) {
+        child.stdin?.on('error', () => undefined);
+        child.stdin?.end(options.input);
       }
 
       const stdout = new BoundedBuffer(options.maxOutputBytes);

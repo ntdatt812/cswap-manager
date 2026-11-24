@@ -125,13 +125,17 @@ describe('buildDashboardModel', () => {
     const sevenDay = usage?.meters.find((meter) => meter.id === 'window:sevenDay');
     assert.deepEqual(
       sevenDay?.facts.map((fact) => fact.label),
-      ['Expected by now', 'Ahead of pace', 'Lasts until reset', 'Resets'],
+      ['Even pace by now', 'Ahead of pace', 'Lasts until reset', 'Resets'],
     );
+    // The even-pace mark is drawn on the bar only when cswap supplies it.
+    assert.equal(typeof sevenDay?.pace?.pct, 'number');
+    assert.match(sevenDay?.pace?.text ?? '', /^Even pace by now: /);
     const fiveHour = usage?.meters.find((meter) => meter.id === 'window:fiveHour');
     assert.deepEqual(
       fiveHour?.facts.map((fact) => fact.label),
       ['Resets'],
     );
+    assert.equal(fiveHour?.pace, undefined);
     const spend = usage?.meters.find((meter) => meter.id === 'window:spend');
     assert.equal(spend?.facts[0]?.value, '12.5 / 50 USD');
     assert.match(usage?.note ?? '', /refused this account for quota until/);
@@ -161,7 +165,7 @@ describe('buildDashboardModel', () => {
     );
     assert.deepEqual(
       manage?.manage?.map((row) => `${row.label}=${row.value}:${row.actions.map((action) => action.id).join('+')}`),
-      ['Display name=not set:setDisplayName', 'Alias=work:setAlias+removeAlias', 'Auto-rotation=included:disable', 'Switch threshold=85%:setThreshold+clearThreshold', 'Slot=1:move'],
+      ['Display name=not set:setDisplayName', 'Alias=work:setAlias+removeAlias', 'Auto-rotation=included:disable', 'Switch threshold=85%:setThreshold+clearThreshold', 'Priority=unknown:setPriority', 'Slot=1:move'],
     );
     assert.equal(section(bob, 'Manage account')?.manage?.find((row) => row.label === 'Auto-rotation')?.value, 'held out');
     // Every action offered in the list is one the manage flow accepts for that account.

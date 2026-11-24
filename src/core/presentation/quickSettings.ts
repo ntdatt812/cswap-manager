@@ -17,16 +17,20 @@ export const REFRESH_CHOICES_SECONDS: readonly number[] = [0, 60, 120, 300, 600,
 export const SETTING_KEYS = [
   'language',
   'confirmSwitch',
+  'projectAccount',
   'refresh',
   'autoSwitch',
   'autoStrategy',
+  'autoModel',
   'autoRules',
   'statusBar',
   'barStyle',
   'thresholds',
   'sortOrder',
   'cliPath',
+  'cswapVersion',
   'timeout',
+  'transfer',
   'allSettings',
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -41,6 +45,8 @@ export interface QuickSettingsValues {
   readonly autoSwitchMode: AutoSwitchMode;
   /** cswap's `autoswitch.strategy`; undefined while the rules are not loaded. */
   readonly autoSwitchStrategy: string | undefined;
+  /** cswap's `autoswitch.model`: null when unset, undefined while the rules are not loaded. */
+  readonly autoSwitchModel: string | null | undefined;
   /** Short summary of cswap's other auto-switch rules; undefined while not loaded. */
   readonly autoSwitchRules: string | undefined;
   /** Parts the status bar item shows; empty when it is hidden. */
@@ -54,6 +60,11 @@ export interface QuickSettingsValues {
   /** The configured cswap path for display (home shortened to `~`); empty when auto-detected. */
   readonly cliPath: string;
   readonly timeoutSeconds: number;
+  /** Account assigned to the open project with `cswap map`: text, or undefined when no folder is open. */
+  readonly projectAccount?: string;
+  /** Installed cswap version and the newer one, when known. */
+  readonly cswapVersion?: string;
+  readonly cswapLatest?: string;
 }
 
 /** Time limits offered for one cswap command, in seconds. */
@@ -218,9 +229,25 @@ export function barStyleLabel(style: BarStyle, t: Translate): string {
   }
 }
 
+/**
+ * How finely a style can draw. Blocks have Unicode eighths; slanted cells get eighths from the
+ * extension's own icons, which tree items cannot show.
+ */
+export function barStylePrecision(style: BarStyle, t: Translate): string {
+  switch (style) {
+    case 'blocks':
+      return t('Each cell shows eighths, so steps of about 1%.');
+    case 'circles':
+    case 'squares':
+      return t('Each cell shows halves, so steps of about 5%.');
+    case 'parallelograms':
+      return t('Each cell shows eighths (about 1%) in the switcher, status bar and tooltips; the sidebar shows whole cells.');
+  }
+}
+
 /** A sample bar in the given style, for pickers. */
 export function barStyleSample(style: BarStyle): string {
-  return usageBar(60, STATUS_BAR_BAR_WIDTH, style);
+  return usageBar(60, STATUS_BAR_BAR_WIDTH, style, { icons: true });
 }
 
 export function statusBarColorsLabel(colors: StatusBarColors, t: Translate): string {
@@ -255,10 +282,21 @@ export function thresholdsLabel(thresholds: UsageThresholds, t: Translate): stri
   return t('yellow {0} · red {1}', formatPercent(thresholds.warning), formatPercent(thresholds.critical));
 }
 
+export function modelLabel(model: string | null | undefined, t: Translate): string {
+  if (model === undefined) {
+    return t('rules not loaded');
+  }
+  if (model === null || model === '') {
+    return t('Overall limits only');
+  }
+  return model.toLowerCase() === 'all' ? t('All per-model limits') : model;
+}
+
 export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
     { key: 'language', iconId: 'globe', label: t('Language'), value: languageLabel(values.language, t) },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
+    { key: 'projectAccount', iconId: 'folder', label: t('Account for this project'), value: values.projectAccount ?? t('no folder open') },
     { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
     { separator: true, label: t('Auto-switch') },
     { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: autoSwitchModeLabel(values.autoSwitchMode, t) },
@@ -268,6 +306,7 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
       label: t('Auto-switch strategy'),
       value: values.autoSwitchStrategy === undefined ? t('rules not loaded') : autoSwitchStrategyLabel(values.autoSwitchStrategy, t),
     },
+    { key: 'autoModel', iconId: 'symbol-class', label: t('Per-model limits'), value: modelLabel(values.autoSwitchModel, t) },
     { key: 'autoRules', iconId: 'law', label: t('Auto-switch rules'), value: values.autoSwitchRules ?? t('rules not loaded') },
     { separator: true, label: t('Display') },
     { key: 'statusBar', iconId: 'layout-statusbar', label: t('Status bar'), value: statusBarSummary(values.statusBarParts, values.statusBarButtons, t) },
@@ -276,7 +315,19 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
     { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
     { separator: true, label: t('Advanced') },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
+    {
+      key: 'cswapVersion',
+      iconId: 'cloud-download',
+      label: t('cswap version'),
+      value:
+        values.cswapVersion === undefined
+          ? t('check for updates')
+          : values.cswapLatest !== undefined && values.cswapLatest !== values.cswapVersion
+            ? t('{0} · {1} available', values.cswapVersion, values.cswapLatest)
+            : values.cswapVersion,
+    },
     { key: 'timeout', iconId: 'watch', label: t('Command time limit'), value: t('{0} s', values.timeoutSeconds) },
+    { key: 'transfer', iconId: 'arrow-swap', label: t('Another computer'), value: t('export, import, usage readings') },
     { key: 'allSettings', iconId: 'settings-gear', label: t('All settings…'), value: t('VS Code settings page') },
   ];
 }

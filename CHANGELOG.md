@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — 2026-11-24
+More of cswap, without a terminal:
+- **Add Current Login…** (`cswap add`) — stores the account Claude Code is logged in to now, in a free slot of your choice with an optional alias, or refreshes its stored login when it is already managed. The empty sidebar links to it.
+- **Remove from cswap…** (`cswap remove`, account right-click menu) — confirmed first, with a special warning for the active account.
+- **Drag and drop** in the Accounts view: drop an account onto another one to give it that slot (the two trade places, `cswap move`). No dialog: progress shows in the view and the result has **Undo**. Account changes made from data read in the last 15 seconds skip the extra re-read, like switching.
+- **Priority** (`cswap priority`, 0–1000) under *Manage Account…* and the dashboard, for the *By account priority* auto-switch strategy.
+- **Per-model limits** (*Quick Settings*, cswap's `autoswitch.model`) — also count one model's weekly limit, or all of them, when picking an account.
+- **Per-project accounts** (`cswap map` / `cswap run`) — assign an account to the open folder and **Open Claude Code for This Project** in a terminal with it, or **Open Claude Code as This Account…** with any account. The account used everywhere else does not change. The folder must be trusted, and on Windows a `claude` program inside the project is never picked up instead of the real one.
+- **Another computer** (*Quick Settings*, sidebar `…` menu) — export accounts to a file and import them (`cswap export` / `import`, both confirmed; the file holds logins and the extension never opens it), and pass usage readings between computers that share accounts (`cswap import-usage`, with an optional pause of local fetching).
+- **cswap updates** — a daily check against PyPI offers to update cswap with the command for the way it was installed (`cswapManager.checkCswapUpdates`, on by default); *Quick Settings › cswap version* checks on demand.
+- Dashboard: the active account card uses two columns (the account and its switch buttons on the left, its usage meters on the right), so it is shorter; clicking an account in *Resets in the next 7 days* opens its details. *Expected by now* is renamed **Even pace by now** (it is the share of the window's time already passed, not a usage forecast) and drawn as a thin mark on the usage bars.
+- **Precise slanted bars**: Unicode has no partly filled parallelogram, so **Slanted** bars used whole cells (54% looked like 50%, 1% like 10%, 98% like 90%). The extension now ships its own slanted cells filled in eighths, used in the switcher, the status bar and tooltips (about 1% steps, like **Blocks**). Sidebar rows cannot show icons and keep whole cells. The style picker says how precise each style is.
+
 ## 0.7.0 — 2026-11-24
 - **Display names**: give any account a name with capitals, spaces or accents (*Set Display Name…* in the account's right-click menu, *Manage Account…* or the dashboard). It is shown instead of the alias or email in the sidebar, status bar, switcher and dashboard, kept in VS Code only (never sent to cswap), follows the account when it moves slot, and updates every window at once.
 - Setting an alias now says what cswap will store as you type (e.g. *Will be saved as "work"*). cswap keeps aliases in lower case with a–z, 0–9, `-`, `_` and `.` because commands use them.

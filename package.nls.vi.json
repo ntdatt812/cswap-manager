@@ -12,7 +12,7 @@
   "welcome.invalidSetting": "Đường dẫn cswap đã cấu hình không phải đường dẫn tuyệt đối tới một file thực thi có thật.\n[Mở cài đặt](command:cswapManager.openSettings)\n[Xem chẩn đoán](command:cswapManager.showDiagnostics)",
   "welcome.unsupportedExecutable": "Đường dẫn cswap trỏ tới shim .cmd/.bat/.ps1, không chạy an toàn được nếu không qua shell. Hãy trỏ cài đặt tới cswap.exe.\n[Mở cài đặt](command:cswapManager.openSettings)\n[Xem chẩn đoán](command:cswapManager.showDiagnostics)",
   "welcome.error": "Không đọc được tài khoản từ cswap. Thông báo phía trên danh sách giải thích lý do.\n[Thử lại](command:cswapManager.refresh)\n[Xem chẩn đoán](command:cswapManager.showDiagnostics)",
-  "welcome.empty": "cswap chưa quản lý tài khoản nào. Hãy thêm bằng `cswap add` trong terminal rồi làm mới.\n[Làm mới](command:cswapManager.refresh)",
+  "welcome.empty": "cswap chưa quản lý tài khoản nào. Hãy đăng nhập bằng /login trong Claude Code rồi thêm đăng nhập đó.\n[Thêm tài khoản đang đăng nhập](command:cswapManager.addAccount)\n[Làm mới](command:cswapManager.refresh)",
   "welcome.filteredEmpty": "Không có tài khoản nào khớp bộ lọc hiện tại.\n[Bỏ lọc](command:cswapManager.clearFilter)",
   "config.cliPath.description": "Đường dẫn tuyệt đối tới file `cswap`. Để trống để tự tìm trong `PATH` và `~/.local/bin`. Trên Windows hãy trỏ tới `cswap.exe`; shim `.cmd`/`.bat` không được hỗ trợ vì phải chạy qua shell. Chỉ đọc từ user (machine) settings, không bao giờ từ workspace settings.",
   "config.language.description": "Ngôn ngữ giao diện riêng của extension (thanh bên, thanh trạng thái, hộp thoại, bảng điều khiển). `auto` theo ngôn ngữ hiển thị của VS Code. Tên lệnh và mô tả cài đặt luôn theo ngôn ngữ hiển thị của VS Code.",
@@ -66,5 +66,18 @@
   "config.statusBarButtons.description": "Các nút hiện cạnh tài khoản trên thanh trạng thái: `refresh` (làm mới), `dashboard` (bảng điều khiển) và `settings` (Cài đặt nhanh).",
   "config.barStyle.description": "Kiểu của mọi thanh tiến trình mức dùng: ở sidebar, khung chọn tài khoản và thanh trạng thái.",
   "command.setDisplayName.title": "Đặt tên hiển thị…",
-  "config.displayNames.description": "Tên hiển thị thay cho bí danh hoặc email (cho phép chữ hoa, dấu cách, tiếng Việt). Đặt bằng thao tác **Đặt tên hiển thị…** của tài khoản; tên chỉ lưu trong VS Code, không gửi cho cswap. Khoá là mã băm ngắn để nhận ra tài khoản mà không lưu email."
+  "config.displayNames.description": "Tên hiển thị thay cho bí danh hoặc email (cho phép chữ hoa, dấu cách, tiếng Việt). Đặt bằng thao tác **Đặt tên hiển thị…** của tài khoản; tên chỉ lưu trong VS Code, không gửi cho cswap. Khoá là mã băm ngắn để nhận ra tài khoản mà không lưu email.",
+  "command.addAccount.title": "Thêm tài khoản đang đăng nhập…",
+  "command.removeAccount.title": "Xoá khỏi cswap…",
+  "command.checkCswapUpdate.title": "Kiểm tra cập nhật cswap",
+  "config.checkCswapUpdates.description": "Mỗi ngày một lần, hỏi PyPI xem cswap (claude-swap) có bản mới không và đề nghị cập nhật trong terminal. Chỉ gửi một yêu cầu xem trang gói.",
+  "command.openClaudeAs.title": "Mở Claude Code bằng tài khoản này…",
+  "command.openClaudeForProject.title": "Mở Claude Code cho dự án này",
+  "command.assignProjectAccount.title": "Gán cho thư mục dự án…",
+  "command.exportAccounts.title": "Xuất tài khoản ra tệp…",
+  "command.exportAccount.title": "Xuất tài khoản này ra tệp…",
+  "command.importAccounts.title": "Nhập tài khoản từ tệp…",
+  "command.saveUsageReadings.title": "Lưu mức dùng để chuyển sang máy khác…",
+  "command.importUsage.title": "Nhập mức dùng từ máy khác…",
+  "icon.slant.description": "Ô thanh mức dùng (kiểu vát chéo), tô theo phần tám"
 }

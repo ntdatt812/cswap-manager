@@ -25,6 +25,7 @@ Requires Node.js 20.19+ and VS Code 1.90+.
 | `npm run package:vsix` | production bundle + `cswap-manager-<version>.vsix` in the project root |
 | `npm run l10n:extract` | regenerate `l10n/bundle.l10n.json` (English source strings) and list missing/unused keys per translation; `npm test` fails if a translation is missing or loses a `{n}` placeholder |
 | F5 ("Run Extension") | launch an Extension Development Host |
+| `python scripts/build-usage-bar-icons.py` | regenerate `media/usage-bars.woff`, the slanted usage-bar cells (`cswap-slant-0…8` icons); needs `python -m pip install fonttools`, only when the cell shapes change |
 
 ## Documents
 - `docs/SPEC.md`: product and UX specification

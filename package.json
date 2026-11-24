@@ -2,7 +2,7 @@
   "name": "cswap-manager",
   "displayName": "Cswap Manager",
   "description": "%extension.description%",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "nguyenthanhdat",
   "license": "MIT",
   "icon": "resources/icon.png",
@@ -181,6 +181,64 @@
         "category": "Cswap"
       },
       {
+        "command": "cswapManager.openClaudeAs",
+        "title": "%command.openClaudeAs.title%",
+        "category": "Cswap",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "cswapManager.openClaudeForProject",
+        "title": "%command.openClaudeForProject.title%",
+        "category": "Cswap",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "cswapManager.assignProjectAccount",
+        "title": "%command.assignProjectAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.checkCswapUpdate",
+        "title": "%command.checkCswapUpdate.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.addAccount",
+        "title": "%command.addAccount.title%",
+        "category": "Cswap",
+        "icon": "$(add)"
+      },
+      {
+        "command": "cswapManager.removeAccount",
+        "title": "%command.removeAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.exportAccounts",
+        "title": "%command.exportAccounts.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.exportAccount",
+        "title": "%command.exportAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.importAccounts",
+        "title": "%command.importAccounts.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.saveUsageReadings",
+        "title": "%command.saveUsageReadings.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.importUsage",
+        "title": "%command.importUsage.title%",
+        "category": "Cswap"
+      },
+      {
         "command": "cswapManager.setDisplayName",
         "title": "%command.setDisplayName.title%",
         "category": "Cswap"
@@ -232,6 +290,71 @@
         "category": "Cswap"
       }
     ],
+    "icons": {
+      "cswap-slant-0": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E000"
+        }
+      },
+      "cswap-slant-1": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E001"
+        }
+      },
+      "cswap-slant-2": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E002"
+        }
+      },
+      "cswap-slant-3": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E003"
+        }
+      },
+      "cswap-slant-4": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E004"
+        }
+      },
+      "cswap-slant-5": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E005"
+        }
+      },
+      "cswap-slant-6": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E006"
+        }
+      },
+      "cswap-slant-7": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E007"
+        }
+      },
+      "cswap-slant-8": {
+        "description": "%icon.slant.description%",
+        "default": {
+          "fontPath": "./media/usage-bars.woff",
+          "fontCharacter": "\\E008"
+        }
+      }
+    },
     "menus": {
       "view/title": [
         {
@@ -280,9 +403,39 @@
           "group": "z_support@1"
         },
         {
+          "command": "cswapManager.addAccount",
+          "when": "view == cswapManager.accounts",
+          "group": "x_accounts@1"
+        },
+        {
+          "command": "cswapManager.openClaudeForProject",
+          "when": "view == cswapManager.accounts",
+          "group": "x_accounts@2"
+        },
+        {
           "command": "cswapManager.autoSwitch",
           "when": "view == cswapManager.accounts",
           "group": "y_auto@1"
+        },
+        {
+          "command": "cswapManager.exportAccounts",
+          "when": "view == cswapManager.accounts",
+          "group": "y_transfer@1"
+        },
+        {
+          "command": "cswapManager.importAccounts",
+          "when": "view == cswapManager.accounts",
+          "group": "y_transfer@2"
+        },
+        {
+          "command": "cswapManager.saveUsageReadings",
+          "when": "view == cswapManager.accounts",
+          "group": "y_transfer@3"
+        },
+        {
+          "command": "cswapManager.importUsage",
+          "when": "view == cswapManager.accounts",
+          "group": "y_transfer@4"
         }
       ],
       "commandPalette": [
@@ -300,6 +453,14 @@
         },
         {
           "command": "cswapManager.setDisplayName",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.removeAccount",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.exportAccount",
           "when": "false"
         },
         {
@@ -391,6 +552,26 @@
           "command": "cswapManager.moveAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
           "group": "2_manage@7"
+        },
+        {
+          "command": "cswapManager.removeAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "9_danger@1"
+        },
+        {
+          "command": "cswapManager.openClaudeAs",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "1_switch@3"
+        },
+        {
+          "command": "cswapManager.assignProjectAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@8"
+        },
+        {
+          "command": "cswapManager.exportAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@9"
         }
       ]
     },
@@ -580,6 +761,13 @@
           ],
           "order": 8.1,
           "markdownDescription": "%config.barStyle.description%"
+        },
+        "cswapManager.checkCswapUpdates": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 8.6,
+          "markdownDescription": "%config.checkCswapUpdates.description%"
         },
         "cswapManager.displayNames": {
           "type": "object",

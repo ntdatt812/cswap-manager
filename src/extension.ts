@@ -17,7 +17,10 @@ import { configureLocalization } from './vscode/l10n';
 import { Logger } from './vscode/logger';
 import { describeCliError } from './vscode/messages';
 import { applyDisplayNames } from './core/model/displayNames';
+import { applyPriorities, type PriorityEntry } from './core/model/priorities';
 import { CrossWindowSync } from './vscode/crossWindowSync';
+import { CswapUpdateCheck } from './vscode/cswapUpdateCheck';
+import { ProjectAccounts } from './vscode/projectAccounts';
 import { StatusBarController } from './vscode/statusBarController';
 
 /** Exposed only when running under the extension test harness. */
@@ -57,16 +60,41 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     homeDir,
     onCommandFinished: (meta, error) => logger.commandFinished(meta, error),
   });
-  // Display names are the user's own, kept in VS Code settings and added to every snapshot.
-  const refreshService = new RefreshService({ cli, decorate: (snapshot) => applyDisplayNames(snapshot, configuration.displayNameMap()) });
+  // Display names (VS Code settings) and priorities (`cswap priority`, absent from list --json) are
+  // added to every snapshot.
+  let priorities: readonly PriorityEntry[] | undefined;
+  const refreshService = new RefreshService({
+    cli,
+    decorate: (snapshot) => applyPriorities(applyDisplayNames(snapshot, configuration.displayNameMap()), priorities),
+  });
   const gate = new OperationGate();
   const switchService = new SwitchService(cli, refreshService, gate);
   const managementService = new ManagementService(cli, refreshService, gate);
+  const loadPriorities = async (): Promise<void> => {
+    const read = await cli.priorities();
+    if (read.ok) {
+      priorities = read.value;
+      refreshService.redecorate();
+    } else {
+      logger.warn(`cswap priority could not be read (${read.error.kind}).`);
+    }
+  };
+  const firstLoad = refreshService.onDidChange((state) => {
+    if (state.snapshot !== undefined && !state.refreshing) {
+      firstLoad.dispose();
+      void loadPriorities();
+      void projectAccounts.load();
+    }
+  });
   const autoRefresh = new AutoRefreshController(refreshService, configuration);
   const accountsView = new AccountsView({ refreshService, configuration, autoRefresh, describeError: describeCliError });
   const statusBar = new StatusBarController({ refreshService, switchService, configuration, autoRefresh, describeError: describeCliError });
   const autoSwitch = new AutoSwitchController({ context, cli, gate, refreshService, switchService, configuration, logger, homeDir });
   const crossWindow = new CrossWindowSync(context.globalStorageUri, refreshService, logger);
+  const updateCheck = new CswapUpdateCheck(context, cli, resolver, logger, () => configuration.checkCswapUpdates());
+  const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger });
+  // Out of the way of start-up: one check shortly after activation, then at most daily.
+  const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
   const dashboard = new DashboardController({
     extensionUri: context.extensionUri,
     autoSwitch: autoSwitch.service,
@@ -83,6 +111,9 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
 
   context.subscriptions.push(
     logger,
+    firstLoad,
+    managementService,
+    managementService.onDidApply(() => void loadPriorities()),
     refreshService,
     switchService,
     gate,
@@ -92,6 +123,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     dashboard,
     autoSwitch,
     crossWindow,
+    { dispose: () => clearTimeout(updateTimer) },
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.displayNames`)) {
         refreshService.redecorate();
@@ -102,7 +134,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
         void refreshService.refresh({ trigger: 'configuration', requireFresh: true });
       }
     }),
-    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, homeDir }),
+    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, homeDir }),
   );
 
   return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow } : undefined;

@@ -6,7 +6,7 @@ import {
   accountLevel,
   accountName,
   hasUnavailableUsage,
-  metricsDescription,
+  metricsRow,
   planText,
   relativeAge,
   type PresentationOptions,
@@ -96,6 +96,14 @@ export function sanitizeLabel(text: string): string {
   return text.replace(/\$\(/g, '$​(');
 }
 
+/**
+ * Like `sanitizeLabel`, but keeps the slant usage-bar icons (`$(cswap-slant-0…8)`), for lines that
+ * contain a bar. Any other `$(` is still neutralised; the bar icons only draw a bar cell.
+ */
+export function sanitizeLabelKeepingBars(text: string): string {
+  return text.replace(/\$\((?!cswap-slant-[0-8]\))/g, '$​(');
+}
+
 function shorten(text: string): string {
   return text.length <= MAX_NAME_LENGTH ? text : `${text.slice(0, MAX_NAME_LENGTH - 1)}…`;
 }
@@ -150,10 +158,10 @@ function tooltipFor(account: Account | undefined, state: AccountsState, options:
       rows.push({ label: t('Usage status'), value: account.usageStatus ?? '' });
     }
     for (const window of account.usage?.windows ?? []) {
-      rows.push({ label: windowLabel(window.key), value: metricsDescription(window, options) });
+      rows.push(metricsRow(windowLabel(window.key), window, options));
     }
     for (const scope of account.usage?.scoped ?? []) {
-      rows.push({ label: scope.name, value: metricsDescription(scope, options) });
+      rows.push(metricsRow(scope.name, scope, options));
     }
     const age = usageAgeMs(account, snapshot.capturedAt, options.now);
     if (age !== undefined) {
@@ -228,7 +236,7 @@ export function buildStatusBarModel(state: AccountsState, options: StatusBarOpti
   }
   // The bar sits right before the percentage it draws, as one segment.
   const usageSegment = [
-    has('bar') && fullest?.pct !== undefined ? usageBar(fullest.pct, STATUS_BAR_BAR_WIDTH, options.barStyle) : undefined,
+    has('bar') && fullest?.pct !== undefined ? usageBar(fullest.pct, STATUS_BAR_BAR_WIDTH, options.barStyle, { icons: true }) : undefined,
     has('usage') && usage !== undefined ? sanitizeLabel(usage) : undefined,
   ].filter((piece): piece is string => piece !== undefined);
   if (usageSegment.length > 0) {

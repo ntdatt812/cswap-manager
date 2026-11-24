@@ -13,7 +13,11 @@ export function availableActions(account: Account): AccountActionId[] {
   if (account.threshold !== undefined) {
     actions.push('clearThreshold');
   }
-  actions.push('move');
+  actions.push('setPriority');
+  if ((account.priority ?? 0) > 0) {
+    actions.push('clearPriority');
+  }
+  actions.push('move', 'remove');
   return actions;
 }
 
@@ -33,8 +37,14 @@ export function actionLabel(action: AccountActionId, t: Translate): string {
       return t('Set switch threshold…');
     case 'clearThreshold':
       return t('Clear switch threshold');
+    case 'setPriority':
+      return t('Set priority…');
+    case 'clearPriority':
+      return t('Reset priority to 0');
     case 'move':
       return t('Move to slot…');
+    case 'remove':
+      return t('Remove from cswap…');
   }
 }
 
@@ -71,12 +81,23 @@ export function manageRows(account: Account, t: Translate): ManageRow[] {
         ...(account.threshold === undefined ? [] : [action('clearThreshold', t('Use global'))]),
       ],
     },
+    {
+      label: t('Priority'),
+      value: account.priority === undefined ? t('unknown') : account.priority === 0 ? t('0 (default)') : String(account.priority),
+      actions: [
+        action('setPriority', (account.priority ?? 0) > 0 ? t('Change…') : t('Set…')),
+        ...((account.priority ?? 0) > 0 ? [action('clearPriority', t('Reset'))] : []),
+      ],
+    },
     { label: t('Slot'), value: String(account.slot), actions: [action('move', t('Move…'))] },
   ];
 }
 
+/** Actions shown in the dashboard: everything except removal (native UI only). */
 export function accountActions(account: Account, t: Translate): AccountAction[] {
-  return availableActions(account).map((id) => ({ id, label: actionLabel(id, t) }));
+  return availableActions(account)
+    .filter((id) => id !== 'remove')
+    .map((id) => ({ id, label: actionLabel(id, t) }));
 }
 
 /**

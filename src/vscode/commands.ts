@@ -17,8 +17,13 @@ import type { AutoSwitchController } from './autoSwitchController';
 import type { DashboardController } from './dashboardPanel';
 import type { ExtensionConfiguration } from './configuration';
 import type { StatusBarController } from './statusBarController';
+import type { CswapUpdateCheck } from './cswapUpdateCheck';
+import type { ProjectAccounts } from './projectAccounts';
 import { describeCliError } from './messages';
-import { runAccountAction } from './manageFlow';
+import { runAccountAction, runDropMove } from './manageFlow';
+import { MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndDrop';
+import { runAddAccount } from './addAccountFlow';
+import { exportAccounts, importAccounts, importUsage, saveUsageReadings } from './transferFlow';
 import { t } from './presentation';
 import { openQuickSettings } from './quickSettings';
 import { runQuickSwitch, runSwitch } from './switchFlow';
@@ -36,12 +41,27 @@ export interface CommandDependencies {
   readonly dashboard: DashboardController;
   readonly autoSwitch: AutoSwitchController;
   readonly statusBar: StatusBarController;
+  readonly updateCheck: CswapUpdateCheck;
+  readonly projectAccounts: ProjectAccounts;
   readonly homeDir: string;
 }
 
 function extensionVersion(context: vscode.ExtensionContext): string {
   const version = (context.extension.packageJSON as { version?: unknown }).version;
   return typeof version === 'string' ? version : 'unknown';
+}
+
+async function checkUpdateCommand(deps: CommandDependencies): Promise<void> {
+  const state = await vscode.window.withProgress({ location: vscode.ProgressLocation.Window, title: localize('Cswap: checking for a cswap update…') }, () =>
+    deps.updateCheck.check(true),
+  );
+  if (state.current === undefined || state.latest === undefined) {
+    void vscode.window.showWarningMessage(localize('Could not check for a cswap update right now.'));
+    return;
+  }
+  if (state.latest.text === state.current.text) {
+    void vscode.window.showInformationMessage(localize('cswap {0} is up to date.', state.current.text));
+  }
 }
 
 async function refreshCommand(deps: CommandDependencies): Promise<void> {
@@ -132,6 +152,7 @@ const ACTION_COMMANDS: ReadonlyArray<[string, AccountActionId]> = [
   ['cswapManager.setThreshold', 'setThreshold'],
   ['cswapManager.clearThreshold', 'clearThreshold'],
   ['cswapManager.moveAccount', 'move'],
+  ['cswapManager.removeAccount', 'remove'],
 ];
 
 export function registerCommands(deps: CommandDependencies): vscode.Disposable[] {
@@ -143,6 +164,20 @@ export function registerCommands(deps: CommandDependencies): vscode.Disposable[]
       vscode.commands.registerCommand(command, (node?: NodeModel) => runAccountAction(deps, action, node?.slot)),
     ),
     vscode.commands.registerCommand('cswapManager.refresh', () => refreshCommand(deps)),
+    vscode.commands.registerCommand('cswapManager.addAccount', () => runAddAccount(deps)),
+    // Internal (not contributed): a drop in the Accounts view. Arguments are checked again in runDropMove.
+    vscode.commands.registerCommand(MOVE_ACCOUNT_TO_COMMAND, (slot: unknown, targetSlot: unknown) =>
+      typeof slot === 'number' && typeof targetSlot === 'number' ? runDropMove(deps, slot, targetSlot) : undefined,
+    ),
+    vscode.commands.registerCommand('cswapManager.exportAccounts', () => exportAccounts(deps)),
+    vscode.commands.registerCommand('cswapManager.exportAccount', (node?: NodeModel) => (node?.slot === undefined ? undefined : exportAccounts(deps, node.slot))),
+    vscode.commands.registerCommand('cswapManager.importAccounts', () => importAccounts(deps)),
+    vscode.commands.registerCommand('cswapManager.saveUsageReadings', () => saveUsageReadings(deps)),
+    vscode.commands.registerCommand('cswapManager.importUsage', () => importUsage(deps)),
+    vscode.commands.registerCommand('cswapManager.checkCswapUpdate', () => checkUpdateCommand(deps)),
+    vscode.commands.registerCommand('cswapManager.openClaudeAs', (node?: NodeModel) => deps.projectAccounts.openClaude(node?.slot)),
+    vscode.commands.registerCommand('cswapManager.openClaudeForProject', () => deps.projectAccounts.openClaudeForProject()),
+    vscode.commands.registerCommand('cswapManager.assignProjectAccount', (node?: NodeModel) => deps.projectAccounts.assign(node?.slot)),
     vscode.commands.registerCommand('cswapManager.showDiagnostics', () => diagnosticsCommand(deps)),
     vscode.commands.registerCommand('cswapManager.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${deps.context.extension.id}`),

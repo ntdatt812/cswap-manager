@@ -9,7 +9,8 @@ src/
     cli/
       processRunner.ts         spawn wrapper: shell:false, timeout, stdout bound, cancellation
       executableResolver.ts    setting → absolute PATH entries → ~/.local/bin
-      cswapCli.ts              read-only adapter: --version, list --json, status --json
+      cswapCli.ts              adapter: list/status/switch, auto, config, management, map, add, transfer
+      transfer.ts              export / import / import-usage arguments and stderr summaries
       cliErrors.ts, version.ts
     model/                     tolerant parsers, normalized types, list/status reconciliation
     service/refreshService.ts  cache, single-flight refresh, stale tracking, events
@@ -124,7 +125,8 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 - The `spend` amounts are shown exactly as the CLI reports them (`used / limit currency`); their unit has not been verified.
 - A real move/swap between two occupied slots has not been executed during development (fixture-tested only).
 - The opt-in end-to-end test (`CSWAP_E2E_MUTATE=1 npm run test:integration`) sets and removes an alias on an inactive slot without one; it is skipped by default.
-- Not implemented on purpose: priority, directory mappings, `cswap run`, add/remove/import/export, purge, and the auto-switch `--model`/API-key options (reasons in docs/CLI-CONTRACT.md). Auto-switch itself and its main rules are supported since 0.3.0.
+- Not implemented on purpose: `purge`, `add-token` (a token would sit in a process argument), `unclaimed`, `tui`/`watch`, the macOS `menubar`, the `--model` switch flag (the extension sets `autoswitch.model` instead) and the API-key auto-switch option. Priority, mappings, `cswap run`, add/remove and export/import/import-usage arrived in 0.8.0.
+- Per-project accounts compare folders after resolving symlinks, junctions and substituted drives, like cswap; in a multi-root workspace Quick Settings shows the first folder's account (named). `cswap run` terminals need a trusted folder.
 - The webview DOM itself has no automated tests (host-side model, protocol validation and table logic are unit-tested; the panel/message bridge is covered by extension-host tests).
 - The filter is not persisted across window reloads.
 - Killing a timed-out process is best-effort (`child.kill()`); a process tree is not killed explicitly.
@@ -162,6 +164,32 @@ Accepted: reversible actions (remove alias, enable, clear threshold) run without
 ## Display names (0.7.0)
 - cswap aliases are lower-case ASCII by design (`models.normalize_alias`: they are command identifiers). Free-form names live in the extension: `cswapManager.displayNames` (application scope) maps a 16-hex SHA-256 prefix of `email|organizationUuid` to a name, so names follow accounts across slot moves and settings.json holds no email.
 - `RefreshService` takes a `decorate` hook that adds `displayName` to every snapshot; a settings change calls `redecorate()`, which re-applies names without running cswap. `accountName` prefers the display name, then the alias, then the email.
+
+## Account lifecycle, per-project accounts and transfer (0.8.0)
+Contracts are in `docs/CLI-CONTRACT.md`; none of these commands has JSON, so each parser accepts only the verified English lines and anything else is `unexpected-shape`.
+- **Priority**: `cswap priority` is read after the first refresh and after every management change (`ManagementService.onDidApply`) and attached to snapshots by the same `decorate` hook as display names (`applyPriorities`, matched by email so a moved account keeps its tier). A priority change is verified by reading the list back.
+- **Add / remove**: `addCurrent` runs under the operation gate and confirms that the added slot became the active one. `remove` always prompts in cswap, so it gets `y` on stdin only after the VS Code modal; `ProcessRunOptions.input` is the only way stdin is opened. Removal is offered in native UI only: the dashboard's allow-list (`ACCOUNT_ACTION_IDS`) deliberately excludes it.
+- **Project accounts** (`ProjectAccounts`): `map`/`unmap` run under the gate and are verified by reading `cswap map` back; an unmap only requires the folder's own entry to be gone (a parent mapping may still apply). `cswap run` is started as a terminal whose process is cswap itself (`shellPath` = resolved executable, fixed arguments), so nothing passes through a shell and the global login is untouched.
+- **Transfer** (`core/cli/transfer.ts`, `vscode/transferFlow.ts`): export, import and import-usage always get an absolute file path (`isSafePathArgument`), never `-`, so logins never pass through the extension's pipes; their summaries are read from stderr (`OutputParser` receives stderr; it is never logged raw). Export is confirmed in a modal, warns when the target is inside an open workspace folder, never uses `--full`, and the extension never opens the file. Import is confirmed, with *Replace existing* (`--force`) as a separate button; when cswap reports that the live login's slot was rewritten, the user is told that `switch --force` (which the extension never runs) activates it. *Save usage readings* writes this computer's `list --json` verbatim after checking that it parses.
+- **cswap updates** (`CswapUpdateCheck`): at most one request a day to `pypi.org/pypi/claude-swap/json` (5 s timeout, 2 MB cap, final releases only), 30 s after start-up; *Update* opens a visible terminal with the installer's upgrade command, since `cswap upgrade` does not upgrade on Windows.
+- **Progress bar precision**: `blocks` uses Unicode eighths (~1% steps over 10 cells); `circles`/`squares` have halves (~5%). Unicode has only a full and an empty parallelogram, so `media/usage-bars.woff` (built by `scripts/build-usage-bar-icons.py`, proportions of Segoe UI Symbol's ▰▱) adds nine slanted cells contributed as icons `cswap-slant-0…8` (empty, eighths, full). `usageBar(…, { icons: true })` uses them where `$(icon)` renders: status bar text, quick pick labels/descriptions and tooltips. Tree item descriptions cannot render icons, so the sidebar keeps ▰▱ whole cells. Quick pick descriptions go through `sanitizeLabelKeepingBars`, which neutralises every `$(` except these nine ids; tooltips enable theme icons, `appendText` then escapes `$(` in all data, and only a row's `bar` matching `SLANT_BAR_PATTERN` is appended as Markdown.
+
+- **Drag and drop** (`AccountsDragAndDrop`): the drag carries only the slot (own MIME type) of a single account node; a drop onto another account node runs the internal, uncontributed command `cswapManager.moveAccountTo`, which re-validates both slots and runs `runDropMove`. A drop is deliberate and a swap is reversible, so there is no modal: progress shows in the view (`ProgressLocation` with the view id) and a confirmed result offers **Undo**, which swaps back through `ManagementService.apply(…, stateAfterTheMove)`, so it refuses if either slot changed meanwhile. *Move to slot…* keeps its confirmation.
+- `ManagementService.apply` skips the re-read before a change under the same rule as switching (`CONFIRMED_FRESH_MS`: the snapshot acted on is under 15 s old, still the latest read, and no refresh failed since); otherwise it re-reads and refuses when a touched slot changed.
+- **Even pace**: cswap's `expectedPct` is the share of the window's time already passed. The dashboard labels it *Even pace by now* and draws it as a neutral tick on the meter bars (`Meter.pace`), explained in the bar's tooltip and accessible value.
+- **Dashboard**: the active card is a two-column grid (account and switch buttons | stacked meters; one column below 620 px). Reset-timeline rows are buttons that select the account (`selectRow`), marked with `aria-pressed`.
+
+### Independent review of the 0.8.0 batch
+A read-only security review found 1 high, 1 medium, 6 low and 3 info issues; all are fixed:
+- **H1** `cswap run` terminals start in the project folder and cswap finds `claude` with `shutil.which`, which on Windows searches the current folder first, so a planted `claude.cmd/.bat/.exe` would run. The terminal now requires a trusted workspace and sets `NoDefaultCurrentDirectoryInExePath=1`.
+- **M2** Priorities were matched by email, but one email can own several accounts (one per organization) and `cswap priority` prints no organization. The slot now decides, the email only cross-checks it, and an ambiguous tier is unverified rather than assumed 0.
+- **L3** The update terminal starts in the home folder with the same variable; `~/.local/bin` (used by both uv and pipx) is resolved by which installer's tool folder holds claude-swap.
+- **L4** "(account removed)" map rows are `<path> → <email> (account removed)`; the parser and fixture now match.
+- **L5** Folders are compared after `realpath` (cswap uses `Path.resolve()`); mapping changes are verified against a fresh read only.
+- **L6** Quick Settings tells "not read yet" from "not assigned" and names the folder in multi-root workspaces.
+- **L7** Saving usage readings warns inside a project folder and reports write errors.
+- **L8** A single-account export re-checks inside the gate that the slot still holds the confirmed account.
+- Info: `add` output with a move is reported as a move; the PyPI request has an overall deadline; outdated limitation notes were updated.
 
 ## Keeping windows in step (0.6.0)
 - Auto-switch runs in one window, and windows only poll while focused, so other windows could show an old account. `CrossWindowSync` writes `active-account.signal.json` (slot, time, `vscode.env.sessionId`; no account data) into global storage when a fresh snapshot shows a different active slot, and watches that file; a signal from another window that disagrees with this window's slot triggers one refresh (`trigger: 'external'`). The decision logic (`ActiveSlotTracker`) only writes on a real change after the first load and ignores its own echo, so windows cannot ping-pong.

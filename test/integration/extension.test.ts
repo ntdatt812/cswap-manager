@@ -48,7 +48,10 @@ suite('Cswap Manager (extension host)', () => {
 
   test('registers every contributed command', async () => {
     const registered = await vscode.commands.getCommands(true);
-    for (const command of COMMANDS) {
+    const contributed = (vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON as { contributes: { commands: Array<{ command: string }> } }).contributes.commands.map(
+      (entry) => entry.command,
+    );
+    for (const command of [...COMMANDS, ...contributed]) {
       assert.ok(registered.includes(command), command);
     }
   });

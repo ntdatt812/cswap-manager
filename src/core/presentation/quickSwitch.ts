@@ -30,7 +30,7 @@ function usageLine(account: Account, options: PresentationOptions): string {
   const width = windows.length === 1 ? 10 : 6;
   const bars = windows.map((window) => {
     const pct = window.pct === undefined ? '?' : formatPercent(window.pct);
-    return `${windowLabel(window.key)} ${usageBar(window.pct ?? 0, width, options.barStyle)} ${pct}`;
+    return `${windowLabel(window.key)} ${usageBar(window.pct ?? 0, width, options.barStyle, { icons: true })} ${pct}`;
   });
   const reset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined && epoch > now);
   return reset === undefined ? bars.join('   ') : `${bars.join('   ')}   ↻ ${compactDuration(reset - now)}`;

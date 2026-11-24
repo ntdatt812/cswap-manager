@@ -6,6 +6,7 @@ import {
   STATUS_BAR_LOOKS,
   STATUS_BAR_LOOK_PARTS,
   barStyleLabel,
+  barStylePrecision,
   barStyleSample,
   buildQuickSettingsRows,
   languageLabel,
@@ -33,7 +34,10 @@ import {
 } from '../core/presentation/statusBar';
 import type { AutoSwitchController, MenuResult } from './autoSwitchController';
 import type { ExtensionConfiguration, UserSettingKey } from './configuration';
+import type { AccountsSnapshot } from '../core/model/types';
+import { accountName } from '../core/presentation/accountTree';
 import { t } from './presentation';
+import type { ProjectMapping } from './projectAccounts';
 import { askWithBack, BACK, pickMany, pickOne, type Back } from './quickPick';
 import { offerReload, showSaveFailed } from './settingErrors';
 import { statusBarButtonIcon, type StatusBarController } from './statusBarController';
@@ -42,6 +46,12 @@ export interface QuickSettingsDependencies {
   readonly configuration: ExtensionConfiguration;
   readonly autoSwitch: AutoSwitchController;
   readonly statusBar: StatusBarController;
+  /** For names of mapped accounts. */
+  readonly refreshService?: { getState(): { readonly snapshot?: AccountsSnapshot } };
+  /** Account mapped to the open project folder (`cswap map`). */
+  readonly projectAccounts?: { currentMapping(): ProjectMapping | undefined; assign(): Promise<void> };
+  /** Known cswap version / newer release, for the Advanced row. */
+  readonly updateCheck?: { getState(): { readonly current?: { readonly text: string }; readonly latest?: { readonly text: string } } };
 }
 
 /**
@@ -49,6 +59,24 @@ export interface QuickSettingsDependencies {
  * change was made), or close everything (Esc, focus moved elsewhere, or other UI took over).
  */
 type Outcome = 'list' | 'close';
+
+/** The open project's account; undefined when no folder is open. Names the folder in a multi-root workspace. */
+function projectAccountText(deps: QuickSettingsDependencies): string | undefined {
+  const mapping = deps.projectAccounts?.currentMapping();
+  if (mapping === undefined) {
+    return undefined;
+  }
+  let text: string;
+  if (mapping.unknown === true) {
+    text = t('not read yet');
+  } else if (mapping.slot === undefined) {
+    text = t('not assigned');
+  } else {
+    const account = deps.refreshService?.getState().snapshot?.accounts.find((candidate) => candidate.slot === mapping.slot);
+    text = `#${mapping.slot} ${account === undefined ? '' : accountName(account, t)}`.trim();
+  }
+  return (vscode.workspace.workspaceFolders?.length ?? 0) > 1 ? `${text} (${mapping.folderName})` : text;
+}
 
 const fromMenu = (result: MenuResult): Outcome => (result === 'closed' ? 'close' : 'list');
 
@@ -67,6 +95,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     confirmSwitch: configuration.confirmSwitch(),
     autoSwitchMode: configuration.autoSwitchMode(),
     autoSwitchStrategy: deps.autoSwitch.service.getState().rules?.strategy,
+    autoSwitchModel: ((rules) => (rules === undefined ? undefined : (rules.model ?? null)))(deps.autoSwitch.service.getState().rules),
     autoSwitchRules: deps.autoSwitch.rulesText(),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
@@ -76,6 +105,11 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     refreshSeconds: configuration.refreshIntervalSeconds(),
     cliPath: displayPath(configuration.cliPath()),
     timeoutSeconds: Math.round(configuration.cliRunSettings().timeoutMs / 1000),
+    ...((text) => (text === undefined ? {} : { projectAccount: text }))(projectAccountText(deps)),
+    ...((update) => ({
+      ...(update?.current === undefined ? {} : { cswapVersion: update.current.text }),
+      ...(update?.latest === undefined ? {} : { cswapLatest: update.latest.text }),
+    }))(deps.updateCheck?.getState()),
   };
 }
 
@@ -250,7 +284,7 @@ async function chooseBarStyle(deps: QuickSettingsDependencies): Promise<Outcome>
   const current = configuration.barStyle();
   const value = await chooseValue(
     t('Progress bar style'),
-    BAR_STYLES.map((style) => ({ value: style, label: barStyleLabel(style, t), description: barStyleSample(style) })),
+    BAR_STYLES.map((style) => ({ value: style, label: barStyleLabel(style, t), description: barStyleSample(style), detail: barStylePrecision(style, t) })),
     current,
     // The status bar previews the style when it shows a bar; the samples show it either way.
     (style) => statusBar.preview(style === undefined ? undefined : { barStyle: style }),
@@ -469,6 +503,8 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
       return fromMenu(await deps.autoSwitch.openMenu({ back: true }));
     case 'autoStrategy':
       return fromMenu(await deps.autoSwitch.chooseStrategy({ back: true }));
+    case 'autoModel':
+      return fromMenu(await deps.autoSwitch.chooseModel({ back: true }));
     case 'autoRules':
       return fromMenu(await deps.autoSwitch.editRules({ back: true }));
     case 'statusBar':
@@ -498,6 +534,43 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
         timeoutChoices(current).map((seconds) => ({ value: seconds, label: t('{0} s', seconds) })),
         current,
       );
+    }
+    case 'projectAccount':
+      if (deps.projectAccounts === undefined) {
+        return 'list';
+      }
+      await deps.projectAccounts.assign();
+      return 'list';
+    case 'cswapVersion':
+      await vscode.commands.executeCommand('cswapManager.checkCswapUpdate');
+      return 'close';
+    case 'transfer': {
+      const command = await chooseValue(
+        t('Another computer'),
+        [
+          {
+            value: 'cswapManager.exportAccounts',
+            label: `$(export) ${t('Export accounts to a file…')}`,
+            detail: t('To move your accounts to another computer. The file holds the logins.'),
+          },
+          { value: 'cswapManager.importAccounts', label: `$(desktop-download) ${t('Import accounts from a file…')}` },
+          {
+            value: 'cswapManager.saveUsageReadings',
+            label: `$(save) ${t('Save usage readings for another computer…')}`,
+            detail: t('Computers with the same accounts can let one of them fetch usage and pass it to the others.'),
+          },
+          { value: 'cswapManager.importUsage', label: `$(cloud-download) ${t('Import usage readings from another computer…')}` },
+        ],
+        '',
+      );
+      if (command === undefined) {
+        return 'close';
+      }
+      if (command === BACK) {
+        return 'list';
+      }
+      await vscode.commands.executeCommand(command);
+      return 'close';
     }
     case 'allSettings':
       await vscode.commands.executeCommand('cswapManager.openSettings');
