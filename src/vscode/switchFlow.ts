@@ -1,0 +1,168 @@
+import * as vscode from 'vscode';
+import type { SwitchTarget } from '../core/cli/cswapCli';
+import type { Account } from '../core/model/types';
+import { accountName } from '../core/presentation/accountTree';
+import { buildQuickSwitchItems, type QuickSwitchAction } from '../core/presentation/quickSwitch';
+import { sanitizeLabel } from '../core/presentation/statusBar';
+import { neutralizeLinks, redactText } from '../core/security/redact';
+import { assessFreshness, type RefreshService } from '../core/service/refreshService';
+import type { SwitchOutcome, SwitchService } from '../core/service/switchService';
+import type { ExtensionConfiguration } from './configuration';
+import { describeCliError, describeNoSwitchReason } from './messages';
+import { presentationOptions, t } from './presentation';
+
+export interface SwitchFlowDependencies {
+  readonly refreshService: RefreshService;
+  readonly switchService: SwitchService;
+  readonly configuration: ExtensionConfiguration;
+  readonly homeDir: string;
+}
+
+interface ActionItem extends vscode.QuickPickItem {
+  readonly action?: QuickSwitchAction;
+}
+
+function findAccount(deps: SwitchFlowDependencies, slot: number): Account | undefined {
+  return deps.refreshService.getState().snapshot?.accounts.find((account) => account.slot === slot);
+}
+
+function targetLabel(deps: SwitchFlowDependencies, target: SwitchTarget): string {
+  if (target.kind === 'strategy') {
+    return target.strategy === 'best' ? t('the account with the most headroom') : t('the next available account');
+  }
+  const account = findAccount(deps, target.slot);
+  return account === undefined ? t('slot {0}', target.slot) : t('slot {0} ({1})', target.slot, accountName(account, t));
+}
+
+async function confirm(deps: SwitchFlowDependencies, target: SwitchTarget): Promise<boolean> {
+  if (!deps.configuration.confirmSwitch()) {
+    return true;
+  }
+  const proceed = t('Switch');
+  const choice = await vscode.window.showWarningMessage(
+    neutralizeLinks(t('Switch Claude Code to {0}?', targetLabel(deps, target))),
+    { modal: true, detail: t('cswap replaces the active Claude Code login. Running Claude Code sessions will use the new account.') },
+    proceed,
+  );
+  return choice === proceed;
+}
+
+function verificationNote(outcome: Extract<SwitchOutcome, { verification: unknown }>): string {
+  const { verification } = outcome;
+  if (verification.refreshError) {
+    return t('The result could not be verified: {0}', describeCliError(verification.refreshError));
+  }
+  return verification.activeSlot === undefined ? t('The active account is unknown.') : t('Active account is now slot {0}.', verification.activeSlot);
+}
+
+/** Reports only what the post-switch verification confirmed, never just what the CLI claimed. */
+function report(deps: SwitchFlowDependencies, outcome: SwitchOutcome): void {
+  // Messages may carry CLI-derived names or reasons; they must never render as links.
+  const info = (text: string) => void vscode.window.showInformationMessage(neutralizeLinks(text));
+  const warn = (text: string) => void vscode.window.showWarningMessage(neutralizeLinks(text));
+  switch (outcome.kind) {
+    case 'busy':
+      info(t('Another cswap operation is in progress. Try again when it finishes.'));
+      return;
+    case 'rejected':
+      warn(t('The account in that slot changed after you confirmed. Nothing was switched; check the list and try again.'));
+      return;
+    case 'switched': {
+      const slot = outcome.result.to?.slot ?? outcome.verification.activeSlot;
+      const warnings = outcome.result.warnings.length > 0 ? ` ${t('cswap reported {0} warning(s).', outcome.result.warnings.length)}` : '';
+      if (outcome.verification.status === 'confirmed' && slot !== undefined) {
+        const account = findAccount(deps, slot);
+        const name = account === undefined ? '' : ` (${accountName(account, t)})`;
+        info(`${t('Cswap: switched to slot {0}{1}.', slot, name)}${warnings}`);
+      } else {
+        warn(`${t('cswap reported a switch, but the new state could not be confirmed.')} ${verificationNote(outcome)}${warnings}`);
+      }
+      return;
+    }
+    case 'not-switched':
+      info(`${describeNoSwitchReason(outcome.result.reason)} ${verificationNote(outcome)}`);
+      return;
+    case 'failed': {
+      const detail = outcome.error.detail ? ` (${redactText(outcome.error.detail, { homeDir: deps.homeDir })})` : '';
+      void vscode.window.showErrorMessage(neutralizeLinks(`${t('Cswap switch failed: {0}', describeCliError(outcome.error))}${detail} ${verificationNote(outcome)}`));
+      return;
+    }
+  }
+}
+
+export async function runSwitch(deps: SwitchFlowDependencies, target: SwitchTarget): Promise<SwitchOutcome | undefined> {
+  if (deps.switchService.isSwitching()) {
+    report(deps, { kind: 'busy' });
+    return { kind: 'busy' };
+  }
+  // The state the user sees while confirming; the switch is refused if that slot changes meanwhile.
+  const confirmedWith = deps.refreshService.getState().snapshot;
+  if (target.kind === 'slot' && confirmedWith?.active.slot === target.slot) {
+    void vscode.window.showInformationMessage(t('Slot {0} is already the active account.', target.slot));
+    return undefined;
+  }
+  if (!(await confirm(deps, target))) {
+    return undefined;
+  }
+  const outcome = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title: neutralizeLinks(t('Cswap: switching to {0}…', targetLabel(deps, target))) },
+    () => deps.switchService.switch(target, confirmedWith),
+  );
+  report(deps, outcome);
+  return outcome;
+}
+
+async function ensureData(deps: SwitchFlowDependencies): Promise<boolean> {
+  const state = deps.refreshService.getState();
+  const freshness = assessFreshness(state, Date.now(), deps.configuration.staleAfterMs());
+  if (freshness.freshness === 'fresh') {
+    return true;
+  }
+  const result = await vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Window, title: t('Cswap: refreshing accounts…') },
+    () => deps.refreshService.refresh({ trigger: 'manual' }),
+  );
+  if (!result.ok && result.snapshot === undefined) {
+    void vscode.window.showErrorMessage(describeCliError(result.error));
+    return false;
+  }
+  return true;
+}
+
+export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<SwitchOutcome | undefined> {
+  if (deps.switchService.isSwitching()) {
+    report(deps, { kind: 'busy' });
+    return { kind: 'busy' };
+  }
+  if (!(await ensureData(deps))) {
+    return undefined;
+  }
+  const state = deps.refreshService.getState();
+  const snapshot = state.snapshot;
+  if (snapshot === undefined) {
+    return undefined;
+  }
+  const stale = assessFreshness(state, Date.now(), deps.configuration.staleAfterMs()).freshness === 'stale';
+  const items: ActionItem[] = buildQuickSwitchItems(snapshot, presentationOptions(deps.configuration)).map((model) =>
+    model.separator
+      ? { label: model.label, kind: vscode.QuickPickItemKind.Separator }
+      : {
+          label: `${model.iconId ? `$(${model.iconId}) ` : ''}${sanitizeLabel(model.label)}`,
+          ...(model.description === undefined ? {} : { description: sanitizeLabel(model.description) }),
+          ...(model.detail === undefined ? {} : { detail: sanitizeLabel(model.detail) }),
+          ...(model.action === undefined ? {} : { action: model.action }),
+        },
+  );
+  const active = snapshot.active.slot === undefined ? t('unknown') : `#${snapshot.active.slot}`;
+  const picked = await vscode.window.showQuickPick(items, {
+    title: t('Cswap: switch account (active: {0})', active),
+    placeHolder: stale ? t('Data may be out of date. Type to search by slot, email, alias or plan.') : t('Type to search by slot, email, alias or plan.'),
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+  const action = picked?.action;
+  if (action === undefined) {
+    return undefined;
+  }
+  return runSwitch(deps, action.kind === 'strategy' ? { kind: 'strategy', strategy: action.strategy } : { kind: 'slot', slot: action.slot });
+}

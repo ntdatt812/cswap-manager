@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "switched": true,
+  "from": {
+    "number": 2,
+    "email": "bob@example.com"
+  },
+  "to": {
+    "number": 1,
+    "email": "alice@example.com"
+  },
+  "strategy": "best",
+  "reason": "switched",
+  "message": "Switched to Account-1 (alice@example.com)",
+  "warnings": ["Live login for bob@example.com was re-synced before switching"],
+  "models": ["ModelA"],
+  "modelSource": "cli"
+}

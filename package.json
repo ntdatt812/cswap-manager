@@ -1,0 +1,471 @@
+{
+  "name": "cswap-manager",
+  "displayName": "Cswap Manager",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "cswap-manager-dev",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "cswap",
+    "claude-swap",
+    "accounts"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "%capabilities.untrustedWorkspaces.description%",
+      "restrictedConfigurations": [
+        "cswapManager.confirmSwitch"
+      ]
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cswapManager",
+          "title": "Cswap Manager",
+          "icon": "resources/cswap.svg"
+        }
+      ]
+    },
+    "views": {
+      "cswapManager": [
+        {
+          "id": "cswapManager.accounts",
+          "name": "%view.accounts.name%",
+          "icon": "resources/cswap.svg",
+          "contextualTitle": "Cswap Manager"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.loading%",
+        "when": "!cswapManager.viewState || cswapManager.viewState == loading"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.notFound%",
+        "when": "cswapManager.viewState == notFound"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.invalidSetting%",
+        "when": "cswapManager.viewState == invalidSetting"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.unsupportedExecutable%",
+        "when": "cswapManager.viewState == unsupportedExecutable"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.error%",
+        "when": "cswapManager.viewState == error"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.empty%",
+        "when": "cswapManager.viewState == empty"
+      },
+      {
+        "view": "cswapManager.accounts",
+        "contents": "%welcome.filteredEmpty%",
+        "when": "cswapManager.viewState == filteredEmpty"
+      }
+    ],
+    "commands": [
+      {
+        "command": "cswapManager.refresh",
+        "title": "%command.refresh.title%",
+        "category": "Cswap",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "cswapManager.showDiagnostics",
+        "title": "%command.showDiagnostics.title%",
+        "category": "Cswap",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "cswapManager.openSettings",
+        "title": "%command.openSettings.title%",
+        "category": "Cswap",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "cswapManager.filterAccounts",
+        "title": "%command.filterAccounts.title%",
+        "category": "Cswap",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "cswapManager.clearFilter",
+        "title": "%command.clearFilter.title%",
+        "category": "Cswap",
+        "icon": "$(filter-filled)"
+      },
+      {
+        "command": "cswapManager.sortAccounts",
+        "title": "%command.sortAccounts.title%",
+        "category": "Cswap",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "cswapManager.quickSwitch",
+        "title": "%command.quickSwitch.title%",
+        "category": "Cswap",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "cswapManager.switchBest",
+        "title": "%command.switchBest.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.switchNextAvailable",
+        "title": "%command.switchNextAvailable.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.switchToAccount",
+        "title": "%command.switchToAccount.title%",
+        "category": "Cswap",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "cswapManager.openDashboard",
+        "title": "%command.openDashboard.title%",
+        "category": "Cswap",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "cswapManager.showAccountDetails",
+        "title": "%command.showAccountDetails.title%",
+        "category": "Cswap",
+        "icon": "$(info)"
+      },
+      {
+        "command": "cswapManager.manageAccount",
+        "title": "%command.manageAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.setAlias",
+        "title": "%command.setAlias.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.removeAlias",
+        "title": "%command.removeAlias.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.disableAccount",
+        "title": "%command.disableAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.enableAccount",
+        "title": "%command.enableAccount.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.setThreshold",
+        "title": "%command.setThreshold.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.clearThreshold",
+        "title": "%command.clearThreshold.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.moveAccount",
+        "title": "%command.moveAccount.title%",
+        "category": "Cswap"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "cswapManager.refresh",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "cswapManager.quickSwitch",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "cswapManager.openDashboard",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@3"
+        },
+        {
+          "command": "cswapManager.filterAccounts",
+          "when": "view == cswapManager.accounts && !cswapManager.filterActive",
+          "group": "navigation@4"
+        },
+        {
+          "command": "cswapManager.clearFilter",
+          "when": "view == cswapManager.accounts && cswapManager.filterActive",
+          "group": "navigation@4"
+        },
+        {
+          "command": "cswapManager.sortAccounts",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@5"
+        },
+        {
+          "command": "cswapManager.openSettings",
+          "when": "view == cswapManager.accounts",
+          "group": "navigation@9"
+        },
+        {
+          "command": "cswapManager.showDiagnostics",
+          "when": "view == cswapManager.accounts",
+          "group": "z_support@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "cswapManager.clearFilter",
+          "when": "cswapManager.filterActive"
+        },
+        {
+          "command": "cswapManager.switchToAccount",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.showAccountDetails",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.setAlias",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.removeAlias",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.disableAccount",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.enableAccount",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.setThreshold",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.clearThreshold",
+          "when": "false"
+        },
+        {
+          "command": "cswapManager.moveAccount",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "cswapManager.switchToAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:inactive:/",
+          "group": "inline"
+        },
+        {
+          "command": "cswapManager.switchToAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:inactive:/",
+          "group": "1_switch@1"
+        },
+        {
+          "command": "cswapManager.showAccountDetails",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "inline"
+        },
+        {
+          "command": "cswapManager.showAccountDetails",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "1_switch@2"
+        },
+        {
+          "command": "cswapManager.setAlias",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@1"
+        },
+        {
+          "command": "cswapManager.removeAlias",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:aliased(:|$)/",
+          "group": "2_manage@2"
+        },
+        {
+          "command": "cswapManager.disableAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:enabled(:|$)/",
+          "group": "2_manage@3"
+        },
+        {
+          "command": "cswapManager.enableAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:disabled(:|$)/",
+          "group": "2_manage@4"
+        },
+        {
+          "command": "cswapManager.setThreshold",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@5"
+        },
+        {
+          "command": "cswapManager.clearThreshold",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:threshold(:|$)/",
+          "group": "2_manage@6"
+        },
+        {
+          "command": "cswapManager.moveAccount",
+          "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
+          "group": "2_manage@7"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Cswap Manager",
+      "properties": {
+        "cswapManager.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "order": 0,
+          "markdownDescription": "%config.cliPath.description%"
+        },
+        "cswapManager.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 120,
+          "minimum": 0,
+          "maximum": 3600,
+          "order": 1,
+          "markdownDescription": "%config.refreshIntervalSeconds.description%"
+        },
+        "cswapManager.statusBar.mode": {
+          "type": "string",
+          "default": "slotUsage",
+          "enum": [
+            "slotUsage",
+            "slot",
+            "nameUsage",
+            "hidden"
+          ],
+          "enumDescriptions": [
+            "%config.statusBarMode.slotUsage%",
+            "%config.statusBarMode.slot%",
+            "%config.statusBarMode.nameUsage%",
+            "%config.statusBarMode.hidden%"
+          ],
+          "order": 2,
+          "markdownDescription": "%config.statusBarMode.description%"
+        },
+        "cswapManager.confirmSwitch": {
+          "type": "boolean",
+          "default": true,
+          "order": 3,
+          "markdownDescription": "%config.confirmSwitch.description%",
+          "scope": "application"
+        },
+        "cswapManager.sidebar.sortOrder": {
+          "type": "string",
+          "default": "slot",
+          "enum": [
+            "slot",
+            "mostUsed",
+            "leastUsed",
+            "soonestReset"
+          ],
+          "enumDescriptions": [
+            "%config.sortOrder.slot%",
+            "%config.sortOrder.mostUsed%",
+            "%config.sortOrder.leastUsed%",
+            "%config.sortOrder.soonestReset%"
+          ],
+          "order": 4,
+          "markdownDescription": "%config.sortOrder.description%"
+        },
+        "cswapManager.display.warningThreshold": {
+          "type": "number",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 100,
+          "order": 5,
+          "markdownDescription": "%config.warningThreshold.description%"
+        },
+        "cswapManager.display.criticalThreshold": {
+          "type": "number",
+          "default": 95,
+          "minimum": 0,
+          "maximum": 100,
+          "order": 6,
+          "markdownDescription": "%config.criticalThreshold.description%"
+        },
+        "cswapManager.commandTimeoutSeconds": {
+          "type": "number",
+          "default": 30,
+          "minimum": 2,
+          "maximum": 300,
+          "scope": "machine",
+          "order": 7,
+          "markdownDescription": "%config.commandTimeoutSeconds.description%"
+        },
+        "cswapManager.maxOutputKilobytes": {
+          "type": "number",
+          "default": 2048,
+          "minimum": 64,
+          "maximum": 65536,
+          "scope": "machine",
+          "order": 8,
+          "markdownDescription": "%config.maxOutputKilobytes.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('out',{recursive:true,force:true});require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "typecheck": "tsc -p . --noEmit && tsc -p src/webview --noEmit",
+    "build:tests": "node -e \"require('fs').rmSync('out',{recursive:true,force:true})\" && tsc -p .",
+    "bundle": "node esbuild.mjs",
+    "compile": "npm run typecheck && npm run bundle",
+    "watch": "node esbuild.mjs --watch",
+    "lint": "eslint .",
+    "test": "npm run build:tests && node --test \"out/test/unit/**/*.test.js\"",
+    "test:live": "npm run build:tests && node --test \"out/test/live/**/*.test.js\"",
+    "test:integration": "npm run build:tests && npm run bundle && vscode-test",
+    "package": "node esbuild.mjs --production",
+    "vscode:prepublish": "npm run package",
+    "package:vsix": "npm run typecheck && vsce package --skip-license --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "~20.19.0",
+    "@types/vscode": "~1.90.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "mocha": "^12.0.3",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.74.0"
+  }
+}

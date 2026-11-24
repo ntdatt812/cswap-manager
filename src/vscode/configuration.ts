@@ -1,0 +1,78 @@
+import * as vscode from 'vscode';
+import type { CliRunSettings } from '../core/cli/cswapCli';
+import { isSortOrder, normalizeThresholds, type SortOrder, type UsageThresholds } from '../core/presentation/format';
+import { isStatusBarMode, type StatusBarMode } from '../core/presentation/statusBar';
+import { normalizeIntervalMs } from '../core/service/refreshScheduler';
+import { DEFAULT_STALE_AFTER_MS } from '../core/service/refreshService';
+
+export const CONFIG_SECTION = 'cswapManager';
+
+const DEFAULT_TIMEOUT_SECONDS = 30;
+const DEFAULT_MAX_OUTPUT_KB = 2048;
+const DEFAULT_REFRESH_SECONDS = 120;
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Reads settings. `cliPath` is read from the user (global) scope only: the setting is declared
+ * machine-scoped, and ignoring workspace values here is defence in depth against a repository that
+ * tries to point the extension at an executable of its choosing.
+ */
+export class ExtensionConfiguration {
+  private get config(): vscode.WorkspaceConfiguration {
+    return vscode.workspace.getConfiguration(CONFIG_SECTION);
+  }
+
+  private number(key: string, fallback: number): number {
+    const value = this.config.get<number>(key, fallback);
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+  }
+
+  cliPath(): string {
+    const inspected = this.config.inspect<string>('cliPath');
+    const value = inspected?.globalValue;
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  cliRunSettings(): CliRunSettings {
+    return {
+      timeoutMs: clamp(this.number('commandTimeoutSeconds', DEFAULT_TIMEOUT_SECONDS), 2, 300) * 1000,
+      maxOutputBytes: clamp(this.number('maxOutputKilobytes', DEFAULT_MAX_OUTPUT_KB), 64, 65536) * 1024,
+    };
+  }
+
+  /** 0 means automatic refresh is off. */
+  refreshIntervalMs(): number {
+    return normalizeIntervalMs(this.number('refreshIntervalSeconds', DEFAULT_REFRESH_SECONDS));
+  }
+
+  sortOrder(): SortOrder {
+    const value = this.config.get<string>('sidebar.sortOrder', 'slot');
+    return isSortOrder(value) ? value : 'slot';
+  }
+
+  async setSortOrder(order: SortOrder): Promise<void> {
+    await this.config.update('sidebar.sortOrder', order, vscode.ConfigurationTarget.Global);
+  }
+
+  thresholds(): UsageThresholds {
+    return normalizeThresholds(this.number('display.warningThreshold', 80), this.number('display.criticalThreshold', 95));
+  }
+
+  /** Data older than this is shown as stale even if the last refresh succeeded. */
+  staleAfterMs(): number {
+    return Math.max(DEFAULT_STALE_AFTER_MS, 2 * this.refreshIntervalMs());
+  }
+
+  statusBarMode(): StatusBarMode {
+    const value = this.config.get<string>('statusBar.mode', 'slotUsage');
+    return isStatusBarMode(value) ? value : 'slotUsage';
+  }
+
+  /** User scope only: a workspace must not be able to silence switch confirmations. */
+  confirmSwitch(): boolean {
+    return this.config.inspect<boolean>('confirmSwitch')?.globalValue !== false;
+  }
+}

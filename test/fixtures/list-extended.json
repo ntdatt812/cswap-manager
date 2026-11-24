@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 1,
+  "accounts": [
+    {
+      "number": 1,
+      "email": "alice@example.com",
+      "alias": "work",
+      "organizationName": "Example Org A",
+      "isOrganization": true,
+      "active": true,
+      "threshold": 85,
+      "usageStatus": "ok",
+      "usage": {
+        "fiveHour": { "pct": 25.0, "resetsAt": "2026-11-24T06:00:00Z" },
+        "sevenDay": { "pct": 82, "resetsAt": "2026-11-26T00:00:00Z", "expectedPct": 60.5, "aheadOfPace": true, "willLastToReset": false },
+        "spend": { "used": 12.5, "limit": 50, "pct": 25, "currency": "USD", "resetsAt": "2026-12-01T00:00:00Z" },
+        "scoped": [{ "pct": 3, "name": "ModelA" }],
+        "source": "headers",
+        "rejected": { "retryAfterS": 120, "resetsAt": "2026-11-24T05:00:00Z" }
+      },
+      "plan": { "label": "Max", "tier": "max_5x", "subscriptionStatus": "active", "expired": false, "fetchedAt": "2026-11-24T01:00:00Z" },
+      "loginExpiresAt": "2026-12-01T00:00:00Z",
+      "usageFetchedAt": "2026-11-24T03:59:00Z",
+      "usageAgeSeconds": 60
+    },
+    {
+      "number": 2,
+      "email": "bob@example.com",
+      "active": false,
+      "disabled": true,
+      "usageStatus": "unavailable",
+      "usage": null,
+      "lastGoodUsage": { "sevenDay": { "pct": 97, "resetsAt": "2026-11-25T00:00:00Z" } },
+      "lastGoodFetchedAt": "2026-11-23T22:00:00Z",
+      "lastGoodAgeSeconds": 21600,
+      "usageError": "http-429",
+      "usageRetryAt": "2026-11-24T04:10:00Z"
+    },
+    {
+      "number": 3,
+      "email": "carol@example.com",
+      "active": false,
+      "usageStatus": "relogin_required",
+      "usage": null
+    }
+  ]
+}

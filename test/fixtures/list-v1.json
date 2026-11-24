@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 2,
+  "accounts": [
+    {
+      "number": 2,
+      "email": "bob@example.com",
+      "organizationName": "Example Org B",
+      "organizationUuid": "00000000-0000-4000-8000-000000000002",
+      "isOrganization": true,
+      "active": true,
+      "usageStatus": "ok",
+      "usage": {
+        "sevenDay": {
+          "pct": 40,
+          "resetsAt": "2026-11-28T04:00:00.097051+00:00",
+          "countdown": "4d 0h",
+          "clock": "Nov 28 11:00",
+          "expectedPct": 42.6,
+          "aheadOfPace": false,
+          "projectedExhaustionAt": "2026-11-28T15:05:00Z",
+          "willLastToReset": true
+        },
+        "scoped": [
+          {
+            "pct": 1,
+            "resetsAt": "2026-11-28T04:00:00.097246+00:00",
+            "countdown": "4d 0h",
+            "clock": "Nov 28 11:00",
+            "expectedPct": 42.6,
+            "aheadOfPace": false,
+            "projectedExhaustionAt": "2027-09-15T15:19:58Z",
+            "willLastToReset": true,
+            "name": "ModelA"
+          }
+        ]
+      },
+      "loginExpiresAt": "2026-12-14T05:07:32Z",
+      "plan": {
+        "label": "Ultra",
+        "tier": "default_claude_max_20x",
+        "organizationType": "claude_max",
+        "billingType": "stripe_subscription",
+        "subscriptionStatus": "active",
+        "planDisplayName": "Ultra",
+        "expired": false,
+        "fetchedAt": "2026-11-24T00:46:28Z"
+      },
+      "usageFetchedAt": "2026-11-24T03:38:00Z",
+      "usageAgeSeconds": 181.6
+    },
+    {
+      "number": 1,
+      "email": "alice@example.com",
+      "organizationName": "Example Org A",
+      "organizationUuid": "00000000-0000-4000-8000-000000000001",
+      "isOrganization": true,
+      "active": false,
+      "usageStatus": "ok",
+      "usage": {
+        "sevenDay": {
+          "pct": 100,
+          "resetsAt": "2026-11-24T05:00:00.182767+00:00",
+          "countdown": "1h 18m",
+          "clock": "12:00",
+          "expectedPct": 99.2,
+          "aheadOfPace": false,
+          "projectedExhaustionAt": "2026-11-24T03:41:00Z",
+          "willLastToReset": false
+        },
+        "scoped": [
+          {
+            "pct": 0,
+            "resetsAt": "2026-11-24T05:00:00+00:00",
+            "countdown": "1h 18m",
+            "clock": "12:00",
+            "expectedPct": 99.2,
+            "aheadOfPace": false,
+            "willLastToReset": true,
+            "name": "ModelA"
+          }
+        ]
+      },
+      "loginExpiresAt": "2026-12-07T05:52:11Z",
+      "plan": {
+        "label": "Ultra",
+        "tier": "default_claude_max_20x",
+        "organizationType": "claude_max",
+        "billingType": "stripe_subscription",
+        "subscriptionStatus": "active",
+        "planDisplayName": "Ultra",
+        "expired": false,
+        "fetchedAt": "2026-11-24T00:52:59Z"
+      },
+      "usageFetchedAt": "2026-11-24T03:41:00Z",
+      "usageAgeSeconds": 1.6
+    }
+  ]
+}

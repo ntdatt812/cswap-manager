@@ -1,0 +1,205 @@
+import { cliError, type CliError } from '../cli/cliErrors';
+import type { CliOutcome } from '../cli/cswapCli';
+import { buildSnapshot, needsStatusCheck } from '../model/reconcile';
+import type { AccountsSnapshot, ListPayload, StatusPayload } from '../model/types';
+import { Emitter, type Disposable } from './emitter';
+
+export interface AccountsCli {
+  list(signal?: AbortSignal): Promise<CliOutcome<ListPayload>>;
+  status(signal?: AbortSignal): Promise<CliOutcome<StatusPayload>>;
+}
+
+export type RefreshTrigger = 'manual' | 'activation' | 'interval' | 'view-visible' | 'post-switch' | 'configuration';
+
+export interface RefreshRequest {
+  readonly trigger: RefreshTrigger;
+  /** Also run `status --json` to confirm the active account (e.g. after switching). */
+  readonly verifyActive?: boolean;
+  /**
+   * Require data gathered after this call. When a refresh is already running, a follow-up run is
+   * queued instead of sharing the in-flight result (which may predate a just-completed switch).
+   */
+  readonly requireFresh?: boolean;
+}
+
+export interface AccountsState {
+  /** Last successfully refreshed data; kept when later refreshes fail. */
+  readonly snapshot?: AccountsSnapshot;
+  readonly lastSuccessAt?: number;
+  readonly lastAttemptAt?: number;
+  /** Error of the most recent attempt; cleared by the next success. */
+  readonly lastError?: CliError;
+  /** Non-fatal problem of the most recent successful refresh (e.g. status verification failed). */
+  readonly lastWarning?: CliError;
+  readonly refreshing: boolean;
+}
+
+export type RefreshResult =
+  | { readonly ok: true; readonly snapshot: AccountsSnapshot }
+  | { readonly ok: false; readonly error: CliError; readonly snapshot?: AccountsSnapshot };
+
+/**
+ * - `none`: no data has ever been loaded (show empty/error guidance, not an empty list).
+ * - `fresh`: the last attempt succeeded recently.
+ * - `stale`: data exists but the last attempt failed or it is older than the stale threshold.
+ */
+export type Freshness = 'none' | 'fresh' | 'stale';
+export type StaleReason = 'refresh-failed' | 'too-old';
+
+export interface FreshnessAssessment {
+  readonly freshness: Freshness;
+  readonly reason?: StaleReason;
+}
+
+export const DEFAULT_STALE_AFTER_MS = 5 * 60 * 1000;
+
+export function assessFreshness(state: AccountsState, now: number, staleAfterMs = DEFAULT_STALE_AFTER_MS): FreshnessAssessment {
+  if (state.snapshot === undefined || state.lastSuccessAt === undefined) {
+    return { freshness: 'none' };
+  }
+  if (state.lastError !== undefined) {
+    return { freshness: 'stale', reason: 'refresh-failed' };
+  }
+  if (now - state.lastSuccessAt > staleAfterMs) {
+    return { freshness: 'stale', reason: 'too-old' };
+  }
+  return { freshness: 'fresh' };
+}
+
+export interface RefreshServiceOptions {
+  readonly cli: AccountsCli;
+  readonly now?: () => number;
+}
+
+interface FollowUp {
+  verifyActive: boolean;
+  readonly promise: Promise<RefreshResult>;
+}
+
+/**
+ * Owns the accounts cache. Concurrent refresh calls share one CLI run (no overlapping processes);
+ * failures keep the last good snapshot and mark it stale instead of discarding it.
+ */
+export class RefreshService implements Disposable {
+  private readonly changed = new Emitter<AccountsState>();
+  readonly onDidChange = this.changed.event;
+
+  private state: AccountsState = { refreshing: false };
+  private current: Promise<RefreshResult> | undefined;
+  private followUp: FollowUp | undefined;
+  private controller: AbortController | undefined;
+  private disposed = false;
+  private readonly now: () => number;
+
+  constructor(private readonly options: RefreshServiceOptions) {
+    this.now = options.now ?? Date.now;
+  }
+
+  getState(): AccountsState {
+    return this.state;
+  }
+
+  refresh(request: RefreshRequest): Promise<RefreshResult> {
+    if (this.disposed) {
+      return Promise.resolve(this.cancelledResult());
+    }
+    if (this.current === undefined) {
+      return this.start(request.verifyActive === true);
+    }
+    if (request.requireFresh !== true) {
+      return this.current;
+    }
+    if (this.followUp !== undefined) {
+      this.followUp.verifyActive ||= request.verifyActive === true;
+      return this.followUp.promise;
+    }
+    const running = this.current;
+    const followUp: FollowUp = {
+      verifyActive: request.verifyActive === true,
+      promise: running.then(() => {
+        this.followUp = undefined;
+        return this.disposed ? this.cancelledResult() : this.start(followUp.verifyActive);
+      }),
+    };
+    this.followUp = followUp;
+    return followUp.promise;
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.controller?.abort();
+    this.changed.dispose();
+  }
+
+  private start(verifyActive: boolean): Promise<RefreshResult> {
+    const controller = new AbortController();
+    this.controller = controller;
+    this.update({ ...this.state, refreshing: true, lastAttemptAt: this.now() });
+    const run = this.execute(verifyActive, controller.signal)
+      .catch(() => this.recordFailure(cliError('unexpected-error')))
+      .finally(() => {
+      if (this.current === run) {
+        this.current = undefined;
+      }
+      if (this.controller === controller) {
+        this.controller = undefined;
+      }
+    });
+    this.current = run;
+    return run;
+  }
+
+  private async execute(verifyActive: boolean, signal: AbortSignal): Promise<RefreshResult> {
+    const list = await this.options.cli.list(signal);
+    if (this.disposed) {
+      return this.cancelledResult();
+    }
+    if (!list.ok) {
+      return this.recordFailure(list.error);
+    }
+
+    let status: StatusPayload | undefined;
+    let warning: CliError | undefined;
+    if (verifyActive || needsStatusCheck(list.value)) {
+      const statusOutcome = await this.options.cli.status(signal);
+      if (this.disposed) {
+        return this.cancelledResult();
+      }
+      if (statusOutcome.ok) {
+        status = statusOutcome.value;
+      } else {
+        // The list data is still valid; the active account simply remains unverified.
+        warning = statusOutcome.error;
+      }
+    }
+
+    const completedAt = this.now();
+    const snapshot = buildSnapshot(list.value, status, completedAt);
+    this.update({
+      snapshot,
+      lastSuccessAt: completedAt,
+      ...(this.state.lastAttemptAt === undefined ? {} : { lastAttemptAt: this.state.lastAttemptAt }),
+      ...(warning === undefined ? {} : { lastWarning: warning }),
+      refreshing: false,
+    });
+    return { ok: true, snapshot };
+  }
+
+  private recordFailure(error: CliError): RefreshResult {
+    const { lastWarning: _previousWarning, ...rest } = this.state;
+    this.update({ ...rest, lastError: error, refreshing: false });
+    return this.state.snapshot === undefined ? { ok: false, error } : { ok: false, error, snapshot: this.state.snapshot };
+  }
+
+  private cancelledResult(): RefreshResult {
+    const error = cliError('cancelled');
+    return this.state.snapshot === undefined ? { ok: false, error } : { ok: false, error, snapshot: this.state.snapshot };
+  }
+
+  private update(next: AccountsState): void {
+    this.state = next;
+    if (!this.disposed) {
+      this.changed.fire(next);
+    }
+  }
+}

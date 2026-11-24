@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "activeAccountNumber": 3,
+  "futureTopLevelField": { "anything": [1, 2, 3] },
+  "accounts": [
+    {
+      "number": 3,
+      "email": "carol@example.com",
+      "active": true,
+      "usageStatus": "rate_limited",
+      "newAccountField": "ignored",
+      "usage": {
+        "fiveHour": { "pct": 87.5, "resetsAt": "2026-11-24T09:00:00Z" },
+        "sevenDay": { "pct": "not-a-number", "resetsAt": "garbage-date" },
+        "monthlyBurst": { "pct": 12, "unknownMetric": 7 },
+        "notAWindow": { "foo": "bar" },
+        "someFlag": true,
+        "scoped": [
+          { "pct": 5, "name": "ModelB", "extra": 1 },
+          { "pct": 9 },
+          "not-an-object"
+        ]
+      },
+      "plan": { "label": "Pro", "brandNewPlanField": 1 }
+    },
+    { "email": "no-slot@example.com" },
+    { "number": 3, "email": "duplicate@example.com" },
+    { "number": 4 },
+    "not-an-account"
+  ]
+}
