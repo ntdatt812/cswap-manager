@@ -131,6 +131,31 @@ export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks', op
   return full.repeat(whole) + partGlyph + empty.repeat(width - whole - (partGlyph === '' ? 0 : 1));
 }
 
+/**
+ * U+2007 FIGURE SPACE: exactly as wide as a digit in UI fonts with tabular figures (Segoe UI, SF),
+ * so numbers padded with it line up in a column even in a proportional font.
+ */
+export const FIGURE_SPACE = ' ';
+
+/** Pads the number a text starts with to `digits` digits, with figure spaces in front. */
+export function padDigits(text: string, digits: number): string {
+  const leading = /^\d*/.exec(text)?.[0].length ?? 0;
+  return FIGURE_SPACE.repeat(Math.max(0, digits - Math.max(leading, text.startsWith('?') ? 1 : 0))) + text;
+}
+
+/** Digits before the decimal point of a percentage as `formatPercent` shows it. */
+export function percentDigits(pct: number): number {
+  return String(Math.trunc(Math.round(pct * 10) / 10)).length;
+}
+
+/** `4d 0h` → `4d  0h` with a figure space: every part after the first takes two digits, so columns line up. */
+export function alignedDuration(ms: number): string {
+  return compactDuration(ms)
+    .split(' ')
+    .map((part, index) => (index === 0 ? part : padDigits(part, 2)))
+    .join(' ');
+}
+
 /** Compact duration in the CLI's own style: `4d 0h`, `1h 18m`, `12m`, `<1m`. */
 export function compactDuration(ms: number): string {
   const totalMinutes = Math.floor(Math.max(0, ms) / 60_000);

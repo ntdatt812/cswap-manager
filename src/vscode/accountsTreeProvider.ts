@@ -42,7 +42,8 @@ export function renderTooltip(model: TooltipModel): vscode.MarkdownString {
 }
 
 export function toTreeItem(node: NodeModel): vscode.TreeItem {
-  const item = new vscode.TreeItem(node.label, COLLAPSIBLE[node.collapsible]);
+  const label = node.highlights === undefined ? node.label : { label: node.label, highlights: node.highlights.map(([start, end]): [number, number] => [start, end]) };
+  const item = new vscode.TreeItem(label, COLLAPSIBLE[node.collapsible]);
   item.id = node.id;
   item.contextValue = node.contextValue;
   if (node.description !== undefined) {

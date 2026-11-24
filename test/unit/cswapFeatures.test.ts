@@ -24,7 +24,7 @@ import { ManagementService, type ManageApplied } from '../../src/core/service/ma
 import { PriorityStore } from '../../src/core/service/priorityStore';
 import { OperationGate } from '../../src/core/service/operationGate';
 import type { RefreshRequest, RefreshResult } from '../../src/core/service/refreshService';
-import { draggedSlot, dropMove } from '../../src/core/presentation/accountDrag';
+import { draggedSlot, dropMove, previewMove, resolveDropTarget } from '../../src/core/presentation/accountDrag';
 import type { NodeModel } from '../../src/core/presentation/accountTree';
 import { SLANT_BAR_PATTERN, usageBar } from '../../src/core/presentation/format';
 import { manageCliStubs, ok } from '../helpers/fixtures';
@@ -397,12 +397,41 @@ describe('drag and drop in the Accounts view', () => {
     assert.equal(draggedSlot([]), undefined);
   });
 
-  it('drops onto another account only: the dragged account takes its slot', () => {
-    assert.deepEqual(dropMove(3, node('account', 1)), { slot: 3, targetSlot: 1 });
+  it('drops onto an account or any of its rows, or onto empty space to go to the end', () => {
+    assert.deepEqual(dropMove(3, node('account', 1)), { slot: 3, target: 1 });
+    assert.deepEqual(dropMove(3, node('window', 1)), { slot: 3, target: 1 }, 'a usage row counts as its account');
     assert.equal(dropMove(3, node('account', 3)), undefined, 'onto itself');
-    assert.equal(dropMove(3, node('window', 1)), undefined, 'onto a usage row');
-    assert.equal(dropMove(3, undefined), undefined, 'onto empty space');
+    assert.equal(dropMove(3, node('detail', 3)), undefined, 'onto one of its own rows');
+    assert.equal(dropMove(3, node('window')), undefined, 'a row without an account');
+    assert.deepEqual(dropMove(3, undefined), { slot: 3, target: 'end' });
     assert.equal(dropMove(0, node('account', 1)), undefined);
+    assert.equal(resolveDropTarget(2, 'end', [1, 2, 5]), 6, 'after the highest slot');
+    assert.equal(resolveDropTarget(5, 'end', [1, 2, 5]), undefined, 'already last');
+    assert.equal(resolveDropTarget(2, 4, [1, 2, 4]), 4);
+  });
+
+  it('shows the move at once, and stops once a refresh already shows it', () => {
+    const before = snapshotOf([
+      { number: 1, email: 'a@example.com' },
+      { number: 2, email: 'b@example.com' },
+    ]);
+    const move = { slot: 2, targetSlot: 1, dragged: { email: 'b@example.com' } };
+    const shown = previewMove(before, move);
+    assert.deepEqual(
+      shown.accounts.map((account) => `${account.slot}:${account.email}`),
+      ['2:a@example.com', '1:b@example.com'],
+    );
+    assert.equal(shown.active.slot, 2, 'the active account (a) now shows slot 2');
+    const afterRefresh = snapshotOf([
+      { number: 1, email: 'b@example.com' },
+      { number: 2, email: 'a@example.com' },
+    ]);
+    assert.equal(previewMove(afterRefresh, move), afterRefresh, 'already moved: nothing swapped back');
+    const toEnd = previewMove(before, { slot: 1, targetSlot: 3, dragged: { email: 'a@example.com' } });
+    assert.deepEqual(
+      toEnd.accounts.map((account) => `${account.slot}:${account.email}`),
+      ['3:a@example.com', '2:b@example.com'],
+    );
   });
 });
 

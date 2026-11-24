@@ -45,7 +45,7 @@ describe('buildAccountNodes', () => {
 
   it('lists accounts in slot order with stable ids', () => {
     assert.deepEqual(nodes.map((node) => node.id), ['account:1', 'account:2']);
-    assert.equal(alice?.label, '1 · alice@example.com');
+    assert.equal(alice?.label, '1 · 7d 100% · ↻ 1h \u20070m · alice@example.com');
   });
 
   it('makes the active account prominent and expanded', () => {
@@ -53,8 +53,17 @@ describe('buildAccountNodes', () => {
     assert.equal(bob?.icon?.color, 'charts.green');
     assert.equal(bob?.collapsible, 'expanded');
     assert.equal(bob?.contextValue, 'cswap.account:active:enabled:unaliased:nothreshold');
-    assert.match(bob?.description ?? '', /^Active · Ultra · 7d 40% · ↻ 4d 0h$/);
+    // The icon marks the active account; the spoken label still says so.
+    assert.equal(bob?.label, '2 · 7d \u200740% · ↻ 4d \u20070h · bob@example.com');
+    assert.equal(bob?.description, 'Ultra');
+    assert.match(bob?.accessibilityLabel ?? '', /^Slot 2, bob@example\.com\. Active, /);
     assert.equal(alice?.collapsible, 'collapsed');
+  });
+
+  it('lines numbers up across rows: padded with figure spaces, names after them', () => {
+    assert.equal(alice?.label.indexOf('%'), bob?.label.indexOf('%'));
+    assert.equal(alice?.label.indexOf('↻'), bob?.label.indexOf('↻'));
+    assert.equal(alice?.label.lastIndexOf('m · '), bob?.label.lastIndexOf('h · '), 'names start at the same place');
   });
 
   it('colours inactive accounts by their worst usage level', () => {
@@ -64,11 +73,12 @@ describe('buildAccountNodes', () => {
 
   it('renders one child per usage window and scope, using the CLI keys', () => {
     const window = child(bob, ':window:sevenDay');
-    assert.equal(window?.label, '7d');
-    assert.equal(window?.description, '████░░░░░░ 40% · resets in 4d 0h');
+    assert.equal(window?.label, '████░░░░░░ \u200740% · 7d');
+    assert.equal(window?.description, 'resets in 4d 0h');
+    assert.equal(window?.slot, 2, 'usage rows carry their account, so a drop on them counts');
     const scope = child(bob, ':scope:0:ModelA');
-    assert.equal(scope?.label, 'ModelA');
-    assert.equal(scope?.description, '▏░░░░░░░░░ 1% · resets in 4d 0h');
+    assert.equal(scope?.label, '▏░░░░░░░░░ \u2007\u20071% · ModelA');
+    assert.equal(scope?.description, 'resets in 4d 0h');
   });
 
   it('shows pace fields only when the CLI supplies them', () => {
@@ -79,10 +89,11 @@ describe('buildAccountNodes', () => {
   });
 
   it('flags reset times that have already passed instead of showing a negative countdown', () => {
-    assert.equal(child(alice, ':window:sevenDay')?.description, '██████████ 100% · resets in 1h 0m');
+    assert.equal(child(alice, ':window:sevenDay')?.label, '██████████ 100% · 7d');
+    assert.equal(child(alice, ':window:sevenDay')?.description, 'resets in 1h 0m');
     const later = buildAccountNodes(snapshot(), options({ now: Date.parse('2026-11-24T06:00:00Z') }));
     assert.match(child(later[0], ':window:sevenDay')?.description ?? '', /reset time passed/);
-    assert.equal(later[0]?.description?.includes('↻'), false, 'no countdown for a passed reset');
+    assert.equal(later[0]?.label.includes('↻'), false, 'no countdown for a passed reset');
   });
 
   it('adds plan, freshness and organization details', () => {
@@ -110,8 +121,8 @@ describe('buildAccountNodes', () => {
     const bare = sparse.find((node) => node.id === 'account:4');
     assert.equal(carol?.icon?.id, 'pass-filled', 'active wins');
     assert.match(carol?.description ?? '', /usage rate_limited/);
-    assert.match(carol?.description ?? '', /5h 87\.5%/);
-    assert.match(carol?.description ?? '', /7d \?/);
+    assert.match(carol?.label ?? '', /5h 87\.5%/);
+    assert.match(carol?.label ?? '', /7d \u2007*\?/);
     assert.equal(bare?.label, '4 · Account 4');
     assert.match(bare?.description ?? '', /usage unknown/);
     assert.equal(child(bare, ':usageStatus')?.description, 'not reported by cswap');

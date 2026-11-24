@@ -147,8 +147,9 @@ suite('Cswap Manager (extension host)', () => {
       this.skip();
       return;
     }
+    // The active account is marked by its icon; its spoken label names it in the UI language.
     const activeDescription = () =>
-      api.accountsView.provider.getChildren().find((node) => node.id === `account:${activeSlot}`)?.description ?? '';
+      api.accountsView.provider.getChildren().find((node) => node.id === `account:${activeSlot}`)?.accessibilityLabel ?? '';
     const waitFor = async (predicate: () => boolean) => {
       for (let attempt = 0; attempt < 40 && !predicate(); attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -158,9 +159,9 @@ suite('Cswap Manager (extension host)', () => {
     const config = vscode.workspace.getConfiguration('cswapManager');
     try {
       await config.update('language', 'vi', vscode.ConfigurationTarget.Global);
-      assert.ok(await waitFor(() => activeDescription().startsWith('Đang dùng')), activeDescription());
+      assert.ok(await waitFor(() => activeDescription().includes('Đang dùng')), activeDescription());
       await config.update('language', 'en', vscode.ConfigurationTarget.Global);
-      assert.ok(await waitFor(() => activeDescription().startsWith('Active')), activeDescription());
+      assert.ok(await waitFor(() => activeDescription().includes('Active')), activeDescription());
     } finally {
       await config.update('language', undefined, vscode.ConfigurationTarget.Global);
     }

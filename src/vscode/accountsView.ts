@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
 import type { CliError } from '../core/cli/cliErrors';
+import { identityOf } from '../core/model/accountPolicy';
+import { previewMove, resolveDropTarget, type DropTarget, type PendingMove } from '../core/presentation/accountDrag';
 import { buildAccountNodes, describeView, visibleAccounts, type NodeModel } from '../core/presentation/accountTree';
+import { sortOrderLabel } from '../core/presentation/quickSettings';
+import type { ManageOutcome } from '../core/service/managementService';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
-import { AccountsDragAndDrop } from './accountsDragAndDrop';
+import { AccountsDragAndDrop, MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndDrop';
 import { AccountsTreeProvider } from './accountsTreeProvider';
 import type { AutoRefreshController } from './autoRefresh';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
 import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
+import { showSaveFailed } from './settingErrors';
+
+/** How long the slot numbers a move changed stay highlighted. */
+const MOVED_HIGHLIGHT_MS = 4000;
 
 export const ACCOUNTS_VIEW_ID = 'cswapManager.accounts';
 
@@ -25,12 +33,17 @@ export class AccountsView implements vscode.Disposable {
   private filter: string | undefined;
   private clock: ReturnType<typeof setInterval> | undefined;
   private progressDone: (() => void) | undefined;
+  /** A dropped move cswap is still running: shown at once. */
+  private pending: PendingMove | undefined;
+  private moved: ReadonlySet<number> = new Set();
+  private movedTimer: ReturnType<typeof setTimeout> | undefined;
+  private sortHintShown = false;
 
   constructor(private readonly deps: AccountsViewDependencies) {
     this.treeView = vscode.window.createTreeView(ACCOUNTS_VIEW_ID, {
       treeDataProvider: this.provider,
       showCollapseAll: true,
-      dragAndDropController: new AccountsDragAndDrop(),
+      dragAndDropController: new AccountsDragAndDrop((move) => this.drop(move)),
     });
     this.disposables.push(
       this.treeView,
@@ -67,9 +80,68 @@ export class AccountsView implements vscode.Disposable {
 
   dispose(): void {
     this.stopClock();
+    clearTimeout(this.movedTimer);
     this.progressDone?.();
     for (const disposable of this.disposables) {
       disposable.dispose();
+    }
+  }
+
+  /**
+   * A drop: the list shows the move at once while cswap runs it (the move flow re-checks, verifies
+   * and offers Undo), then the two slot numbers stay highlighted for a moment.
+   */
+  private async drop(move: { readonly slot: number; readonly target: DropTarget }): Promise<void> {
+    const snapshot = this.deps.refreshService.getState().snapshot;
+    const dragged = snapshot?.accounts.find((account) => account.slot === move.slot);
+    const targetSlot = snapshot === undefined ? undefined : resolveDropTarget(move.slot, move.target, snapshot.accounts.map((account) => account.slot));
+    if (dragged === undefined || targetSlot === undefined) {
+      return;
+    }
+    this.pending = { slot: move.slot, targetSlot, dragged: identityOf(dragged) };
+    this.render();
+    void this.offerSlotOrder();
+    let outcome: ManageOutcome | undefined;
+    try {
+      outcome = await vscode.commands.executeCommand<ManageOutcome | undefined>(MOVE_ACCOUNT_TO_COMMAND, move.slot, targetSlot);
+    } finally {
+      this.pending = undefined;
+    }
+    if (outcome?.kind === 'applied' && outcome.verification === 'confirmed') {
+      this.highlightMoved([move.slot, targetSlot]);
+    } else {
+      this.render();
+    }
+  }
+
+  private highlightMoved(slots: readonly number[]): void {
+    clearTimeout(this.movedTimer);
+    this.moved = new Set(slots);
+    this.movedTimer = setTimeout(() => {
+      this.moved = new Set();
+      this.render();
+    }, MOVED_HIGHLIGHT_MS);
+    this.render();
+  }
+
+  /** Sorted by anything but slot, rows keep their place after a move; say so once per session. */
+  private async offerSlotOrder(): Promise<void> {
+    const order = this.deps.configuration.sortOrder();
+    if (this.sortHintShown || order === 'slot') {
+      return;
+    }
+    this.sortHintShown = true;
+    const bySlot = t('Sort by Slot');
+    const choice = await vscode.window.showInformationMessage(
+      t('The list is sorted by {0}, so rows keep their place after a move; only the slot numbers change.', sortOrderLabel(order, t)),
+      bySlot,
+    );
+    if (choice === bySlot) {
+      try {
+        await this.deps.configuration.setSortOrder('slot');
+      } catch (error) {
+        showSaveFailed(error);
+      }
     }
   }
 
@@ -111,9 +183,9 @@ export class AccountsView implements vscode.Disposable {
     const state = refreshService.getState();
     const options = presentationOptions(configuration);
     const sortOrder = configuration.sortOrder();
-    const snapshot = state.snapshot;
+    const snapshot = state.snapshot !== undefined && this.pending !== undefined ? previewMove(state.snapshot, this.pending) : state.snapshot;
     const filter = this.filter === undefined ? {} : { filter: this.filter };
-    const nodes = snapshot ? buildAccountNodes(snapshot, { ...options, sortOrder, ...filter }) : [];
+    const nodes = snapshot ? buildAccountNodes(snapshot, { ...options, sortOrder, ...filter, highlightSlots: this.moved }) : [];
     const presentation = describeView(state, {
       now: options.now,
       t,

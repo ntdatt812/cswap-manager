@@ -1,5 +1,8 @@
+import * as fs from 'node:fs';
 import * as os from 'node:os';
+import * as nodePath from 'node:path';
 import * as vscode from 'vscode';
+import type { CachedExecutableResolver } from '../core/cli/executableResolver';
 import { SORT_ORDERS } from '../core/presentation/format';
 import {
   LANGUAGE_SETTINGS,
@@ -50,6 +53,8 @@ export interface QuickSettingsDependencies {
   readonly refreshService?: { getState(): { readonly snapshot?: AccountsSnapshot } };
   /** Account mapped to the open project folder (`cswap map`). */
   readonly projectAccounts?: Pick<ProjectAccounts, 'currentMapping' | 'assign' | 'load'>;
+  /** Where cswap is found now, for the cswap path screen. */
+  readonly resolver?: Pick<CachedExecutableResolver, 'resolve'>;
   /** Known cswap version / newer release, for the Advanced row. */
   readonly updateCheck?: { getState(): { readonly current?: { readonly text: string }; readonly latest?: { readonly text: string } } };
 }
@@ -212,6 +217,104 @@ async function chooseValue<T>(
     ...(onActive === undefined ? {} : { onActive: (item: ValueItem<T> | undefined) => onActive(item?.value) }),
   });
   return picked === BACK || picked === undefined ? picked : picked.value;
+}
+
+/** Why a typed or picked path cannot be the cswap program, or undefined when it can. */
+function cliPathProblem(path: string): string | undefined {
+  if (!nodePath.isAbsolute(path)) {
+    return t('Enter the full path to the cswap program.');
+  }
+  if (process.platform === 'win32' && !/\.(exe|com)$/i.test(path)) {
+    return t('Choose cswap.exe itself: .cmd and .bat launchers would need a shell, which the extension does not use.');
+  }
+  try {
+    return fs.statSync(path).isFile() ? undefined : t('No file at that path.');
+  } catch {
+    return t('No file at that path.');
+  }
+}
+
+/**
+ * The cswap path, in the extension's own language: find it automatically, pick the program, or type
+ * its path. It is saved in the user settings only (workspace values are never read), and the
+ * resolver still refuses `.cmd`/`.bat` launchers and anything that is not an existing file.
+ */
+async function chooseCliPath(deps: QuickSettingsDependencies): Promise<Outcome> {
+  const { configuration } = deps;
+  const current = configuration.cliPath();
+  const resolution = await deps.resolver?.resolve();
+  const found = current === '' && resolution?.ok === true ? displayPath(resolution.path) : undefined;
+  type Choice = 'auto' | 'browse' | 'type' | 'settings';
+  const choice = await chooseValue<Choice>(
+    t('cswap path'),
+    [
+      { value: 'auto', label: `$(search) ${t('Find cswap automatically')}`, detail: found === undefined ? t('Looks in PATH and ~/.local/bin.') : t('Found: {0}', found) },
+      { value: 'browse', label: `$(folder-opened) ${t('Choose the cswap program…')}` },
+      { value: 'type', label: `$(edit) ${t('Enter the path…')}`, ...(current === '' ? {} : { detail: displayPath(current) }) },
+      { value: 'settings', label: `$(settings-gear) ${t('Open in VS Code Settings')}` },
+    ],
+    current === '' ? 'auto' : 'type',
+  );
+  if (choice === undefined) {
+    return 'close';
+  }
+  if (choice === BACK) {
+    return 'list';
+  }
+  let path: string | undefined;
+  switch (choice) {
+    case 'settings':
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'cswapManager.cliPath');
+      return 'close';
+    case 'auto':
+      path = undefined;
+      break;
+    case 'browse': {
+      const picked = await vscode.window.showOpenDialog({
+        title: t('Choose the cswap program'),
+        canSelectMany: false,
+        openLabel: t('Use This Program'),
+        defaultUri: vscode.Uri.file(nodePath.join(os.homedir(), '.local', 'bin')),
+        ...(process.platform === 'win32' ? { filters: { cswap: ['exe', 'com'] } } : {}),
+      });
+      const file = picked?.[0];
+      if (file === undefined) {
+        return 'list';
+      }
+      const problem = cliPathProblem(file.fsPath);
+      if (problem !== undefined) {
+        void vscode.window.showErrorMessage(problem);
+        return 'list';
+      }
+      path = file.fsPath;
+      break;
+    }
+    case 'type': {
+      const typed = await askWithBack({
+        title: t('cswap path'),
+        prompt: t('Full path to the cswap program (cswap.exe on Windows).'),
+        value: current,
+        validate: (text) => cliPathProblem(text.trim()),
+      });
+      if (typed === undefined) {
+        return 'close';
+      }
+      if (typed === BACK) {
+        return 'list';
+      }
+      path = typed.trim();
+      break;
+    }
+  }
+  if (path !== (current === '' ? undefined : current)) {
+    try {
+      // The configuration listener re-resolves cswap and refreshes the accounts.
+      await configuration.setCliPath(path);
+    } catch (error) {
+      showSaveFailed(error);
+    }
+  }
+  return 'list';
 }
 
 async function writeUserSetting(deps: QuickSettingsDependencies, key: UserSettingKey, value: unknown): Promise<void> {
@@ -530,9 +633,7 @@ async function editRow(deps: QuickSettingsDependencies, key: SettingKey): Promis
         configuration.sortOrder(),
       );
     case 'cliPath':
-      // Machine-scoped and security-relevant: edited on VS Code's own Settings page, never from here.
-      await vscode.commands.executeCommand('workbench.action.openSettings', 'cswapManager.cliPath');
-      return 'close';
+      return chooseCliPath(deps);
     case 'timeout': {
       const current = Math.round(configuration.cliRunSettings().timeoutMs / 1000);
       return editValue(

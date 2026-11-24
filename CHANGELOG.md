@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 — 2026-11-24
+- **Sidebar columns line up**: each account row now reads `slot · 7d 40% · ↻ 2d 4h · name`, with numbers padded so percentages and reset times sit in straight columns; plan and problems follow in dim text. Usage rows under an account show the bar and percentage first. The active account is marked by its icon (and still named in its tooltip and spoken label).
+- **Smoother drag and drop**: the move shows in the list at once while cswap runs it, and the two slot numbers it changed stay highlighted for a moment. Dropping on an account's usage rows counts as dropping on the account, and dropping on the empty space below the list moves the account to the end. When the list is not sorted by slot, a one-time tip offers to sort by slot.
+- **Dashboard, more compact**: the reset time sits on each usage bar's title line (`7d · resets in 6d 20h`), and spacing is tighter throughout.
+- **cswap path** in Quick Settings is now its own screen in the extension's language: find cswap automatically (showing where it was found), choose the program, or type its path. It is still saved in your user settings only, and `.cmd`/`.bat` launchers are still refused.
+- Fewer cswap runs: priorities are re-read only after changes that can move them, and folder mappings are read when Quick Settings opens instead of at start-up.
+
 ## 0.8.0 — 2026-11-24
 More of cswap, without a terminal:
 - **Add Current Login…** (`cswap add`) — stores the account Claude Code is logged in to now, in a free slot of your choice with an optional alias, or refreshes its stored login when it is already managed. The empty sidebar links to it.

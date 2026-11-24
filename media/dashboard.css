@@ -1,5 +1,5 @@
 :root {
-  --gap: 14px;
+  --gap: 10px;
   --radius: 3px;
   --border: var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.35)));
   --surface: var(--vscode-editorWidget-background, var(--vscode-sideBar-background, transparent));
@@ -19,12 +19,12 @@
 
 body {
   margin: 0;
-  padding: 18px 22px 28px;
+  padding: 12px 16px 18px;
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 #app {
@@ -57,7 +57,7 @@ h3 {
 
 h4 {
   font-size: 0.8em;
-  margin: 14px 0 8px;
+  margin: 10px 0 6px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
@@ -235,8 +235,8 @@ h4 {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 16px;
-  padding: 10px 14px;
+  gap: 8px 16px;
+  padding: 7px 12px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--border);
   border-radius: var(--radius);
@@ -341,9 +341,9 @@ h4 {
 .card {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -569,9 +569,27 @@ h4 {
   font-size: 0.88em;
 }
 
+/* The reset time sits on the meter's title line: "7d · resets in 6d 20h", one line less per meter. */
+.meter-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.meter-title .meter-caption {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meter-title .meter-caption::before {
+  content: '· ';
+}
+
 .meters {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 /* ---- Layout and panels ---- */
@@ -591,7 +609,7 @@ h4 {
 
 .panel {
   min-width: 0;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -608,7 +626,7 @@ h4 {
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .heading-row {
@@ -703,7 +721,7 @@ col.col-reset {
 
 table.accounts th,
 table.accounts td {
-  padding: 8px 8px;
+  padding: 5px 8px;
   text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--border);
@@ -813,12 +831,12 @@ td.col-name {
 /* ---- Reset timeline ---- */
 
 .timeline-panel h2 {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .timeline-list {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -925,13 +943,13 @@ button.timeline-row:focus-visible {
 
 .detail-header {
   display: grid;
-  gap: 10px;
-  padding-bottom: 12px;
+  gap: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
 .detail-section h4 {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .note {
@@ -944,8 +962,8 @@ button.timeline-row:focus-visible {
 .facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 3px 14px;
-  margin: 8px 0 0;
+  gap: 2px 14px;
+  margin: 6px 0 0;
 }
 
 .facts dt {
@@ -958,9 +976,9 @@ button.timeline-row:focus-visible {
 }
 
 .fold {
-  margin-top: 12px;
+  margin-top: 8px;
   border-top: 1px solid var(--border);
-  padding-top: 10px;
+  padding-top: 6px;
 }
 
 .fold > summary {

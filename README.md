@@ -20,7 +20,7 @@ The extension finds `cswap` on `PATH` or in `~/.local/bin`. If yours lives elsew
 ### Accounts sidebar
 Click the Cswap Manager icon in the Activity Bar.
 - Accounts are listed by slot; the active account is marked and expanded.
-- Each account shows plan and usage per window (for example `7d 40%`) with the time until reset; expand it for per-window bars, per-model scopes, plan and how old the data is.
+- Each account row reads `slot · 7d 40% · ↻ 2d 4h · name`: usage per window and the time until reset, padded so the numbers line up in columns, then the name and (dimmed) the plan. The active account has a green check. Expand an account for per-window bars, per-model scopes, plan and how old the data is.
 - **Re-login due** appears (yellow) when an account's stored login expires within 7 days, and in red once it has lapsed — the same 7-day window cswap uses. To renew, log in to that account with `/login` in Claude Code, then run `cswap add`. The dashboard always shows the exact expiry date.
 - Toolbar: refresh, switch, open dashboard, filter, sort, settings. Diagnostics is in the `…` menu.
 - Right-click an account to switch to it, show details, or manage it.
@@ -58,7 +58,7 @@ From the account's right-click menu, **Cswap: Manage Account…**, or the dashbo
 - **Move to slot** — renumber an account; if the slot is taken, the two accounts trade places.
 - **Priority** (0–1000, default 0) — used by the auto-switch strategy *By account priority*: higher first. Read back from `cswap priority` after every change.
 - **Remove from cswap…** (right-click menu only) — cswap deletes its stored login, session profile and folder mappings for that account. Your Claude account itself is not affected.
-- **Drag and drop** in the sidebar: drop an account onto another one to give it that slot; the two trade places. There is no dialog; the result has **Undo**.
+- **Drag and drop** in the sidebar: drop an account onto another one (or any of its rows) to give it that slot; the two trade places. Drop it on the empty space below the list to move it to the end. The list shows the move at once, the changed slot numbers are highlighted briefly, and the result has **Undo**.
 
 Disabling, moving and removing ask for confirmation first. Every change is checked against cswap afterwards.
 

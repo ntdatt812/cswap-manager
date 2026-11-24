@@ -4,9 +4,12 @@ import { TESTED_SCHEMA_VERSIONS } from '../model/parsers';
 import type { Account, AccountsSnapshot, UsageMetrics } from '../model/types';
 import type { AccountsState, FreshnessAssessment } from '../service/refreshService';
 import {
+  alignedDuration,
   compactDuration,
   epochOf,
   formatPercent,
+  padDigits,
+  percentDigits,
   matchesFilter,
   sortAccounts,
   usageAgeMs,
@@ -50,9 +53,11 @@ export interface NodeModel {
   /** Stable across refreshes so VS Code keeps expansion state. */
   readonly id: string;
   readonly kind: NodeKind;
-  /** Set on account nodes; the identity used for switching. */
+  /** The account's slot, on account nodes and on their child rows (used for switching and drops). */
   readonly slot?: number;
   readonly label: string;
+  /** Ranges of the label shown highlighted (e.g. the slot numbers a move just changed). */
+  readonly highlights?: ReadonlyArray<readonly [number, number]>;
   readonly description?: string;
   readonly tooltip?: TooltipModel;
   readonly icon?: IconSpec;
@@ -75,6 +80,30 @@ export interface PresentationOptions {
 export interface TreeBuildOptions extends PresentationOptions {
   readonly sortOrder: SortOrder;
   readonly filter?: string;
+  /** Slots whose number is highlighted for a moment after a move. */
+  readonly highlightSlots?: ReadonlySet<number>;
+}
+
+/**
+ * Widths that make the sidebar's numbers line up: tree rows have no columns and a proportional
+ * font, but digits and figure spaces share one width, so numbers come first, padded, and names
+ * (whose widths vary) come after them.
+ */
+export interface RowColumns {
+  readonly slotDigits: number;
+  readonly percentDigits: number;
+}
+
+export function rowColumns(accounts: readonly Account[]): RowColumns {
+  const percents = accounts.flatMap((account) => [...(account.usage?.windows ?? []), ...(account.usage?.scoped ?? [])].map((window) => window.pct));
+  return {
+    slotDigits: Math.max(1, ...accounts.map((account) => String(account.slot).length)),
+    percentDigits: Math.max(1, ...percents.map((pct) => (pct === undefined ? 1 : percentDigits(pct)))),
+  };
+}
+
+function alignedPercent(pct: number | undefined, columns: RowColumns): string {
+  return padDigits(pct === undefined ? '?' : formatPercent(pct), columns.percentDigits);
 }
 
 const LEVEL_COLOR: Record<UsageLevel, string | undefined> = {
@@ -181,21 +210,25 @@ function metricsRows(metrics: UsageMetrics, options: PresentationOptions): Toolt
   return rows;
 }
 
+/** A usage row under an account: bar and percentage first (they line up), then the window's name. */
 function metricsNode(
   id: string,
   kind: 'window' | 'scope',
   label: string,
   metrics: UsageMetrics,
   options: PresentationOptions,
+  slot: number,
+  columns: RowColumns,
 ): NodeModel {
   const level = usageLevel(metrics.pct, options.thresholds);
   const color = LEVEL_COLOR[level];
-  const description = metricsDescription(metrics, options);
+  const reset = resetText(metrics.resetsAt, options);
   return {
     id,
     kind,
-    label,
-    description,
+    slot,
+    label: metrics.pct === undefined ? label : `${usageBar(metrics.pct, 10, options.barStyle)} ${alignedPercent(metrics.pct, columns)} · ${label}`,
+    ...(metrics.pct === undefined ? { description: options.t('usage unknown') } : reset === undefined ? {} : { description: reset }),
     icon: { id: kind === 'window' ? 'dashboard' : 'layers', ...(color ? { color } : {}) },
     tooltip: { title: label, rows: metricsRows(metrics, options) },
     contextValue: `cswap.${kind}`,
@@ -205,8 +238,8 @@ function metricsNode(
   };
 }
 
-function detailNode(id: string, label: string, description: string, icon: IconSpec): NodeModel {
-  return { id, kind: 'detail', label, description, icon, contextValue: 'cswap.detail', collapsible: 'none', children: [] };
+function detailNode(id: string, label: string, description: string, icon: IconSpec, slot: number): NodeModel {
+  return { id, kind: 'detail', slot, label, description, icon, contextValue: 'cswap.detail', collapsible: 'none', children: [] };
 }
 
 export function planText(account: Account, t: Translate): string | undefined {
@@ -249,44 +282,48 @@ function loginDueText(due: LoginDue, options: PresentationOptions): string {
   return due.expired ? options.t('now (expired {0})', when) : options.t('in {0} ({1})', compactDuration(due.expiresAt - options.now), when);
 }
 
-function accountChildren(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions): NodeModel[] {
+function accountChildren(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions, columns: RowColumns): NodeModel[] {
   const { t, now } = options;
   const base = `account:${account.slot}`;
+  const slot = account.slot;
   const children: NodeModel[] = [];
 
   for (const window of account.usage?.windows ?? []) {
-    children.push(metricsNode(`${base}:window:${window.key}`, 'window', windowLabel(window.key), window, options));
+    children.push(metricsNode(`${base}:window:${window.key}`, 'window', windowLabel(window.key), window, options, slot, columns));
   }
   (account.usage?.scoped ?? []).forEach((scope, index) => {
-    children.push(metricsNode(`${base}:scope:${index}:${scope.name}`, 'scope', scope.name, scope, options));
+    children.push(metricsNode(`${base}:scope:${index}:${scope.name}`, 'scope', scope.name, scope, options, slot, columns));
   });
 
   if (hasUnavailableUsage(account)) {
-    children.push(detailNode(`${base}:usageStatus`, t('Usage status'), account.usageStatus ?? '', { id: 'warning', color: 'charts.yellow' }));
+    children.push(detailNode(`${base}:usageStatus`, t('Usage status'), account.usageStatus ?? '', { id: 'warning', color: 'charts.yellow' }, slot));
   } else if (account.usage === undefined) {
-    children.push(detailNode(`${base}:usageStatus`, t('Usage'), t('not reported by cswap'), { id: 'question' }));
+    children.push(detailNode(`${base}:usageStatus`, t('Usage'), t('not reported by cswap'), { id: 'question' }, slot));
   }
 
   const plan = planText(account, t);
   if (plan !== undefined) {
     const expired = account.plan?.expired === true;
-    children.push(detailNode(`${base}:plan`, t('Plan'), plan, expired ? { id: 'warning', color: 'charts.yellow' } : { id: 'credit-card' }));
+    children.push(detailNode(`${base}:plan`, t('Plan'), plan, expired ? { id: 'warning', color: 'charts.yellow' } : { id: 'credit-card' }, slot));
   }
   const due = loginDue(account, now);
   if (due !== undefined) {
     children.push(
-      detailNode(`${base}:login`, t('Re-login due'), loginDueText(due, options), {
-        id: due.expired ? 'error' : 'warning',
-        color: due.expired ? 'charts.red' : 'charts.yellow',
-      }),
+      detailNode(
+        `${base}:login`,
+        t('Re-login due'),
+        loginDueText(due, options),
+        { id: due.expired ? 'error' : 'warning', color: due.expired ? 'charts.red' : 'charts.yellow' },
+        slot,
+      ),
     );
   }
   const age = usageAgeMs(account, snapshot.capturedAt, now);
   if (age !== undefined) {
-    children.push(detailNode(`${base}:fetched`, t('Usage updated'), relativeAge(age, t), { id: 'history' }));
+    children.push(detailNode(`${base}:fetched`, t('Usage updated'), relativeAge(age, t), { id: 'history' }, slot));
   }
   if (account.isOrganization === true && account.organizationName !== undefined) {
-    children.push(detailNode(`${base}:org`, t('Organization'), account.organizationName, { id: 'organization' }));
+    children.push(detailNode(`${base}:org`, t('Organization'), account.organizationName, { id: 'organization' }, slot));
   }
   return children;
 }
@@ -308,26 +345,27 @@ function accountIcon(account: Account, isActive: boolean, level: UsageLevel): Ic
   }
 }
 
-function accountDescription(account: Account, isActive: boolean, options: PresentationOptions): string {
+/** The aligned part of an account row: each window's percentage, then the time to the next reset. */
+function usageColumnsText(account: Account, options: PresentationOptions, columns: RowColumns): string[] {
+  const windows = account.usage?.windows ?? [];
+  const parts = windows.map((window) => `${windowLabel(window.key)} ${alignedPercent(window.pct, columns)}`);
+  const firstReset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined);
+  if (firstReset !== undefined && firstReset > options.now) {
+    parts.push(`↻ ${alignedDuration(firstReset - options.now)}`);
+  }
+  return parts;
+}
+
+/** The dim text after an account's name: what does not line up (rotation, plan, usage problems). */
+function accountDescription(account: Account, options: PresentationOptions): string {
   const { t } = options;
   const parts: string[] = [];
-  if (isActive) {
-    parts.push(t('Active'));
-  }
   if (account.disabled === true) {
     parts.push(t('disabled'));
   }
   const planLabel = account.plan?.displayName ?? account.plan?.label;
   if (planLabel !== undefined) {
     parts.push(planLabel);
-  }
-  const windows = account.usage?.windows ?? [];
-  for (const window of windows) {
-    parts.push(`${windowLabel(window.key)} ${window.pct === undefined ? '?' : formatPercent(window.pct)}`);
-  }
-  const firstReset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined);
-  if (firstReset !== undefined && firstReset > options.now) {
-    parts.push(`↻ ${compactDuration(firstReset - options.now)}`);
   }
   if (hasUnavailableUsage(account)) {
     parts.push(t('usage {0}', account.usageStatus ?? ''));
@@ -386,23 +424,38 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
   return { title: accountName(account, t), rows, ...(notes.length > 0 ? { notes } : {}) };
 }
 
-export function buildAccountNode(account: Account, snapshot: AccountsSnapshot, options: PresentationOptions): NodeModel {
+/**
+ * An account row: `slot · 7d 40% · ↻ 2d 4h · name`, numbers padded so they line up across rows
+ * (`rowColumns`), then plan and problems in the dim description. The active account is marked by
+ * its icon (and in its tooltip and spoken label).
+ */
+export function buildAccountNode(
+  account: Account,
+  snapshot: AccountsSnapshot,
+  options: PresentationOptions & { readonly highlightSlots?: ReadonlySet<number> },
+  columns: RowColumns = rowColumns(snapshot.accounts),
+): NodeModel {
+  const { t } = options;
   const isActive = snapshot.active.slot === account.slot;
   const level = accountLevel(account, options.thresholds);
-  const description = accountDescription(account, isActive, options);
-  const name = accountName(account, options.t);
+  const description = accountDescription(account, options);
+  const name = accountName(account, t);
+  const slotText = padDigits(String(account.slot), columns.slotDigits);
+  const usage = usageColumnsText(account, options, columns);
+  const spoken = [isActive ? t('Active') : undefined, ...usage, description].filter((part): part is string => part !== undefined && part !== '').join(', ');
   return {
     id: `account:${account.slot}`,
     kind: 'account',
     slot: account.slot,
-    label: `${account.slot} · ${name}`,
-    description,
+    label: [slotText, ...usage, name].join(' · '),
+    ...(options.highlightSlots?.has(account.slot) === true ? { highlights: [[0, slotText.length]] as const } : {}),
+    ...(description === '' ? {} : { description }),
     tooltip: accountTooltip(account, isActive, snapshot, options),
     icon: accountIcon(account, isActive, level),
     contextValue: accountContextValue(account, isActive),
     collapsible: isActive ? 'expanded' : 'collapsed',
-    accessibilityLabel: options.t('Slot {0}, {1}. {2}', account.slot, name, description),
-    children: accountChildren(account, snapshot, options),
+    accessibilityLabel: t('Slot {0}, {1}. {2}', account.slot, name, spoken),
+    children: accountChildren(account, snapshot, options, columns),
   };
 }
 
@@ -412,7 +465,9 @@ export function visibleAccounts(snapshot: AccountsSnapshot, sortOrder: SortOrder
 }
 
 export function buildAccountNodes(snapshot: AccountsSnapshot, options: TreeBuildOptions): NodeModel[] {
-  return visibleAccounts(snapshot, options.sortOrder, options.filter).map((account) => buildAccountNode(account, snapshot, options));
+  const accounts = visibleAccounts(snapshot, options.sortOrder, options.filter);
+  const columns = rowColumns(accounts);
+  return accounts.map((account) => buildAccountNode(account, snapshot, options, columns));
 }
 
 /** Drives `viewsWelcome` content via the `cswapManager.viewState` context key. */

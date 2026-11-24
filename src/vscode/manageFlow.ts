@@ -375,26 +375,27 @@ export async function runAccountAction(deps: ManageFlowDependencies, action: Acc
  * view itself. The move is re-checked and verified like "Move to slot…", and Undo only runs while
  * both slots still hold what the move left there.
  */
-export async function runDropMove(deps: ManageFlowDependencies, slot: number, targetSlot: number, undoing = false): Promise<void> {
+export async function runDropMove(deps: ManageFlowDependencies, slot: number, targetSlot: number, undoing = false): Promise<ManageOutcome | undefined> {
   if (!isValidSlot(slot) || !isValidSlot(targetSlot) || slot === targetSlot) {
-    return;
+    return undefined;
   }
   if (deps.gate.isBusy()) {
     showBusy();
-    return;
+    return { kind: 'busy' };
   }
   const snapshot = await snapshotOrRefresh(deps);
   if (snapshot === undefined) {
-    return;
+    return undefined;
   }
   const account = snapshot.accounts.find((candidate) => candidate.slot === slot);
-  if (account === undefined || !snapshot.accounts.some((candidate) => candidate.slot === targetSlot)) {
+  if (account === undefined) {
     void vscode.window.showErrorMessage(t('That account is no longer listed by cswap. Refresh and try again.'));
-    return;
+    return undefined;
   }
   const operation: ManageOperation = { kind: 'move', slot, targetSlot };
   const outcome = await vscode.window.withProgress({ location: { viewId: ACCOUNTS_VIEW_ID } }, () => deps.managementService.apply(operation, snapshot));
-  // The dragged account now sits in targetSlot; moving it back swaps the two again, and the re-check
-  // against the state after this move refuses if anything changed in between.
+  // The dragged account now sits in targetSlot; moving it back undoes the move (a swap swaps again),
+  // and the re-check against the state after this move refuses if anything changed in between.
   report(deps, operation, account, outcome, undoing ? undefined : () => void runDropMove(deps, targetSlot, slot, true));
+  return outcome;
 }

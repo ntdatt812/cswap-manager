@@ -52,6 +52,14 @@ export class ExtensionConfiguration {
     return typeof value === 'string' ? value.trim() : '';
   }
 
+  /**
+   * Saves the cswap path in the user settings (`undefined` = find it automatically). Workspace
+   * values of this setting are never read, so nothing else can override it.
+   */
+  async setCliPath(path: string | undefined): Promise<void> {
+    await this.config.update('cliPath', path, vscode.ConfigurationTarget.Global);
+  }
+
   cliRunSettings(): CliRunSettings {
     return {
       timeoutMs: clamp(this.number('commandTimeoutSeconds', DEFAULT_TIMEOUT_SECONDS), 2, 300) * 1000,

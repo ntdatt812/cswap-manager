@@ -254,9 +254,14 @@ function renderInsights(current: DashboardModel): void {
 
 function meterBlock(meter: Meter, compact = false): HTMLElement {
   return el('div', { className: `meter level-${meter.level}${compact ? ' compact' : ''}` }, [
-    el('div', { className: 'meter-head' }, [el('span', { className: 'meter-label', text: meter.label }), el('span', { className: 'meter-value', text: meter.pctText })]),
+    el('div', { className: 'meter-head' }, [
+      el('span', { className: 'meter-title' }, [
+        el('span', { className: 'meter-label', text: meter.label }),
+        meter.caption !== undefined && el('span', { className: 'meter-caption', text: meter.caption }),
+      ]),
+      el('span', { className: 'meter-value', text: meter.pctText }),
+    ]),
     bar(meter.label, meter.pct, meter.level, meter.caption ? `${meter.pctText}, ${meter.caption}` : meter.pctText, meter.pace === undefined ? {} : { pace: meter.pace }),
-    meter.caption !== undefined && el('div', { className: 'meter-caption', text: meter.caption }),
   ]);
 }
 
