@@ -94,7 +94,7 @@ export class CrossWindowSync implements vscode.Disposable {
     const signal = parseActiveSignal(text);
     if (signal !== undefined && this.tracker.shouldRefresh(signal)) {
       this.logger.info('Another window reports a different active account; refreshing.');
-      await this.refreshService.refresh({ trigger: 'external' });
+      await this.refreshService.refresh({ trigger: 'external', requireFresh: true });
     }
   }
 }

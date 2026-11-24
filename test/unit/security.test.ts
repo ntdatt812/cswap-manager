@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { cliError } from '../../src/core/cli/cliErrors';
 import { CswapCli, cliEnvironment, type CliOutcome } from '../../src/core/cli/cswapCli';
 import type { ProcessResult, ProcessRunner } from '../../src/core/cli/processRunner';
 import { parseJsonDocument } from '../../src/core/model/json';
@@ -136,8 +137,8 @@ describe('L4: the account must not change between confirmation and execution', (
   });
 
   it('trusts a snapshot under 15 s old and switches without re-reading first (speed)', async () => {
-    const refresher = refresherReturning(confirmed);
     const fresh: AccountsSnapshot = { ...confirmed, capturedAt: 1_000_000 };
+    const refresher = { ...refresherReturning(confirmed), getState: () => ({ snapshot: fresh }) };
     const service = new SwitchService(
       { switch: () => Promise.resolve(ok('switch', { switched: true, to: { slot: 3 }, warnings: [] })) },
       refresher,
@@ -151,6 +152,20 @@ describe('L4: the account must not change between confirmation and execution', (
       ['post-switch'],
       'no pre-check, only the verification',
     );
+  });
+
+  it('re-checks a fresh snapshot when a later refresh failed or replaced it', async () => {
+    const fresh: AccountsSnapshot = { ...confirmed, capturedAt: 1_000_000 };
+    const switcher = () => ({ switch: () => Promise.resolve(ok('switch', { switched: true, to: { slot: 3 }, warnings: [] })) });
+    for (const state of [
+      { snapshot: fresh, lastError: cliError('timeout') },
+      { snapshot: { ...fresh } },
+    ]) {
+      const refresher = { ...refresherReturning(confirmed), getState: () => state };
+      const service = new SwitchService(switcher(), refresher, new OperationGate(), () => 1_000_000 + 5_000);
+      await service.switch({ kind: 'slot', slot: 3 }, fresh);
+      assert.equal(refresher.requests[0]?.trigger, 'manual', 'pre-check ran');
+    }
   });
 
   it('proceeds when nothing changed', async () => {

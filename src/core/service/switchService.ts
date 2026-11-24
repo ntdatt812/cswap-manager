@@ -4,7 +4,7 @@ import type { AccountsSnapshot, SwitchResult } from '../model/types';
 import { Emitter, type Disposable } from './emitter';
 import { sameAccountsAt } from './managementService';
 import { OperationGate } from './operationGate';
-import type { RefreshRequest, RefreshResult } from './refreshService';
+import type { AccountsState, RefreshRequest, RefreshResult } from './refreshService';
 
 export interface SwitchCli {
   switch(target: SwitchTarget): Promise<CliOutcome<SwitchResult>>;
@@ -12,6 +12,7 @@ export interface SwitchCli {
 
 export interface SwitchRefresher {
   refresh(request: RefreshRequest): Promise<RefreshResult>;
+  getState(): Pick<AccountsState, 'snapshot' | 'lastError'>;
 }
 
 /**
@@ -85,9 +86,7 @@ export class SwitchService implements Disposable {
       this.running = true;
       this.changed.fire(true);
       try {
-        // Re-read first only when what the user picked from is not fresh; slot contents only change
-        // through rare account management, and this check costs a full cswap list (~0.6 s).
-        if (confirmedWith !== undefined && target.kind === 'slot' && this.now() - confirmedWith.capturedAt > CONFIRMED_FRESH_MS) {
+        if (confirmedWith !== undefined && target.kind === 'slot' && !this.canTrust(confirmedWith)) {
           const fresh = await this.refresher.refresh({ trigger: 'manual', requireFresh: true });
           if (fresh.ok && !sameAccountsAt(confirmedWith, fresh.snapshot, [target.slot])) {
             return { kind: 'rejected', reason: 'account-changed' };
@@ -110,6 +109,16 @@ export class SwitchService implements Disposable {
       }
     });
     return outcome ?? { kind: 'busy' };
+  }
+
+  /**
+   * Skips the pre-switch re-read (a full cswap list, ~0.6 s) only when what the user confirmed is
+   * recent, is still the latest read, and no later refresh failed. A failed refresh after an account
+   * change leaves an old snapshot in place, so it always forces the re-read.
+   */
+  private canTrust(confirmedWith: AccountsSnapshot): boolean {
+    const state = this.refresher.getState();
+    return this.now() - confirmedWith.capturedAt <= CONFIRMED_FRESH_MS && state.snapshot === confirmedWith && state.lastError === undefined;
   }
 
   dispose(): void {

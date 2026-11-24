@@ -26,18 +26,28 @@ export function remainingPct(account: Account): number | undefined {
   return used === undefined ? undefined : Math.min(100, Math.max(0, 100 - used));
 }
 
-/** Soonest reset still ahead, across every window and scope. */
+/**
+ * When the limiting window's quota comes back: the reset of the fullest window (the latest one when
+ * several are equally full), so a reset is always paired with the percentage it refers to.
+ */
 export function nextReset(account: Account, now: number): number | undefined {
-  const resets = [...(account.usage?.windows ?? []), ...(account.usage?.scoped ?? [])]
-    .map((metrics) => epochOf(metrics.resetsAt))
+  const used = limitingPct(account);
+  if (used === undefined) {
+    return undefined;
+  }
+  const resets = (account.usage?.windows ?? [])
+    .filter((window) => window.pct === used)
+    .map((window) => epochOf(window.resetsAt))
     .filter((epoch): epoch is number => epoch !== undefined && epoch > now);
-  return resets.length === 0 ? undefined : Math.min(...resets);
+  return resets.length === 0 ? undefined : Math.max(...resets);
 }
 
-/** An account worth switching to: in rotation, usage known, not at its limit. */
+/** An account worth switching to: in rotation, usage known, not at its limit, not refused. */
 function usable(account: Account, options: PresentationOptions): boolean {
   return (
     account.disabled !== true &&
+    account.plan?.expired !== true &&
+    account.usage?.rejected === undefined &&
     !hasUnavailableUsage(account) &&
     remainingPct(account) !== undefined &&
     accountLevel(account, options.thresholds) !== 'critical'
@@ -84,7 +94,8 @@ export function buildInsights(snapshot: AccountsSnapshot, options: PresentationO
   if (active !== undefined) {
     const level = accountLevel(active, options.thresholds);
     const activeLeft = remainingPct(active);
-    const best = byHeadroom[0];
+    // Only an account with more quota left than the active one is worth switching to.
+    const best = byHeadroom.find((candidate) => activeLeft === undefined || (remainingPct(candidate) ?? 0) > activeLeft);
     if (level === 'critical' || level === 'warning' || hasUnavailableUsage(active)) {
       if (best !== undefined) {
         suggested = best.slot;

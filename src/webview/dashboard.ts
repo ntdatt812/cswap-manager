@@ -52,7 +52,8 @@ function restoreUiState(raw: unknown): UiState {
   return {
     ...(typeof value['selectedSlot'] === 'number' ? { selectedSlot: value['selectedSlot'] } : {}),
     query: typeof value['query'] === 'string' ? value['query'] : '',
-    sortKey: isTableSortKey(value['sortKey']) ? value['sortKey'] : 'slot',
+    // Only columns still shown (an old saved "status" sort falls back to slot).
+    sortKey: isTableSortKey(value['sortKey']) && COLUMNS.some((column) => column.key === value['sortKey']) ? value['sortKey'] : 'slot',
     sortDirection: value['sortDirection'] === 'desc' ? 'desc' : 'asc',
     open,
   };
@@ -116,7 +117,10 @@ function bar(label: string, pct: number | undefined, level: string, valueText: s
 
 /** A folded section that remembers being opened across re-renders. */
 function foldable(key: string, summaryText: string, content: Child[], className = 'fold'): HTMLDetailsElement {
-  const details = el('details', { className }, [el('summary', { text: summaryText }), ...content]);
+  const summary = el('summary', { text: summaryText });
+  // Keeps keyboard focus on the same fold header across the 30-second re-render.
+  summary.dataset['focusKey'] = `fold:${key}`;
+  const details = el('details', { className }, [summary, ...content]);
   details.open = ui.open.includes(key);
   details.addEventListener('toggle', () => {
     const others = ui.open.filter((candidate) => candidate !== key);
@@ -442,12 +446,12 @@ function renderSection(section: DetailSection): HTMLElement {
   return el('section', { className: 'detail-section' }, [el('h4', { text: section.title }), ...sectionContent(section)]);
 }
 
-function renderAccountDetail(current: DashboardModel, account: AccountDetail): HTMLElement[] {
+function renderAccountDetail(current: DashboardModel, account: AccountDetail, active: boolean): HTMLElement[] {
   const s = current.strings;
   return [
     el('div', { className: 'detail-header' }, [
       el('div', { className: 'active-name' }, [
-        el('span', { className: `slot-badge${account.canSwitch ? '' : ' filled'}`, text: String(account.slot) }),
+        el('span', { className: `slot-badge${active ? ' filled' : ''}`, text: String(account.slot) }),
         el('div', { className: 'name-stack' }, [
           el('h3', { text: account.title }),
           account.subtitle !== undefined && el('span', { className: 'muted', text: account.subtitle }),
@@ -489,7 +493,7 @@ function renderDetail(): void {
     return;
   }
   const row = model.rows.find((candidate) => candidate.slot === ui.selectedSlot);
-  detail.replaceChildren(...(row === undefined ? [el('p', { className: 'muted placeholder', text: model.strings.noSelection })] : renderAccountDetail(model, row.detail)));
+  detail.replaceChildren(...(row === undefined ? [el('p', { className: 'muted placeholder', text: model.strings.noSelection })] : renderAccountDetail(model, row.detail, row.active)));
 }
 
 function render(): void {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.1 — 2026-11-24
+Fixes from an independent review of 0.6.0:
+- Suggestions never propose an account with less quota left than the active one.
+- A suggestion's reset time now belongs to the same usage window as its percentage (with a 5-hour window present, 0.6.0 could pair weekly quota with the 5-hour reset). The reset timeline follows the same rule.
+- Accounts with an expired plan or refused by the server for quota are no longer suggested.
+- The faster-switch shortcut only skips the pre-switch check when the confirmed data is still the latest read and no refresh failed since; otherwise the slot is re-checked as before.
+- Another window's switch signal always triggers a new refresh rather than reusing one already running.
+- Dashboard: keyboard focus stays on a folded section's header across updates; the selected account's slot badge no longer looks active during a switch; an old saved sort by the removed Status column falls back to slot.
+
 ## 0.6.0 — 2026-11-24
 - **Redesigned dashboard**, smarter and calmer:
   - **Suggestions** computed from cswap's own numbers (never a forecast), each with a one-click action: switch before the active account runs out (with when it resets, so waiting can be an option), spend quota that resets soon instead of losing it, no other account can help (with the first reset), logins that need renewing.

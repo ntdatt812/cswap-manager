@@ -62,6 +62,41 @@ describe('dashboard suggestions', () => {
     assert.equal(insights.some((insight) => insight.id === 'use-before-reset'), false);
   });
 
+  it('never suggests an account with less quota left than the active one', () => {
+    const snapshot = snapshotOf(1, [
+      { slot: 1, pct: 82, resetInHours: 100 },
+      { slot: 2, pct: 90, resetInHours: 50 },
+    ]);
+    const insights = buildInsights(snapshot, options);
+    assert.equal(insights[0]?.id, 'all-limited');
+    assert.equal(insights.some((insight) => insight.switchSlot === 2), false);
+  });
+
+  it('pairs a reset with the window the percentage comes from', () => {
+    // 7d is the fuller window; its 60% left must not be said to reset with the 5-hour window.
+    const json = JSON.stringify({
+      schemaVersion: 1,
+      activeAccountNumber: 1,
+      accounts: [
+        { number: 1, email: 'a@example.com', active: true, usageStatus: 'ok', usage: { sevenDay: { pct: 30, resetsAt: new Date(NOW + 120 * HOUR).toISOString() } } },
+        {
+          number: 2,
+          email: 'b@example.com',
+          active: false,
+          usageStatus: 'ok',
+          usage: {
+            fiveHour: { pct: 10, resetsAt: new Date(NOW + 1 * HOUR).toISOString() },
+            sevenDay: { pct: 40, resetsAt: new Date(NOW + 60 * HOUR).toISOString() },
+          },
+        },
+      ],
+    });
+    const list = parseListOutput(json);
+    assert.ok(list.ok);
+    const insights = buildInsights(buildSnapshot(list.value, undefined, NOW), options);
+    assert.match(insights[0]?.text ?? '', /60% left and resets in 2d 12h/);
+  });
+
   it('suggests spending quota that resets before the active account does', () => {
     const snapshot = snapshotOf(1, [
       { slot: 1, pct: 30, resetInHours: 120 },

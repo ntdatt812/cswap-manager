@@ -77,8 +77,10 @@ interface FollowUp {
 }
 
 /**
- * Owns the accounts cache. Concurrent refresh calls share one CLI run (no overlapping processes);
- * failures keep the last good snapshot and mark it stale instead of discarding it.
+ * Owns the accounts cache. Concurrent refresh calls share one run (refreshes never overlap); a
+ * verifying run starts `list` and `status` together, which cswap supports: both go through its shared
+ * usage collector, which claims each fetch and shares one cache. Failures keep the last good
+ * snapshot and mark it stale instead of discarding it.
  */
 export class RefreshService implements Disposable {
   private readonly changed = new Emitter<AccountsState>();

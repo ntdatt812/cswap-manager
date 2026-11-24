@@ -156,6 +156,7 @@ class FakeSwitchDeps {
       this.refreshRequests.push(request);
       return Promise.resolve(this.refreshOutcome);
     },
+    getState: () => ({}),
   };
 }
 
