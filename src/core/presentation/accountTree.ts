@@ -8,6 +8,7 @@ import {
   compactDuration,
   epochOf,
   formatPercent,
+  NO_WINDOW,
   padDigits,
   percentDigits,
   matchesFilter,
@@ -93,6 +94,11 @@ export interface TreeBuildOptions extends PresentationOptions {
 export interface RowColumns {
   readonly slotDigits: number;
   readonly percentDigits: number;
+  /**
+   * Every account-wide window the listed accounts report, in first-seen order: an account without
+   * one (another plan) keeps its column, so the same windows line up.
+   */
+  readonly windowKeys: readonly string[];
 }
 
 export function rowColumns(accounts: readonly Account[]): RowColumns {
@@ -100,6 +106,7 @@ export function rowColumns(accounts: readonly Account[]): RowColumns {
   return {
     slotDigits: Math.max(1, ...accounts.map((account) => String(account.slot).length)),
     percentDigits: Math.max(1, ...percents.map((pct) => (pct === undefined ? 1 : percentDigits(pct)))),
+    windowKeys: [...new Set(accounts.flatMap((account) => (account.usage?.windows ?? []).map((window) => window.key)))],
   };
 }
 
@@ -361,7 +368,7 @@ function accountIcon(account: Account, isActive: boolean, level: UsageLevel): Ic
 
 /** Extras for `usageColumnsText` where a list can show more than the sidebar. */
 export interface UsageColumnsStyle {
-  /** Drawn between a window's label and its percentage, e.g. a usage bar. */
+  /** Drawn between a window's label and its percentage, e.g. a usage bar; `pct` is absent for a column the account has no window for. */
   readonly bar?: (window: UsageWindow) => string;
   /** Applied to each window's label, e.g. where `$(icon)` syntax would render. */
   readonly label?: (label: string) => string;
@@ -373,9 +380,12 @@ export interface UsageColumnsStyle {
  */
 export function usageColumnsText(account: Account, options: PresentationOptions, columns: RowColumns, style: UsageColumnsStyle = {}): string[] {
   const windows = account.usage?.windows ?? [];
-  const parts = windows.map((window) => {
-    const label = windowLabel(window.key);
-    return [style.label?.(label) ?? label, style.bar?.(window), alignedPercent(window.pct, columns)].filter((piece) => piece !== undefined).join(' ');
+  const keys = windows.length === 0 ? [] : [...new Set([...columns.windowKeys, ...windows.map((window) => window.key)])];
+  const parts = keys.map((key) => {
+    const window = windows.find((candidate) => candidate.key === key);
+    const label = windowLabel(key);
+    const value = window === undefined ? padDigits(NO_WINDOW, columns.percentDigits) : alignedPercent(window.pct, columns);
+    return [style.label?.(label) ?? label, style.bar?.(window ?? { key }), value].filter((piece) => piece !== undefined).join(' ');
   });
   const firstReset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined);
   if (firstReset !== undefined && firstReset > options.now) {

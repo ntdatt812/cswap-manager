@@ -14,7 +14,8 @@ import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
-import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel, shareHistoryOn, tokenUsageLevel, type TokenUsageLevel } from '../core/presentation/quickSettings';
+import { limitNames, limitProfile, showWeeklyThreshold, switchThresholdHelp, weeklyThresholdHelp, type LimitProfile } from '../core/presentation/limits';
+import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel, shareHistoryOn, tokenUsageLabel, tokenUsageLevel, type TokenUsageLevel } from '../core/presentation/quickSettings';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
   AutoSwitchService,
@@ -347,13 +348,14 @@ export class AutoSwitchController implements vscode.Disposable {
    */
   async chooseTokenUsage(options: MenuOptions = {}): Promise<MenuResult> {
     const rules = await this.freshRules();
+    const limits = this.limits();
     return this.pickSetting<TokenUsageLevel>(
       t('Usage of token accounts'),
       t('Only for accounts added with a setup-token. These are cswap settings.'),
       [
         { label: t('Off'), detail: t('Setup-token accounts show "usage unavailable". cswap default.'), value: 'off' },
-        { label: t('5-hour and weekly'), detail: t('Each check sends a 1-token Haiku request from that account.'), value: 'haiku' },
-        { label: t('5-hour, weekly and Fable'), detail: t('Also a 1-token Fable request per check, which spends Fable quota.'), value: 'fable' },
+        { label: tokenUsageLabel('haiku', t, limits), detail: t('Each check sends a 1-token Haiku request from that account.'), value: 'haiku' },
+        { label: tokenUsageLabel('fable', t, limits), detail: t('Also a 1-token Fable request per check, which spends Fable quota.'), value: 'fable' },
       ],
       tokenUsageLevel(rules),
       options,
@@ -390,7 +392,7 @@ export class AutoSwitchController implements vscode.Disposable {
       t('Per-model limits'),
       t('These are cswap settings; they also apply to `cswap auto` in a terminal.'),
       [
-        { label: t('Overall limits only'), detail: t('Compare accounts by their 5-hour and weekly limits only. cswap default.'), value: '' },
+        { label: t('Overall limits only'), detail: t('Compare accounts by their {0} limits only. cswap default.', limitNames(this.limits(), t)), value: '' },
         { label: t('All per-model limits'), detail: t('Also count every per-model weekly limit when picking an account.'), value: 'all' },
         ...known.map((name) => ({ label: name, detail: t('Also count the {0} weekly limit when picking an account.', name), value: name })),
       ],
@@ -543,9 +545,13 @@ export class AutoSwitchController implements vscode.Disposable {
   private async editRuleOnce(options: MenuOptions): Promise<MenuResult | 'again'> {
     const rules = await this.freshRules();
     const valueText = (value: number | string | undefined, suffix = '') => (value === undefined ? t('not set') : `${value}${suffix}`);
+    const limits = this.limits();
+    const weeklySet = rules?.weeklyThreshold !== undefined;
     const entries: Array<{ key: AutoSwitchRuleKey; label: string; value: string; help: string }> = [
-      { key: 'autoswitch.threshold', label: t('Switch threshold'), value: valueText(rules?.threshold, '%'), help: t('Switch when the 5-hour window (or any window without a weekly line) reaches this usage.') },
-      { key: 'autoswitch.weeklyThreshold', label: t('Weekly threshold'), value: valueText(rules?.weeklyThreshold, '%'), help: t('Separate line for the 7-day and per-model windows; not set means the switch threshold.') },
+      { key: 'autoswitch.threshold', label: t('Switch threshold'), value: valueText(rules?.threshold, '%'), help: switchThresholdHelp(limits, weeklySet, t) },
+      ...(showWeeklyThreshold(limits, weeklySet)
+        ? [{ key: 'autoswitch.weeklyThreshold' as const, label: t('Weekly threshold'), value: valueText(rules?.weeklyThreshold, '%'), help: weeklyThresholdHelp(limits, t) }]
+        : []),
       { key: 'autoswitch.cooldownSeconds', label: t('Cooldown'), value: valueText(rules?.cooldownSeconds, ' s'), help: t('Minimum time between two automatic switches.') },
       { key: 'autoswitch.intervalSeconds', label: t('Check interval'), value: valueText(rules?.intervalSeconds, ' s'), help: t('How often usage is checked while auto-switch is on.') },
       {
@@ -604,6 +610,11 @@ export class AutoSwitchController implements vscode.Disposable {
   }
 
   // ---- Internals ------------------------------------------------------------------------------
+
+  /** The limits the accounts report, so menus name only those (no 5-hour wording without one). */
+  private limits(): LimitProfile {
+    return limitProfile(this.deps.refreshService.getState().snapshot?.accounts ?? []);
+  }
 
   /** Saves one rule in cswap's config and verifies it by reading the config back. */
   private async applyRule(key: AutoSwitchRuleKey, value: string): Promise<boolean> {

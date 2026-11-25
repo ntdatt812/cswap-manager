@@ -16,6 +16,7 @@ See the usage of all your Claude accounts at a glance, switch the account Claude
   3 · 5h 100% · 7d  97% · ↻ 1h 25m · Team
   4 · 5h  12% · 7d  64% · ↻ 3h  5m · Research
   ```
+  The windows are the ones cswap reports for each account, so a plan with only weekly limits shows no 5-hour column, and the menus speak of weekly limits only. With accounts on different plans, an account without a window keeps its column (`5h –`).
 - **Status bar**: the active account with a countdown to the next refresh, yellow or red near the limit: `#1 · 5h 38% · 7d 46% · 0:42`.
 - **Switch picker and shortcuts**: `Ctrl+Alt+S` lists *Pick automatically*, *Current account*, *Available* and *At limit*, with a usage bar per window and the time to reset; `Ctrl+Alt+Shift+S` switches straight to the next available account.
 - **Dashboard**: suggestions with one-click switching, quota left, a sortable account table, a 7-day reset timeline and full account details.

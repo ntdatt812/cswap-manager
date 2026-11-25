@@ -4,6 +4,7 @@ import * as nodePath from 'node:path';
 import * as vscode from 'vscode';
 import type { CachedExecutableResolver } from '../core/cli/executableResolver';
 import { SORT_ORDERS } from '../core/presentation/format';
+import { limitProfile } from '../core/presentation/limits';
 import {
   LANGUAGE_SETTINGS,
   STATUS_BAR_LOOKS,
@@ -114,6 +115,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     autoSwitchRules: deps.autoSwitch.rulesText(),
     shareHistory: shareHistoryOn(rules),
     tokenUsage: tokenUsageLevel(rules),
+    limits: limitProfile(deps.refreshService?.getState().snapshot?.accounts ?? []),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
     barStyle: configuration.barStyle(),

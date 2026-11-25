@@ -137,10 +137,14 @@ export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks', op
  */
 export const FIGURE_SPACE = ' ';
 
+/** Shown in a window's column for an account that has no such window (e.g. no 5-hour limit). */
+export const NO_WINDOW = '–';
+
 /** Pads the number a text starts with to `digits` digits, with figure spaces in front. */
 export function padDigits(text: string, digits: number): string {
   const leading = /^\d*/.exec(text)?.[0].length ?? 0;
-  return FIGURE_SPACE.repeat(Math.max(0, digits - Math.max(leading, text.startsWith('?') ? 1 : 0))) + text;
+  const placeholder = text.startsWith('?') || text.startsWith(NO_WINDOW) ? 1 : 0;
+  return FIGURE_SPACE.repeat(Math.max(0, digits - Math.max(leading, placeholder))) + text;
 }
 
 /** Digits before the decimal point of a percentage as `formatPercent` shows it. */

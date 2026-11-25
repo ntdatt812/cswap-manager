@@ -2,6 +2,7 @@ import type { AutoSwitchStrategy } from '../cli/autoSwitchRules';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { Translate } from './accountTree';
 import { formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThresholds } from './format';
+import { capitalized, limitNames, NO_LIMITS_KNOWN, type LimitProfile } from './limits';
 import { STATUS_BAR_BAR_WIDTH, STATUS_BAR_PARTS, type StatusBarButton, type StatusBarColors, type StatusBarPart } from './statusBar';
 
 export const LANGUAGE_SETTINGS = ['auto', 'en', 'vi'] as const;
@@ -93,6 +94,8 @@ export interface QuickSettingsValues {
   readonly shareHistory: boolean | undefined;
   /** cswap's `usage.headerProbe` / `usage.fableProbe`; undefined while not loaded. */
   readonly tokenUsage: TokenUsageLevel | undefined;
+  /** Which limits the accounts report, for labels that name them; nothing known when absent. */
+  readonly limits?: LimitProfile;
   /** Parts the status bar item shows; empty when it is hidden. */
   readonly statusBarParts: readonly StatusBarPart[];
   readonly statusBarButtons: readonly StatusBarButton[];
@@ -367,16 +370,17 @@ export function shareHistoryOn(settings: { readonly shareHistory?: boolean } | u
   return settings === undefined ? undefined : settings.shareHistory !== false;
 }
 
-export function tokenUsageLabel(level: TokenUsageLevel | undefined, t: Translate): string {
+/** The probe levels name the limits the accounts actually have (`limitProfile`), e.g. `Weekly limits`. */
+export function tokenUsageLabel(level: TokenUsageLevel | undefined, t: Translate, limits: LimitProfile = NO_LIMITS_KNOWN): string {
   switch (level) {
     case undefined:
       return t('rules not loaded');
     case 'off':
       return t('Off');
     case 'haiku':
-      return t('5-hour and weekly');
+      return capitalized(t('{0} limits', limitNames(limits, t)));
     case 'fable':
-      return t('5-hour, weekly and Fable');
+      return capitalized(t('{0} limits', limitNames(limits, t, ['Fable'])));
   }
 }
 
@@ -429,7 +433,7 @@ function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsR
       value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
     },
     { key: 'notifications', iconId: 'bell', label: t('Notifications…'), value: notificationsSummary(values.notifications, t) },
-    { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t) },
+    { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t, values.limits) },
     { separator: true, label: t('cswap') },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
     {

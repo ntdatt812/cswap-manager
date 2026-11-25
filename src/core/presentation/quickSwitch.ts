@@ -43,7 +43,7 @@ function usageColumns(account: Account, options: PresentationOptions, columns: R
   if (windows.length === 0) {
     return [t('usage unknown')];
   }
-  const width = windows.length === 1 ? 10 : 6;
+  const width = Math.max(windows.length, columns.windowKeys.length) === 1 ? 10 : 6;
   return usageColumnsText(account, options, columns, {
     label: sanitizeLabel,
     bar: (window) => usageBar(window.pct ?? 0, width, options.barStyle, { icons: true }),
