@@ -37,10 +37,20 @@ export interface ResolverEnvironment {
   readonly platform: NodeJS.Platform;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly homeDir: string;
+  /**
+   * The open workspace folders. PATH entries inside them are not searched, so a project cannot
+   * supply a program through PATH (VS Code started from a shell with `<project>/.venv/bin` on PATH).
+   */
+  readonly workspaceFolders?: readonly string[];
   /** Returns 'file', 'directory', or undefined when the path does not exist. */
   statKind(candidate: string): Promise<'file' | 'directory' | 'other' | undefined>;
   /** POSIX only: whether the file is executable by the current user. */
   isExecutable(candidate: string): Promise<boolean>;
+  /**
+   * Windows only: whether the path is an app execution alias (`WindowsApps\winget.exe`), which starts
+   * like a program but cannot be stat-ed. Asked only by lookups that accept an alias.
+   */
+  isAppExecutionAlias?(candidate: string): Promise<boolean>;
 }
 
 export function nodeResolverEnvironment(): ResolverEnvironment {
@@ -67,14 +77,91 @@ export function nodeResolverEnvironment(): ResolverEnvironment {
         return false;
       }
     },
+    isAppExecutionAlias: nodeIsAppExecutionAlias,
   };
+}
+
+/** An app execution alias fails `stat` with EACCES (or UNKNOWN); Node's lstat reports it as a link. */
+async function nodeIsAppExecutionAlias(candidate: string): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return false;
+  }
+  try {
+    await fs.stat(candidate);
+    return false;
+  } catch (error) {
+    const code = (error as { code?: unknown } | undefined)?.code;
+    if (code !== 'EACCES' && code !== 'UNKNOWN') {
+      return false;
+    }
+  }
+  try {
+    return (await fs.lstat(candidate)).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function pathApi(platform: NodeJS.Platform): path.PlatformPath {
   return platform === 'win32' ? path.win32 : path.posix;
 }
 
-function readEnv(env: ResolverEnvironment['env'], name: string, platform: NodeJS.Platform): string | undefined {
+/** `%LOCALAPPDATA%` when it is an absolute path, else `<home>\AppData\Local`. */
+export function localAppDataDirectory(environment: Pick<ResolverEnvironment, 'platform' | 'env' | 'homeDir'>): string {
+  const local = readEnv(environment.env, 'LOCALAPPDATA', 'win32');
+  return local !== undefined && local !== '' && path.win32.isAbsolute(local) ? local : path.win32.join(environment.homeDir, 'AppData', 'Local');
+}
+
+/** The only folder whose app execution aliases are accepted (and only where a lookup asks for it). */
+export function windowsAppsDirectory(environment: Pick<ResolverEnvironment, 'platform' | 'env' | 'homeDir'>): string {
+  return path.win32.join(localAppDataDirectory(environment), 'Microsoft', 'WindowsApps');
+}
+
+/** Normalized, without trailing separators (a root keeps its own), case-folded where the file system usually is. */
+function comparablePath(value: string, platform: NodeJS.Platform): string {
+  const api = pathApi(platform);
+  let normalized = api.normalize(value);
+  const root = api.parse(normalized).root;
+  while (normalized.length > root.length && normalized.endsWith(api.sep)) {
+    normalized = normalized.slice(0, -1);
+  }
+  return platform === 'win32' || platform === 'darwin' ? normalized.toLowerCase() : normalized;
+}
+
+/** Whether `candidate` is `folder` or inside it (`/a/b` is not inside `/a/bc`). */
+export function isSameOrInside(candidate: string, folder: string, platform: NodeJS.Platform): boolean {
+  const child = comparablePath(candidate, platform);
+  const parent = comparablePath(folder, platform);
+  if (child === parent) {
+    return true;
+  }
+  const sep = pathApi(platform).sep;
+  return child.startsWith(parent.endsWith(sep) ? parent : parent + sep);
+}
+
+/**
+ * The PATH entries that are neither one of the workspace folders nor inside one. A folder that holds
+ * the home folder (the home folder itself, a parent of it, a drive root) is not a project's own
+ * folder and is not used: it would hide the user's own tools, such as `~/.local/bin`.
+ */
+export function pathEntriesOutsideFolders(
+  entries: readonly string[],
+  folders: readonly string[],
+  environment: Pick<ResolverEnvironment, 'platform' | 'homeDir'>,
+): string[] {
+  const { platform, homeDir } = environment;
+  const api = pathApi(platform);
+  const projects = folders.filter((folder) => folder !== '' && api.isAbsolute(folder) && !isSameOrInside(homeDir, folder, platform));
+  return entries.filter((entry) => !projects.some((folder) => isSameOrInside(entry, folder, platform)));
+}
+
+/** The PATH entries lookups search: absolute ones, outside the open workspace folders. */
+export function searchPathEntries(environment: ResolverEnvironment): string[] {
+  return pathEntriesOutsideFolders(absolutePathEntries(environment.env, environment.platform), environment.workspaceFolders ?? [], environment);
+}
+
+/** An environment variable; on Windows the name is matched case-insensitively (`Path`, `PATH`). */
+export function readEnv(env: ResolverEnvironment['env'], name: string, platform: NodeJS.Platform): string | undefined {
   if (platform !== 'win32') {
     return env[name];
   }
@@ -165,8 +252,48 @@ async function resolveConfigured(setting: string, environment: ResolverEnvironme
   return { ok: false, reason: 'setting-not-found', path: normalized };
 }
 
-function candidateNames(platform: NodeJS.Platform): string[] {
-  return platform === 'win32' ? WINDOWS_DIRECT_EXTENSIONS.map((ext) => CLI_BASE_NAME + ext) : [CLI_BASE_NAME];
+function candidateNames(baseName: string, platform: NodeJS.Platform): string[] {
+  return platform === 'win32' ? WINDOWS_DIRECT_EXTENSIONS.map((ext) => baseName + ext) : [baseName];
+}
+
+export interface FindExecutableOptions {
+  /**
+   * Also accept a Windows app execution alias, but only in `%LOCALAPPDATA%\Microsoft\WindowsApps`
+   * (where winget's lives). Off for cswap.
+   */
+  readonly allowAppAlias?: boolean;
+}
+
+async function isAcceptedAppAlias(candidate: string, environment: ResolverEnvironment): Promise<boolean> {
+  if (environment.platform !== 'win32' || environment.isAppExecutionAlias === undefined) {
+    return false;
+  }
+  if (comparablePath(path.win32.dirname(candidate), 'win32') !== comparablePath(windowsAppsDirectory(environment), 'win32')) {
+    return false;
+  }
+  return environment.isAppExecutionAlias(candidate);
+}
+
+/**
+ * The first program named `baseName` in `directories` (searched in order) that can be started without
+ * a shell: on Windows `.exe`/`.com` only, on POSIX an executable file.
+ */
+export async function findExecutableIn(
+  baseName: string,
+  directories: readonly string[],
+  environment: ResolverEnvironment,
+  options: FindExecutableOptions = {},
+): Promise<string | undefined> {
+  const api = pathApi(environment.platform);
+  for (const directory of directories) {
+    for (const name of candidateNames(baseName, environment.platform)) {
+      const candidate = api.join(directory, name);
+      if ((await isUsableFile(candidate, environment)) || (options.allowAppAlias === true && (await isAcceptedAppAlias(candidate, environment)))) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
 }
 
 async function findShim(directories: readonly string[], environment: ResolverEnvironment): Promise<string | undefined> {
@@ -190,7 +317,8 @@ export function defaultLocations(environment: Pick<ResolverEnvironment, 'platfor
 
 /**
  * Resolves the absolute path of the `cswap` executable.
- * Order: explicit setting (never falls back if set but invalid) → absolute PATH entries → default locations.
+ * Order: explicit setting (never falls back if set but invalid) → absolute PATH entries outside the
+ * workspace folders → default locations.
  */
 export async function resolveCswapExecutable(
   setting: string | undefined,
@@ -201,21 +329,16 @@ export async function resolveCswapExecutable(
     return resolveConfigured(configured, environment);
   }
 
-  const api = pathApi(environment.platform);
-  const pathDirs = absolutePathEntries(environment.env, environment.platform);
+  const pathDirs = searchPathEntries(environment);
   const groups: Array<{ source: ExecutableSource; directories: string[] }> = [
     { source: 'path', directories: pathDirs },
     { source: 'default-location', directories: defaultLocations(environment) },
   ];
 
   for (const group of groups) {
-    for (const directory of group.directories) {
-      for (const name of candidateNames(environment.platform)) {
-        const candidate = api.join(directory, name);
-        if (await isUsableFile(candidate, environment)) {
-          return { ok: true, path: candidate, source: group.source };
-        }
-      }
+    const found = await findExecutableIn(CLI_BASE_NAME, group.directories, environment);
+    if (found !== undefined) {
+      return { ok: true, path: found, source: group.source };
     }
   }
 

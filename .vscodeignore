@@ -3,6 +3,8 @@
 !dist/webview/dashboard.js
 !media/**
 !resources/**
+!images/dashboard-dark.png
+!images/dashboard-light.png
 !package.json
 !package.nls.json
 !package.nls.*.json

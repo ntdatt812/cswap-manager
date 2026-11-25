@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 272" role="img" aria-label="Install cswap from a terminal: uv tool install claude-swap, or pipx install claude-swap">
+<title>Install cswap from a terminal: uv tool install claude-swap, or pipx install claude-swap</title>
+<style>
+.cm-ui { font-family: var(--vscode-font-family, "Segoe WPC", "Segoe UI", system-ui, sans-serif); font-size: 13px; }
+.cm-mono { font-family: var(--vscode-editor-font-family, Consolas, "Courier New", monospace); font-size: 14px; }
+.cm-small { font-size: 11px; }
+.cm-detail { font-size: 12px; }
+.cm-bold { font-weight: 600; }
+.cm-fg { fill: var(--vscode-foreground, #cccccc); }
+.cm-dim { fill: var(--vscode-descriptionForeground, #9d9d9d); }
+.cm-icon { fill: none; stroke: var(--vscode-icon-foreground, var(--vscode-foreground, #cccccc)); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.cm-bar { fill: var(--vscode-foreground, #cccccc); }
+.cm-track { fill: var(--vscode-foreground, #cccccc); opacity: 0.22; }
+.cm-sidebar { fill: var(--vscode-sideBar-background, #181818); stroke: var(--vscode-sideBar-border, var(--vscode-panel-border, #2b2b2b)); }
+.cm-title { fill: var(--vscode-sideBarTitle-foreground, var(--vscode-foreground, #cccccc)); }
+.cm-terminal { fill: var(--vscode-terminal-background, var(--vscode-panel-background, #181818)); stroke: var(--vscode-panel-border, #2b2b2b); }
+.cm-term-fg { fill: var(--vscode-terminal-foreground, var(--vscode-foreground, #cccccc)); }
+.cm-tab-line { stroke: var(--vscode-panelTitle-activeBorder, var(--vscode-focusBorder, #0078d4)); }
+.cm-cursor { fill: var(--vscode-terminalCursor-foreground, var(--vscode-terminal-foreground, var(--vscode-foreground, #cccccc))); }
+.cm-quick { fill: var(--vscode-quickInput-background, var(--vscode-editorWidget-background, #222222)); stroke: var(--vscode-widget-border, #313131); }
+.cm-quick-fg { fill: var(--vscode-quickInput-foreground, var(--vscode-foreground, #cccccc)); }
+.cm-input { fill: var(--vscode-input-background, #313131); stroke: var(--vscode-focusBorder, #0078d4); }
+.cm-placeholder { fill: var(--vscode-input-placeholderForeground, #989898); }
+.cm-focus { fill: var(--vscode-quickInputList-focusBackground, var(--vscode-list-activeSelectionBackground, #04395e)); }
+.cm-focus-fg { fill: var(--vscode-quickInputList-focusForeground, var(--vscode-list-activeSelectionForeground, #ffffff)); }
+.cm-focus-icon { fill: none; stroke: var(--vscode-quickInputList-focusIconForeground, var(--vscode-quickInputList-focusForeground, var(--vscode-list-activeSelectionForeground, #ffffff))); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.cm-separator { stroke: var(--vscode-pickerGroup-border, var(--vscode-widget-border, #3c3c3c)); }
+.cm-group { fill: var(--vscode-pickerGroup-foreground, var(--vscode-descriptionForeground, #9d9d9d)); }
+.cm-ok { fill: var(--vscode-charts-green, #89d185); }
+.cm-err { fill: var(--vscode-charts-red, #f14c4c); }
+.cm-on-color { fill: none; stroke: var(--vscode-sideBar-background, var(--vscode-editor-background, #181818)); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+<rect class="cm-terminal" x="0.5" y="0.5" width="559" height="271" rx="6"/>
+<text class="cm-ui cm-small cm-term-fg" x="20" y="28" letter-spacing="0.4">TERMINAL</text>
+<line class="cm-tab-line" x1="20" y1="36.5" x2="78" y2="36.5"/>
+<text class="cm-mono cm-dim" x="20" y="82"># Install cswap (the claude-swap package on PyPI)</text>
+<text class="cm-mono" x="20" y="106"><tspan class="cm-dim">$ </tspan><tspan class="cm-term-fg">uv tool install claude-swap</tspan></text>
+<text class="cm-mono cm-dim" x="20" y="138"># or</text>
+<text class="cm-mono" x="20" y="162"><tspan class="cm-dim">$ </tspan><tspan class="cm-term-fg">pipx install claude-swap</tspan></text>
+<text class="cm-mono cm-dim" x="20" y="194"># Check that it runs</text>
+<text class="cm-mono" x="20" y="218"><tspan class="cm-dim">$ </tspan><tspan class="cm-term-fg">cswap --help</tspan></text>
+<text class="cm-mono cm-dim" x="20" y="250">$ </text><rect class="cm-cursor" x="37" y="237" width="8" height="17"/>
+</svg>

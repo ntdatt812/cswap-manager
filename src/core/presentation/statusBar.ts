@@ -69,8 +69,8 @@ export function isStatusBarColors(value: unknown): value is StatusBarColors {
   return typeof value === 'string' && (STATUS_BAR_COLORS as readonly string[]).includes(value);
 }
 
-/** The status bar has little room: its bar is shorter than the sidebar's. */
-export const STATUS_BAR_BAR_WIDTH = 8;
+/** Same length as the sidebar's and the switch picker's bars, so they read alike. */
+export const STATUS_BAR_BAR_WIDTH = 10;
 
 export interface StatusBarModel {
   /** May contain `$(codicon)` syntax; CLI-derived text is sanitized so it cannot add icons. */
@@ -123,7 +123,7 @@ export function usageSummary(account: Account, options: PresentationOptions): st
 }
 
 /** The window that limits the account: the fullest one with a known percentage. */
-function fullestWindow(account: Account): UsageWindow | undefined {
+export function fullestWindow(account: Account): UsageWindow | undefined {
   return (account.usage?.windows ?? [])
     .filter((window) => window.pct !== undefined)
     .reduce<UsageWindow | undefined>((fullest, window) => (fullest === undefined || (window.pct ?? 0) > (fullest.pct ?? 0) ? window : fullest), undefined);

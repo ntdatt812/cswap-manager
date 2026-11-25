@@ -32,6 +32,8 @@ const COMMANDS = [
   'cswapManager.toggleSwitchAtLimit',
   'cswapManager.autoSwitchPreview',
   'cswapManager.quickSettings',
+  'cswapManager.installCswap',
+  'cswapManager.clearUsageHistory',
 ];
 
 suite('Cswap Manager (extension host)', () => {
@@ -193,6 +195,73 @@ suite('Cswap Manager (extension host)', () => {
     }
   });
 
+  test('turns a notification on and off from Quick Settings › Advanced › Notifications', async () => {
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const notifyValue = () => config().inspect<boolean>('notifyOnWeeklyReset')?.globalValue;
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (predicate: () => boolean) => {
+      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
+        await pause(50);
+      }
+      return predicate();
+    };
+    const before = notifyValue();
+    let opened: Thenable<unknown> | undefined;
+    try {
+      await config().update('notifyOnWeeklyReset', false, vscode.ConfigurationTarget.Global);
+      opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'notifications');
+      await pause(500);
+      // Opens the Notifications screen, whose first row (weekly reset) is highlighted.
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => notifyValue() === true), `notifyOnWeeklyReset is ${String(notifyValue())}`);
+      // The screen comes back on the same row.
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => notifyValue() === false), `notifyOnWeeklyReset is ${String(notifyValue())}`);
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await opened;
+      await config().update('notifyOnWeeklyReset', before, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('switches automatic cswap updates on and off from Quick Settings › Advanced › cswap version', async () => {
+    const config = () => vscode.workspace.getConfiguration('cswapManager');
+    const autoValue = () => config().inspect<boolean>('autoUpdateCswap')?.globalValue;
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const waitFor = async (predicate: () => boolean) => {
+      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
+        await pause(50);
+      }
+      return predicate();
+    };
+    const before = autoValue();
+    let opened: Thenable<unknown> | undefined;
+    try {
+      await config().update('autoUpdateCswap', true, vscode.ConfigurationTarget.Global);
+      opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'cswapVersion');
+      await pause(500);
+      // Opens the cswap version screen on "Check now"; the third row is "Update automatically".
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+      await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
+      await pause(200);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => autoValue() === false), `autoUpdateCswap is ${String(autoValue())}`);
+      // The screen comes back on the same row.
+      await pause(500);
+      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      assert.ok(await waitFor(() => autoValue() === true), `autoUpdateCswap is ${String(autoValue())}`);
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
+      await opened;
+      await config().update('autoUpdateCswap', before, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   test('highlights the current value in a Quick Settings sub-picker, so Enter changes nothing', async () => {
     const config = () => vscode.workspace.getConfiguration('cswapManager');
     const before = config().inspect<number>('refreshIntervalSeconds')?.globalValue;
@@ -225,7 +294,7 @@ suite('Cswap Manager (extension host)', () => {
       await config().update('statusBar.buttons', ['refresh', 'dashboard'], vscode.ConfigurationTarget.Global);
       const state = api.statusBar.currentState();
       // Ends with the countdown to the next refresh while automatic refresh is scheduled.
-      assert.match(state.text ?? '', /^#\d+( · [●◐○]{8})?( · \d+:\d{2})?$/, state.text);
+      assert.match(state.text ?? '', /^#\d+( · [●◐○]{10})?( · \d+:\d{2})?$/, state.text);
       assert.deepEqual(state.buttons, ['refresh', 'dashboard']);
       api.statusBar.preview({ parts: [] });
       assert.equal(api.statusBar.currentState().text, undefined, 'previewing nothing hides the item');
@@ -306,6 +375,35 @@ suite('Cswap Manager (extension host)', () => {
       refreshed = (api.refreshService.getState().lastAttemptAt ?? 0) > before;
     }
     assert.ok(refreshed, 'a signal from another window triggers a refresh');
+  });
+
+  test('records usage readings (hashed accounts only) and clears them', async function () {
+    const refreshed = await api.refreshService.refresh({ trigger: 'manual', requireFresh: true });
+    const keys = refreshed.ok
+      ? refreshed.snapshot.accounts.filter((account) => account.usage !== undefined).map(displayNameKey).filter((key): key is string => key !== undefined)
+      : [];
+    if (!refreshed.ok || keys.length === 0) {
+      this.skip();
+      return;
+    }
+    const store = api.usageHistory;
+    store.record(refreshed.snapshot);
+    const recorded = () => keys.some((key) => (store.current()?.accounts[key]?.length ?? 0) > 0);
+    for (let attempt = 0; attempt < 40 && !recorded(); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok(recorded(), 'a reading is kept for an account with usage');
+    assert.ok(Object.keys(store.current()?.accounts ?? {}).every((key) => /^[0-9a-f]{16}$/.test(key)), 'accounts are named by hash only');
+    await store.clear();
+    assert.deepEqual(store.current(), { accounts: {} });
+    assert.equal(
+      await fs.access(store.file).then(
+        () => true,
+        () => false,
+      ),
+      false,
+      'the file is deleted',
+    );
   });
 
   test('shows a display name in the sidebar as soon as it is saved, without calling cswap', async function () {

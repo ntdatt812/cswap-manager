@@ -74,8 +74,8 @@ function reloginInsight(snapshot: AccountsSnapshot, options: PresentationOptions
     title: lapsed ? t('Re-login needed') : t('Re-login due soon'),
     text:
       soonest === undefined
-        ? t('{0}: log in again with /login in Claude Code, then run cswap add.', slots)
-        : t('{0}: the stored login expires in {1}. Log in again with /login in Claude Code, then run cswap add.', slots, compactDuration(soonest.expiresAt - now)),
+        ? t('{0}: log in again with /login in Claude Code; the extension then stores the new login.', slots)
+        : t('{0}: the stored login expires in {1}. Log in again with /login in Claude Code; the extension then stores the new login.', slots, compactDuration(soonest.expiresAt - now)),
   };
 }
 

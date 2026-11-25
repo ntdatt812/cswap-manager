@@ -601,6 +601,41 @@ h4 {
   gap: 10px;
 }
 
+/* Usage history ("Last 7 days"): a thin line over a baseline, laid out like the meters above it. */
+.spark-block {
+  display: grid;
+  gap: 4px;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 36px;
+  overflow: visible;
+}
+
+.spark-base {
+  stroke: var(--track);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-line {
+  fill: none;
+  stroke: var(--tone-active);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark-dot {
+  stroke: var(--tone-active);
+  stroke-width: 3;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
 /* ---- Layout and panels ---- */
 
 .layout {
@@ -1101,6 +1136,13 @@ button.timeline-row:focus-visible {
   }
   .bar-pace {
     background: CanvasText;
+  }
+  .spark-line,
+  .spark-dot {
+    stroke: Highlight;
+  }
+  .spark-base {
+    stroke: CanvasText;
   }
   .insight,
   .note,

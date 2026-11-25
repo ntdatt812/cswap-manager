@@ -34,7 +34,7 @@ export const SETTING_KEYS = [
   'timeout',
   'transfer',
   'allSettings',
-  'notifyReset',
+  'notifications',
   'advanced',
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -46,11 +46,42 @@ export function isSettingKey(value: unknown): value is SettingKey {
 /** The main list fits without scrolling; rarely changed settings sit on the "Advanced…" page. */
 export type QuickSettingsPage = 'main' | 'advanced';
 
+/** The notifications the user can turn on or off. */
+export interface NotificationSettings {
+  /** `cswapManager.notifyOnWeeklyReset`. */
+  readonly weeklyReset: boolean;
+  /** `cswapManager.notifyAtUsage`: usage % of the active account's limiting window that alerts; 0 = off. */
+  readonly usageAlertPct: number;
+  /** `cswapManager.notifyLoginExpiry`. */
+  readonly loginExpiry: boolean;
+}
+
+/** Usage alert levels offered in the picker (0 = off). */
+export const USAGE_ALERT_CHOICES: readonly number[] = [0, 80, 90, 95];
+
+/** The offered alert levels, plus the current one when it was set to something else by hand. */
+export function usageAlertChoices(currentPct: number): number[] {
+  return [...new Set([...USAGE_ALERT_CHOICES, currentPct])].sort((a, b) => a - b);
+}
+
+export function usageAlertLabel(pct: number, t: Translate): string {
+  return pct > 0 ? formatPercent(pct) : t('Off');
+}
+
+/** `90% · login expiry · weekly reset`, or Off when every notification is off. */
+export function notificationsSummary(settings: NotificationSettings, t: Translate): string {
+  const parts = [
+    settings.usageAlertPct > 0 ? formatPercent(settings.usageAlertPct) : undefined,
+    settings.loginExpiry ? t('login expiry') : undefined,
+    settings.weeklyReset ? t('weekly reset') : undefined,
+  ].filter((part): part is string => part !== undefined);
+  return parts.length === 0 ? t('Off') : parts.join(' · ');
+}
+
 export interface QuickSettingsValues {
   readonly language: LanguageSetting;
   readonly confirmSwitch: boolean;
-  /** Tell when an account's weekly limit resets (`cswapManager.notifyOnWeeklyReset`). */
-  readonly notifyReset: boolean;
+  readonly notifications: NotificationSettings;
   readonly autoSwitchMode: AutoSwitchMode;
   /** cswap's `autoswitch.strategy`; undefined while the rules are not loaded. */
   readonly autoSwitchStrategy: string | undefined;
@@ -78,6 +109,29 @@ export interface QuickSettingsValues {
   /** Installed cswap version and the newer one, when known. */
   readonly cswapVersion?: string;
   readonly cswapLatest?: string;
+  readonly cswapUpdates: CswapUpdateSettings;
+}
+
+/** `cswapManager.checkCswapUpdates` and `cswapManager.autoUpdateCswap`. */
+export interface CswapUpdateSettings {
+  readonly daily: boolean;
+  readonly automatic: boolean;
+}
+
+/** `1.2.0`, or `1.2.0 · 1.3.0 available`; undefined while the version is not known. */
+export function cswapVersionText(version: string | undefined, latest: string | undefined, t: Translate): string | undefined {
+  if (version === undefined) {
+    return undefined;
+  }
+  return latest !== undefined && latest !== version ? t('{0} · {1} available', version, latest) : version;
+}
+
+/** How cswap is kept up to date. */
+export function cswapUpdatesLabel(settings: CswapUpdateSettings, t: Translate): string {
+  if (!settings.daily) {
+    return t('not checked daily');
+  }
+  return settings.automatic ? t('updates automatically') : t('asks before updating');
 }
 
 /** Time limits offered for one cswap command, in seconds. */
@@ -362,7 +416,7 @@ function mainRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[]
     { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
     { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
     { separator: true, label: t('More') },
-    { key: 'advanced', iconId: 'ellipsis', label: t('Advanced…'), value: t('chat history, reset alerts, token usage, cswap, another computer') },
+    { key: 'advanced', iconId: 'ellipsis', label: t('Advanced…'), value: t('chat history, notifications, token usage, cswap, another computer') },
   ];
 }
 
@@ -374,7 +428,7 @@ function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsR
       label: t('Chat history across accounts'),
       value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
     },
-    { key: 'notifyReset', iconId: 'bell', label: t('Tell me when a weekly limit resets'), value: values.notifyReset ? t('On') : t('Off') },
+    { key: 'notifications', iconId: 'bell', label: t('Notifications…'), value: notificationsSummary(values.notifications, t) },
     { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t) },
     { separator: true, label: t('cswap') },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
@@ -382,12 +436,7 @@ function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsR
       key: 'cswapVersion',
       iconId: 'cloud-download',
       label: t('cswap version'),
-      value:
-        values.cswapVersion === undefined
-          ? t('check for updates')
-          : values.cswapLatest !== undefined && values.cswapLatest !== values.cswapVersion
-            ? t('{0} · {1} available', values.cswapVersion, values.cswapLatest)
-            : values.cswapVersion,
+      value: [cswapVersionText(values.cswapVersion, values.cswapLatest, t), cswapUpdatesLabel(values.cswapUpdates, t)].filter((part) => part !== undefined).join(' · '),
     },
     { key: 'timeout', iconId: 'watch', label: t('Command time limit'), value: t('{0} s', values.timeoutSeconds) },
     { separator: true, label: t('Other') },

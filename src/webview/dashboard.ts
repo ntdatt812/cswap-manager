@@ -9,6 +9,7 @@ import type {
   Fact,
   Insight,
   Meter,
+  Sparkline,
   TimelineItem,
   WebviewToHost,
 } from '../shared/dashboardProtocol';
@@ -554,6 +555,54 @@ function manageList(current: DashboardModel, slot: number, rows: NonNullable<Det
   );
 }
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** Sparkline drawing box: 100 wide (stretched to the panel), as tall as the CSS height in pixels. */
+const SPARK_HEIGHT = 36;
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string>): SVGElementTagNameMap[K] {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [name, value] of Object.entries(attrs)) {
+    node.setAttribute(name, value);
+  }
+  return node;
+}
+
+/** Usage 0–100% → y in the drawing box, with room for the stroke at the top and the baseline below. */
+function sparkY(pct: number): string {
+  return (SPARK_HEIGHT - 3 - (pct / 100) * (SPARK_HEIGHT - 6)).toFixed(2);
+}
+
+/**
+ * The recorded readings as one line over the last 7 days (x: time, y: 0–100%) above a thin baseline.
+ * The line starts and ends at real readings; nothing is drawn past the last one.
+ */
+function sparklineBlock(spark: Sparkline): HTMLElement {
+  const box = svg('svg', {
+    class: 'spark',
+    viewBox: `0 0 100 ${SPARK_HEIGHT}`,
+    preserveAspectRatio: 'none',
+    role: 'img',
+    'aria-label': spark.description,
+  });
+  const title = svg('title', {});
+  title.textContent = spark.description;
+  const baseline = String(SPARK_HEIGHT - 0.5);
+  box.append(title, svg('line', { class: 'spark-base', x1: '0', y1: baseline, x2: '100', y2: baseline }));
+  const [only] = spark.points;
+  if (spark.points.length === 1 && only !== undefined) {
+    const y = sparkY(only.y);
+    box.append(svg('line', { class: 'spark-dot', x1: String(only.x), y1: y, x2: String(only.x), y2: y }));
+  } else if (spark.points.length > 1) {
+    box.append(svg('polyline', { class: 'spark-line', points: spark.points.map((point) => `${point.x},${sparkY(point.y)}`).join(' ') }));
+  }
+  return el('div', { className: 'spark-block' }, [
+    el('div', { className: 'meter-head' }, [
+      el('span', { className: 'meter-title' }, [el('span', { className: 'meter-label', text: spark.label }), el('span', { className: 'meter-caption', text: spark.caption })]),
+    ]),
+    box,
+  ]);
+}
+
 function sectionContent(current: DashboardModel, slot: number, section: DetailSection): Child[] {
   return [
     section.note !== undefined && el('p', { className: `note tone-${section.noteTone ?? 'neutral'}`, text: section.note }),
@@ -563,6 +612,7 @@ function sectionContent(current: DashboardModel, slot: number, section: DetailSe
         { className: 'meters' },
         section.meters.map((meter) => el('div', {}, [meterBlock(meter), renderFacts(meter.facts)])),
       ),
+    section.sparklines !== undefined && section.sparklines.length > 0 && el('div', { className: 'meters' }, section.sparklines.map(sparklineBlock)),
     renderFacts(section.facts),
     section.manage !== undefined && section.manage.length > 0 && manageList(current, slot, section.manage),
   ];

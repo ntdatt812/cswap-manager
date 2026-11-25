@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { autoSwitchRuleArgs, ruleMatches, validateRuleInput } from '../../src/core/cli/autoSwitchRules';
 import { cliError } from '../../src/core/cli/cliErrors';
 import { CswapCli, addArgs, addTokenArgs, manageArgs, parseAddOutput, parseRemoveOutput, tokenKind, type AddResult, type CliOutcome, type ManageOperation } from '../../src/core/cli/cswapCli';
-import { isNewer, latestFromPypi, upgradeCommand } from '../../src/core/cli/cswapUpdate';
+import { UPGRADE_ARGS, isNewer, latestFromPypi, upgradeCommandByName, upgradeTool } from '../../src/core/cli/cswapUpdate';
 import {
   exportArgs,
   importArgs,
@@ -400,17 +400,21 @@ describe('cswap update check', () => {
     assert.equal(isNewer(version('1.2.9'), version('2.0.0')), false);
   });
 
-  it('suggests the upgrade command for the way cswap was installed', () => {
+  it('picks the installer that put cswap there, with fixed upgrade arguments', () => {
     const none = { uv: false, pipx: false };
-    assert.equal(upgradeCommand('C:\\Users\\me\\AppData\\Roaming\\uv\\tools\\claude-swap\\Scripts\\cswap.exe', none), 'uv tool upgrade claude-swap');
-    assert.equal(upgradeCommand('/home/me/.local/pipx/venvs/claude-swap/bin/cswap', none), 'pipx upgrade claude-swap');
+    assert.equal(upgradeTool('C:\\Users\\me\\AppData\\Roaming\\uv\\tools\\claude-swap\\Scripts\\cswap.exe', none), 'uv');
+    assert.equal(upgradeTool('/home/me/.local/pipx/venvs/claude-swap/bin/cswap', none), 'pipx');
     // uv and pipx both put launchers in ~/.local/bin: the installer whose environment exists decides.
     const launcher = 'C:\\Users\\me\\.local\\bin\\cswap.exe';
-    assert.equal(upgradeCommand(launcher, { uv: true, pipx: false }), 'uv tool upgrade claude-swap');
-    assert.equal(upgradeCommand(launcher, { uv: false, pipx: true }), 'pipx upgrade claude-swap');
-    assert.equal(upgradeCommand(launcher, { uv: true, pipx: true }), undefined, 'ambiguous');
-    assert.equal(upgradeCommand(launcher, none), undefined);
-    assert.equal(upgradeCommand('D:\\tools\\cswap.exe', { uv: true, pipx: false }), undefined);
+    assert.equal(upgradeTool(launcher, { uv: true, pipx: false }), 'uv');
+    assert.equal(upgradeTool(launcher, { uv: false, pipx: true }), 'pipx');
+    assert.equal(upgradeTool(launcher, { uv: true, pipx: true }), undefined, 'ambiguous');
+    assert.equal(upgradeTool(launcher, none), undefined);
+    assert.equal(upgradeTool('D:\\tools\\cswap.exe', { uv: true, pipx: false }), undefined);
+    assert.deepEqual(UPGRADE_ARGS.uv, ['tool', 'upgrade', 'claude-swap']);
+    assert.deepEqual(UPGRADE_ARGS.pipx, ['upgrade', 'claude-swap']);
+    assert.equal(upgradeCommandByName('uv'), 'uv tool upgrade claude-swap');
+    assert.equal(upgradeCommandByName('pipx'), 'pipx upgrade claude-swap');
   });
 });
 

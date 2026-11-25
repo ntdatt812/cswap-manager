@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, it } from 'node:test';
 import {
   CachedExecutableResolver,
   absolutePathEntries,
+  isSameOrInside,
+  nodeResolverEnvironment,
+  pathEntriesOutsideFolders,
   resolveCswapExecutable,
+  windowsAppsDirectory,
   type ResolverEnvironment,
 } from '../../src/core/cli/executableResolver';
 
@@ -81,6 +87,43 @@ describe('resolveCswapExecutable — Windows', () => {
     assert.equal(result.ok && result.source, 'setting');
   });
 
+  it('never accepts an app execution alias for cswap, even in WindowsApps', async () => {
+    const windowsApps = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps';
+    assert.equal(windowsAppsDirectory({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local' }, homeDir: 'C:\\Users\\dev' }), windowsApps);
+    const aliasAsked: string[] = [];
+    const env: ResolverEnvironment = {
+      ...windowsEnv({}, `${windowsApps};C:\\Tools`),
+      env: { Path: `${windowsApps};C:\\Tools`, LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local' },
+      // An alias-like reparse point: stat fails, lstat would call it a link.
+      isAppExecutionAlias: (candidate) => {
+        aliasAsked.push(candidate);
+        return Promise.resolve(true);
+      },
+    };
+    assert.deepEqual(await resolveCswapExecutable('', env), { ok: false, reason: 'not-found' });
+    assert.deepEqual(aliasAsked, [], 'the cswap lookup never asks');
+  });
+
+  const realAlias = process.platform === 'win32' ? path.join(windowsAppsDirectory(nodeResolverEnvironment()), 'winget.exe') : '';
+  // existsSync stats the file, which an alias refuses; lstat sees it.
+  const hasRealAlias = realAlias !== '' && fs.lstatSync(realAlias, { throwIfNoEntry: false }) !== undefined;
+  it('on this machine, a real app execution alias is no file to statKind (so never cswap), only to isAppExecutionAlias', { skip: !hasRealAlias }, async () => {
+    const env = nodeResolverEnvironment();
+    assert.equal(await env.statKind(realAlias), undefined);
+    assert.equal(await env.isAppExecutionAlias?.(realAlias), true);
+    assert.equal(await env.isAppExecutionAlias?.(process.execPath), false, 'a normal program is not an alias');
+  });
+
+  it('skips PATH entries inside an open workspace folder (case-insensitively), then uses the default location', async () => {
+    const files = ['D:\\Work\\Repo\\.venv\\Scripts\\cswap.exe', 'C:\\Users\\dev\\.local\\bin\\cswap.exe'];
+    const env: ResolverEnvironment = { ...windowsEnv({ files }, 'D:\\Work\\Repo\\.venv\\Scripts;C:\\Tools'), workspaceFolders: ['d:/work/repo/'] };
+    assert.deepEqual(await resolveCswapExecutable('', env), { ok: true, path: 'C:\\Users\\dev\\.local\\bin\\cswap.exe', source: 'default-location' });
+    const shimOnly: ResolverEnvironment = { ...windowsEnv({ files: ['D:\\Work\\Repo\\bin\\cswap.cmd'] }, 'D:\\Work\\Repo\\bin'), workspaceFolders: ['D:\\Work\\Repo'] };
+    assert.deepEqual(await resolveCswapExecutable('', shimOnly), { ok: false, reason: 'not-found' }, 'a shim in the project is not even reported');
+    const outside: ResolverEnvironment = { ...windowsEnv({ files: ['D:\\Work\\RepoTools\\cswap.exe'] }, 'D:\\Work\\RepoTools'), workspaceFolders: ['D:\\Work\\Repo'] };
+    assert.equal((await resolveCswapExecutable('', outside)).ok, true, 'a sibling folder with a longer name is not inside');
+  });
+
   it('rejects relative, missing, directory and shim settings without falling back to PATH', async () => {
     const env = windowsEnv({ files: ['C:\\Tools\\cswap.exe', 'D:\\apps\\cswap.bat'], dirs: ['D:\\apps'] });
     assert.deepEqual(await resolveCswapExecutable('cswap.exe', env), { ok: false, reason: 'setting-not-absolute', path: 'cswap.exe' });
@@ -103,6 +146,45 @@ describe('resolveCswapExecutable — POSIX', () => {
 
   it('ignores empty PATH entries (current directory)', () => {
     assert.deepEqual(absolutePathEntries({ PATH: ':/usr/bin::./bin:/usr/bin' }, 'linux'), ['/usr/bin']);
+  });
+
+  it('skips PATH entries inside an open workspace folder', async () => {
+    const env: ResolverEnvironment = { ...posixEnv({ files: ['/srv/app/.venv/bin/cswap', '/usr/bin/cswap'] }, '/srv/app/.venv/bin:/usr/bin'), workspaceFolders: ['/srv/app'] };
+    assert.deepEqual(await resolveCswapExecutable('', env), { ok: true, path: '/usr/bin/cswap', source: 'path' });
+  });
+});
+
+describe('pathEntriesOutsideFolders', () => {
+  const win = { platform: 'win32' as const, homeDir: 'C:\\Users\\dev' };
+  const linux = { platform: 'linux' as const, homeDir: '/home/dev' };
+
+  it('drops the folder itself and everything inside it, nothing else', () => {
+    const entries = ['/a/b', '/a/b/', '/a/b/.venv/bin', '/a/bc', '/a/bc/bin', '/a', '/usr/bin'];
+    assert.deepEqual(pathEntriesOutsideFolders(entries, ['/a/b'], linux), ['/a/bc', '/a/bc/bin', '/a', '/usr/bin']);
+    assert.deepEqual(pathEntriesOutsideFolders(entries, ['/a/b/'], linux), ['/a/bc', '/a/bc/bin', '/a', '/usr/bin'], 'a trailing separator on the folder');
+    assert.deepEqual(pathEntriesOutsideFolders(['/a/./b/../b/bin'], ['/a/b'], linux), [], 'normalized first');
+  });
+
+  it('compares case-insensitively on Windows (and with either slash), case-sensitively on Linux', () => {
+    const entries = ['C:\\Work\\Repo\\.venv\\Scripts', 'c:/work/repo/node_modules/.bin', 'C:\\Work\\Repository', 'C:\\Windows\\System32'];
+    assert.deepEqual(pathEntriesOutsideFolders(entries, ['c:\\WORK\\repo\\'], win), ['C:\\Work\\Repository', 'C:\\Windows\\System32']);
+    assert.deepEqual(pathEntriesOutsideFolders(['/Work/Repo/bin'], ['/work/repo'], linux), ['/Work/Repo/bin']);
+  });
+
+  it('does not use folders that hold the home folder (home, its parents, a root) or are not absolute', () => {
+    const entries = ['C:\\Users\\dev\\.local\\bin', 'C:\\Users\\dev\\proj\\bin', 'C:\\Windows'];
+    assert.deepEqual(pathEntriesOutsideFolders(entries, ['C:\\Users\\dev', 'C:\\Users', 'C:\\', 'relative', ''], win), entries);
+    assert.deepEqual(pathEntriesOutsideFolders(entries, ['C:\\Users\\dev\\proj'], win), ['C:\\Users\\dev\\.local\\bin', 'C:\\Windows'], 'a project below home still counts');
+    assert.deepEqual(pathEntriesOutsideFolders(['/home/dev/.local/bin'], ['/', '/home', '/home/dev/'], linux), ['/home/dev/.local/bin']);
+  });
+
+  it('isSameOrInside', () => {
+    assert.equal(isSameOrInside('/a/b', '/a/b', 'linux'), true);
+    assert.equal(isSameOrInside('/a/b/c', '/a/b', 'linux'), true);
+    assert.equal(isSameOrInside('/a/bc', '/a/b', 'linux'), false);
+    assert.equal(isSameOrInside('/anything', '/', 'linux'), true);
+    assert.equal(isSameOrInside('D:\\x', 'd:\\', 'win32'), true);
+    assert.equal(isSameOrInside('D:\\x', 'C:\\', 'win32'), false);
   });
 });
 

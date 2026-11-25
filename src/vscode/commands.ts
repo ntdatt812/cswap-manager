@@ -18,7 +18,9 @@ import type { DashboardController } from './dashboardPanel';
 import type { ExtensionConfiguration } from './configuration';
 import type { StatusBarController } from './statusBarController';
 import type { CswapUpdateCheck } from './cswapUpdateCheck';
+import type { CswapInstaller } from './cswapInstall';
 import type { ProjectAccounts } from './projectAccounts';
+import { clearUsageHistory, type UsageHistoryStore } from './usageHistoryStore';
 import { describeCliError } from './messages';
 import { runAccountAction, runDropMove } from './manageFlow';
 import { MOVE_ACCOUNT_TO_COMMAND } from './accountsDragAndDrop';
@@ -44,6 +46,8 @@ export interface CommandDependencies {
   readonly updateCheck: CswapUpdateCheck;
   readonly projectAccounts: ProjectAccounts;
   readonly accountAdder: AccountAdder;
+  readonly cswapInstaller: CswapInstaller;
+  readonly usageHistory: UsageHistoryStore;
   readonly homeDir: string;
 }
 
@@ -74,11 +78,15 @@ async function refreshCommand(deps: CommandDependencies): Promise<void> {
   if (result.error.kind === 'cancelled') {
     return;
   }
+  const install = localize('Install cswap…');
   const diagnostics = localize('Show Diagnostics');
   const settings = localize('Open Settings');
   const stale = result.snapshot ? ` ${localize('Showing last known data (stale).')}` : '';
-  const choice = await vscode.window.showErrorMessage(`${describeCliError(result.error)}${stale}`, diagnostics, settings);
-  if (choice === diagnostics) {
+  const buttons = result.error.kind === 'executable-not-found' ? [install, diagnostics, settings] : [diagnostics, settings];
+  const choice = await vscode.window.showErrorMessage(`${describeCliError(result.error)}${stale}`, ...buttons);
+  if (choice === install) {
+    await vscode.commands.executeCommand('cswapManager.installCswap');
+  } else if (choice === diagnostics) {
     await vscode.commands.executeCommand('cswapManager.showDiagnostics');
   } else if (choice === settings) {
     await vscode.commands.executeCommand('cswapManager.openSettings');
@@ -175,6 +183,8 @@ export function registerCommands(deps: CommandDependencies): vscode.Disposable[]
     vscode.commands.registerCommand('cswapManager.saveUsageReadings', () => saveUsageReadings(deps)),
     vscode.commands.registerCommand('cswapManager.importUsage', () => importUsage(deps)),
     vscode.commands.registerCommand('cswapManager.checkCswapUpdate', () => checkUpdateCommand(deps)),
+    vscode.commands.registerCommand('cswapManager.installCswap', () => deps.cswapInstaller.install()),
+    vscode.commands.registerCommand('cswapManager.clearUsageHistory', () => clearUsageHistory(deps.usageHistory)),
     vscode.commands.registerCommand('cswapManager.openClaudeAs', (node?: NodeModel) => deps.projectAccounts.openClaude(node?.slot)),
     vscode.commands.registerCommand('cswapManager.openClaudeForProject', () => deps.projectAccounts.openClaudeForProject()),
     vscode.commands.registerCommand('cswapManager.assignProjectAccount', (node?: NodeModel) => deps.projectAccounts.assign(node?.slot)),

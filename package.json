@@ -18,15 +18,27 @@
     "vscode": "^1.90.0"
   },
   "categories": [
+    "AI",
+    "Visualization",
     "Other"
   ],
   "keywords": [
+    "claude",
+    "claude code",
     "cswap",
     "claude-swap",
-    "claude code",
+    "account switcher",
+    "multi-account",
     "accounts",
-    "usage"
+    "usage",
+    "quota",
+    "rate limit",
+    "usage limit"
   ],
+  "galleryBanner": {
+    "color": "#1f1f1f",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -61,6 +73,83 @@
         }
       ]
     },
+    "walkthroughs": [
+      {
+        "id": "cswapManager.gettingStarted",
+        "title": "%walkthrough.gettingStarted.title%",
+        "description": "%walkthrough.gettingStarted.description%",
+        "steps": [
+          {
+            "id": "installCswap",
+            "title": "%walkthrough.installCswap.title%",
+            "description": "%walkthrough.installCswap.description%",
+            "media": {
+              "svg": "media/walkthrough/install.svg",
+              "altText": "%walkthrough.installCswap.altText%"
+            },
+            "completionEvents": [
+              "onCommand:cswapManager.refresh",
+              "onContext:cswapManager.viewState == ready || cswapManager.viewState == empty"
+            ]
+          },
+          {
+            "id": "openAccounts",
+            "title": "%walkthrough.openAccounts.title%",
+            "description": "%walkthrough.openAccounts.description%",
+            "media": {
+              "svg": "media/walkthrough/accounts.svg",
+              "altText": "%walkthrough.openAccounts.altText%"
+            },
+            "completionEvents": [
+              "onView:cswapManager.accounts"
+            ]
+          },
+          {
+            "id": "addAccounts",
+            "title": "%walkthrough.addAccounts.title%",
+            "description": "%walkthrough.addAccounts.description%",
+            "media": {
+              "svg": "media/walkthrough/add-account.svg",
+              "altText": "%walkthrough.addAccounts.altText%"
+            },
+            "completionEvents": [
+              "onCommand:cswapManager.addAccount"
+            ]
+          },
+          {
+            "id": "switchAccounts",
+            "title": "%walkthrough.switchAccounts.title%",
+            "description": "%walkthrough.switchAccounts.description%",
+            "media": {
+              "svg": "media/walkthrough/switch.svg",
+              "altText": "%walkthrough.switchAccounts.altText%"
+            },
+            "completionEvents": [
+              "onCommand:cswapManager.quickSwitch",
+              "onCommand:cswapManager.switchNextAvailable",
+              "onCommand:cswapManager.toggleSwitchAtLimit"
+            ]
+          },
+          {
+            "id": "dashboardAndSettings",
+            "title": "%walkthrough.dashboardAndSettings.title%",
+            "description": "%walkthrough.dashboardAndSettings.description%",
+            "media": {
+              "image": {
+                "dark": "images/dashboard-dark.png",
+                "light": "images/dashboard-light.png",
+                "hc": "images/dashboard-dark.png",
+                "hcLight": "images/dashboard-light.png"
+              },
+              "altText": "%walkthrough.dashboardAndSettings.altText%"
+            },
+            "completionEvents": [
+              "onCommand:cswapManager.openDashboard"
+            ]
+          }
+        ]
+      }
+    ],
     "viewsWelcome": [
       {
         "view": "cswapManager.accounts",
@@ -200,6 +289,16 @@
       {
         "command": "cswapManager.checkCswapUpdate",
         "title": "%command.checkCswapUpdate.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.installCswap",
+        "title": "%command.installCswap.title%",
+        "category": "Cswap"
+      },
+      {
+        "command": "cswapManager.clearUsageHistory",
+        "title": "%command.clearUsageHistory.title%",
         "category": "Cswap"
       },
       {
@@ -764,12 +863,42 @@
           "order": 8.6,
           "markdownDescription": "%config.checkCswapUpdates.description%"
         },
+        "cswapManager.autoUpdateCswap": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 8.61,
+          "markdownDescription": "%config.autoUpdateCswap.description%"
+        },
         "cswapManager.notifyOnWeeklyReset": {
           "type": "boolean",
           "default": false,
           "scope": "application",
           "order": 8.7,
           "markdownDescription": "%config.notifyOnWeeklyReset.description%"
+        },
+        "cswapManager.notifyAtUsage": {
+          "type": "number",
+          "default": 90,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "application",
+          "order": 8.71,
+          "markdownDescription": "%config.notifyAtUsage.description%"
+        },
+        "cswapManager.notifyLoginExpiry": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 8.72,
+          "markdownDescription": "%config.notifyLoginExpiry.description%"
+        },
+        "cswapManager.usageHistory": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "order": 8.8,
+          "markdownDescription": "%config.usageHistory.description%"
         },
         "cswapManager.displayNames": {
           "type": "object",

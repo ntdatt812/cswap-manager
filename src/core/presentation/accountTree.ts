@@ -445,7 +445,7 @@ function accountTooltip(account: Account, isActive: boolean, snapshot: AccountsS
     notes.push(snapshot.active.consistency === 'consistent' ? t('Active account.') : t('Active account (sources disagreed; taken from cswap status).'));
   }
   if (due !== undefined) {
-    notes.push(t('To renew: log in to this account with /login in Claude Code, then run cswap add.'));
+    notes.push(t('To renew: log in to this account with /login in Claude Code; the extension then stores the new login.'));
   }
   return { title: accountName(account, t), rows, ...(notes.length > 0 ? { notes } : {}) };
 }

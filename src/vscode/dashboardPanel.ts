@@ -16,6 +16,7 @@ import { currentLanguage, currentLocale } from './l10n';
 import { CLOCK_TICK_MS, presentationOptions, t } from './presentation';
 import { runAccountAction } from './manageFlow';
 import { runSwitch } from './switchFlow';
+import type { UsageHistoryStore } from './usageHistoryStore';
 
 export interface DashboardDependencies {
   readonly extensionUri: vscode.Uri;
@@ -30,6 +31,8 @@ export interface DashboardDependencies {
   readonly describeError: (error: CliError) => string;
   /** Mode and cswap strategy for the overview card. */
   readonly autoSwitch: AutoSwitchService;
+  /** Recorded readings for each account's "Last 7 days". */
+  readonly usageHistory: UsageHistoryStore;
 }
 
 function escapeAttribute(value: string): string {
@@ -80,6 +83,7 @@ export class DashboardController implements vscode.Disposable {
       deps.gate.onDidChange(() => this.postState()),
       deps.autoSwitch.onDidChange(() => this.postState()),
       deps.autoRefresh.onDidChangeSchedule(() => this.postState()),
+      deps.usageHistory.onDidChange(() => this.postState()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration(CONFIG_SECTION)) {
           this.postState();
@@ -230,6 +234,7 @@ export class DashboardController implements vscode.Disposable {
     const auto = this.deps.autoSwitch.getState();
     const locale = currentLocale();
     const nextRefreshAt = this.deps.autoRefresh.nextRefreshAt();
+    const usageHistory = configuration.usageHistory() ? this.deps.usageHistory.current() : undefined;
     const model = buildDashboardModel(state, {
       ...options,
       freshness: assessFreshness(state, options.now, configuration.staleAfterMs()),
@@ -238,6 +243,7 @@ export class DashboardController implements vscode.Disposable {
       autoSwitch: { mode: configuration.autoSwitchMode(), strategy: auto.rules?.strategy },
       formatDecimal: (value) => value.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
       ...(nextRefreshAt === undefined ? {} : { nextRefreshAt }),
+      ...(usageHistory === undefined ? {} : { usageHistory }),
     });
     // Keep the tab title in the chosen language after a language change.
     this.panel.title = t('Cswap Dashboard');

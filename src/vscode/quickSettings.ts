@@ -12,6 +12,7 @@ import {
   barStylePrecision,
   barStyleSample,
   buildQuickSettingsRows,
+  cswapVersionText,
   languageLabel,
   matchingLook,
   refreshChoices,
@@ -24,6 +25,8 @@ import {
   shareHistoryOn,
   timeoutChoices,
   tokenUsageLevel,
+  usageAlertChoices,
+  usageAlertLabel,
   type QuickSettingsPage,
   type QuickSettingsValues,
   type SettingKey,
@@ -104,7 +107,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
   return {
     language: configuration.languageSetting(),
     confirmSwitch: configuration.confirmSwitch(),
-    notifyReset: configuration.notifyOnWeeklyReset(),
+    notifications: configuration.notificationSettings(),
     autoSwitchMode: configuration.autoSwitchMode(),
     autoSwitchStrategy: rules?.strategy,
     autoSwitchModel: rules === undefined ? undefined : (rules.model ?? null),
@@ -122,6 +125,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     ...(projectAccount === undefined ? {} : { projectAccount }),
     ...(update?.current === undefined ? {} : { cswapVersion: update.current.text }),
     ...(update?.latest === undefined ? {} : { cswapLatest: update.latest.text }),
+    cswapUpdates: { daily: configuration.checkCswapUpdates(), automatic: configuration.autoUpdateCswap() },
   };
 }
 
@@ -136,7 +140,6 @@ function rowItems(deps: QuickSettingsDependencies, page: QuickSettingsPage): Row
 /** On/off rows that switch in place, without a screen of their own. */
 const TOGGLES = {
   confirmSwitch: (deps: QuickSettingsDependencies) => deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch()),
-  notifyReset: (deps: QuickSettingsDependencies) => deps.configuration.setNotifyOnWeeklyReset(!deps.configuration.notifyOnWeeklyReset()),
 } satisfies Partial<Record<SettingKey, (deps: QuickSettingsDependencies) => Promise<void>>>;
 type ToggleKey = keyof typeof TOGGLES;
 /** Rows that open a screen of their own. */
@@ -570,6 +573,132 @@ async function openStatusBarPage(deps: QuickSettingsDependencies): Promise<Outco
   }
 }
 
+// ---- Notifications screen -----------------------------------------------------------------------
+
+type NotificationAction = 'weeklyReset' | 'usageAlert' | 'loginExpiry';
+type NotificationItem = vscode.QuickPickItem & { readonly action: NotificationAction };
+
+/** Weekly reset and login expiry switch on/off; the usage alert opens a level picker. Each returns here. */
+async function openNotificationsPage(deps: QuickSettingsDependencies): Promise<Outcome> {
+  const { configuration } = deps;
+  let focus: NotificationAction = 'weeklyReset';
+  for (;;) {
+    const settings = configuration.notificationSettings();
+    const onOff = (on: boolean) => (on ? t('On') : t('Off'));
+    const items: NotificationItem[] = [
+      {
+        label: `$(history) ${t('When a weekly limit resets')}`,
+        description: onOff(settings.weeklyReset),
+        detail: t('With a button to switch to that account.'),
+        action: 'weeklyReset',
+      },
+      {
+        label: `$(warning) ${t('When the active account nears its limit')}`,
+        description: usageAlertLabel(settings.usageAlertPct, t),
+        detail: t('Once per limit period. Not while automatic switching is on.'),
+        action: 'usageAlert',
+      },
+      {
+        label: `$(key) ${t('When a login is about to expire')}`,
+        description: onOff(settings.loginExpiry),
+        detail: t('3 days before, and once it has expired.'),
+        action: 'loginExpiry',
+      },
+    ];
+    const picked = await pickOne(items, {
+      title: t('Notifications'),
+      placeholder: t('Pick a setting to change it. Esc closes.'),
+      back: true,
+      isActive: (item) => item.action === focus,
+    });
+    if (picked === undefined) {
+      return 'close';
+    }
+    if (picked === BACK) {
+      return 'list';
+    }
+    focus = picked.action;
+    switch (picked.action) {
+      case 'weeklyReset':
+        await configuration.setNotifyOnWeeklyReset(!settings.weeklyReset);
+        break;
+      case 'loginExpiry':
+        await configuration.setNotifyLoginExpiry(!settings.loginExpiry);
+        break;
+      case 'usageAlert': {
+        const current = settings.usageAlertPct;
+        const value = await chooseValue(
+          t('When the active account nears its limit'),
+          usageAlertChoices(current).map((pct) => ({ value: pct, label: usageAlertLabel(pct, t) })),
+          current,
+        );
+        if (value === undefined) {
+          return 'close';
+        }
+        if (value !== BACK && value !== current) {
+          await configuration.setNotifyAtUsage(value);
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ---- cswap updates screen -----------------------------------------------------------------------
+
+type CswapUpdateAction = 'check' | 'daily' | 'automatic';
+type CswapUpdateItem = vscode.QuickPickItem & { readonly action: CswapUpdateAction };
+
+/** Check now (closes the menu), and the daily check and automatic updates switching on/off in place. */
+async function openCswapUpdatesPage(deps: QuickSettingsDependencies): Promise<Outcome> {
+  const { configuration } = deps;
+  let focus: CswapUpdateAction = 'check';
+  for (;;) {
+    const update = deps.updateCheck?.getState();
+    const version = cswapVersionText(update?.current?.text, update?.latest?.text, t);
+    const onOff = (on: boolean) => (on ? t('On') : t('Off'));
+    const items: CswapUpdateItem[] = [
+      { label: `$(sync) ${t('Check for a cswap update now')}`, ...(version === undefined ? {} : { description: version }), action: 'check' },
+      {
+        label: `$(calendar) ${t('Check once a day')}`,
+        description: onOff(configuration.checkCswapUpdates()),
+        detail: t('Asks PyPI for the latest claude-swap release; nothing else is sent.'),
+        action: 'daily',
+      },
+      {
+        label: `$(cloud-download) ${t('Update automatically')}`,
+        description: onOff(configuration.autoUpdateCswap()),
+        detail: t('When a check finds a newer cswap, update it in the background with the uv or pipx that installed it.'),
+        action: 'automatic',
+      },
+    ];
+    const picked = await pickOne(items, {
+      title: t('cswap version'),
+      placeholder: t('Pick a setting to change it. Esc closes.'),
+      back: true,
+      isActive: (item) => item.action === focus,
+    });
+    if (picked === undefined) {
+      return 'close';
+    }
+    if (picked === BACK) {
+      return 'list';
+    }
+    focus = picked.action;
+    switch (picked.action) {
+      case 'check':
+        await vscode.commands.executeCommand('cswapManager.checkCswapUpdate');
+        return 'close';
+      case 'daily':
+        await configuration.setCheckCswapUpdates(!configuration.checkCswapUpdates());
+        break;
+      case 'automatic':
+        await configuration.setAutoUpdateCswap(!configuration.autoUpdateCswap());
+        break;
+    }
+  }
+}
+
 // ---- Other screens ------------------------------------------------------------------------------
 
 async function editThresholds(deps: QuickSettingsDependencies, typedWarning?: string): Promise<Outcome> {
@@ -650,6 +779,8 @@ async function editRow(deps: QuickSettingsDependencies, key: ScreenKey): Promise
       return fromMenu(await deps.autoSwitch.chooseTokenUsage({ back: true }));
     case 'statusBar':
       return openStatusBarPage(deps);
+    case 'notifications':
+      return openNotificationsPage(deps);
     case 'barStyle':
       return chooseBarStyle(deps);
     case 'thresholds':
@@ -681,8 +812,7 @@ async function editRow(deps: QuickSettingsDependencies, key: ScreenKey): Promise
       await deps.projectAccounts.assign();
       return 'list';
     case 'cswapVersion':
-      await vscode.commands.executeCommand('cswapManager.checkCswapUpdate');
-      return 'close';
+      return openCswapUpdatesPage(deps);
     case 'transfer': {
       const command = await chooseValue(
         t('Another computer'),

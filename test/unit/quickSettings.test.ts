@@ -6,15 +6,20 @@ import {
   autoSwitchStrategyDetail,
   autoSwitchStrategyLabel,
   buildQuickSettingsRows,
+  cswapUpdatesLabel,
+  cswapVersionText,
   isLanguageSetting,
   isSettingKey,
   languageLabel,
   matchingLook,
+  notificationsSummary,
   statusBarSummary,
   refreshChoices,
   refreshLabel,
   SETTING_KEYS,
   shareHistoryOn,
+  usageAlertChoices,
+  usageAlertLabel,
   type QuickSettingsValues,
 } from '../../src/core/presentation/quickSettings';
 
@@ -23,7 +28,7 @@ const t = (message: string, ...args: Array<string | number | boolean>) => format
 const values: QuickSettingsValues = {
   language: 'vi',
   confirmSwitch: false,
-  notifyReset: false,
+  notifications: { weeklyReset: true, usageAlertPct: 90, loginExpiry: true },
   autoSwitchMode: 'switch',
   autoSwitchStrategy: 'consume-first',
   autoSwitchModel: 'Fable',
@@ -38,6 +43,7 @@ const values: QuickSettingsValues = {
   refreshSeconds: 120,
   cliPath: '',
   timeoutSeconds: 30,
+  cswapUpdates: { daily: true, automatic: true },
 };
 
 describe('quick settings rows', () => {
@@ -59,15 +65,44 @@ describe('quick settings rows', () => {
     assert.equal(value('autoStrategy'), 'Use quota that resets soonest first');
     assert.equal(value('statusBar'), 'With progress bar · 1 button(s)');
     assert.equal(value('thresholds'), 'yellow 80% · red 95%');
-    // Slanted cells are icons in pickers: 60% of 8 cells = 4 full + 6/8.
-    assert.equal(value('barStyle'), `Slanted ${'$(cswap-slant-8)'.repeat(4)}$(cswap-slant-6)${'$(cswap-slant-0)'.repeat(3)}`);
+    // Slanted cells are icons in pickers: 60% of 10 cells = 6 full cells.
+    assert.equal(value('barStyle'), `Slanted ${'$(cswap-slant-8)'.repeat(6)}${'$(cswap-slant-0)'.repeat(4)}`);
     assert.equal(value('autoRules'), 'switch at 90% · cooldown 300s · every 60s');
     assert.equal(value('autoModel'), 'Fable');
     assert.equal(value('sortOrder'), 'By slot number');
     assert.equal(value('refresh'), 'every 2 min');
     assert.equal(value('cliPath'), 'auto-detect');
     assert.equal(value('timeout'), '30 s');
+    assert.equal(value('notifications'), '90% · login expiry · weekly reset');
+    assert.equal(value('cswapVersion'), 'updates automatically', 'version not known yet');
+    assert.ok(advanced.some((row) => row.separator !== true && row.key === 'notifications'), 'notifications sit on the Advanced page');
     assert.ok(rows.some((row) => row.separator === true));
+  });
+
+  it('shows the cswap version, a newer release and how cswap is kept up to date', () => {
+    const row = (overrides: Partial<QuickSettingsValues>) =>
+      buildQuickSettingsRows({ ...values, ...overrides }, t, 'advanced').flatMap((candidate) => (candidate.separator !== true && candidate.key === 'cswapVersion' ? [candidate.value] : []))[0];
+    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.2.0' }), '1.2.0 · updates automatically');
+    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.3.0' }), '1.2.0 · 1.3.0 available · updates automatically');
+    assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: true, automatic: false } }), '1.2.0 · asks before updating');
+    assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: false, automatic: true } }), '1.2.0 · not checked daily');
+    assert.equal(cswapVersionText(undefined, '1.3.0', t), undefined);
+    assert.equal(cswapUpdatesLabel({ daily: false, automatic: false }, t), 'not checked daily');
+  });
+
+  it('summarises the notifications, and says Off when none is on', () => {
+    const summary = (notifications: QuickSettingsValues['notifications']) => notificationsSummary(notifications, t);
+    assert.equal(summary({ weeklyReset: false, usageAlertPct: 0, loginExpiry: false }), 'Off');
+    assert.equal(summary({ weeklyReset: false, usageAlertPct: 95, loginExpiry: false }), '95%');
+    assert.equal(summary({ weeklyReset: true, usageAlertPct: 0, loginExpiry: true }), 'login expiry · weekly reset');
+    assert.equal(usageAlertLabel(0, t), 'Off');
+    assert.equal(usageAlertLabel(80, t), '80%');
+  });
+
+  it('offers Off and the usual alert levels, keeping a hand-set one', () => {
+    assert.deepEqual(usageAlertChoices(90), [0, 80, 90, 95]);
+    assert.deepEqual(usageAlertChoices(85), [0, 80, 85, 90, 95]);
+    assert.deepEqual(usageAlertChoices(0), [0, 80, 90, 95]);
   });
 
   it('says when the auto-switch rules are not loaded instead of guessing a strategy', () => {

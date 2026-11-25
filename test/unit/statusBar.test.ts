@@ -40,11 +40,11 @@ describe('custom status bar parts', () => {
 
   it('shows exactly the ticked parts, always in the same order', () => {
     assert.equal(custom(['usage', 'slot', 'icon']), '$(account) #2 · 7d 40%');
-    assert.equal(custom(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), '$(account) #2 · Ultra · ███▎░░░░ 7d 40% · ↻ 4d 0h');
+    assert.equal(custom(['icon', 'slot', 'plan', 'bar', 'usage', 'reset']), '$(account) #2 · Ultra · ████░░░░░░ 7d 40% · ↻ 4d 0h');
     // Slanted cells are the extension's icons in the status bar: 40% of 8 cells = 3 full + 2/8.
     assert.equal(
       custom(['bar', 'usage'], { barStyle: 'parallelograms' }),
-      `${'$(cswap-slant-8)'.repeat(3)}$(cswap-slant-2)${'$(cswap-slant-0)'.repeat(4)} 7d 40%`,
+      `${'$(cswap-slant-8)'.repeat(4)}${'$(cswap-slant-0)'.repeat(6)} 7d 40%`,
     );
     assert.equal(custom(['icon']), '$(account)');
   });

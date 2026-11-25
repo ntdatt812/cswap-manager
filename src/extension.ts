@@ -1,7 +1,8 @@
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { CswapCli } from './core/cli/cswapCli';
-import { CachedExecutableResolver, nodeResolverEnvironment } from './core/cli/executableResolver';
+import { CachedExecutableResolver, nodeResolverEnvironment, type ResolverEnvironment } from './core/cli/executableResolver';
+import { PausableRunner } from './core/cli/pausableRunner';
 import { NodeProcessRunner } from './core/cli/processRunner';
 import { ManagementService } from './core/service/managementService';
 import { OperationGate } from './core/service/operationGate';
@@ -20,8 +21,10 @@ import { applyDisplayNames } from './core/model/displayNames';
 import { PriorityStore } from './core/service/priorityStore';
 import { CrossWindowSync } from './vscode/crossWindowSync';
 import { CswapUpdateCheck } from './vscode/cswapUpdateCheck';
+import { CswapInstaller } from './vscode/cswapInstall';
+import { UsageHistoryStore } from './vscode/usageHistoryStore';
 import { AccountAdder } from './vscode/addAccountFlow';
-import { watchWeeklyResets } from './vscode/weeklyResetNotifier';
+import { watchNotifications } from './vscode/notifications';
 import { ProjectAccounts } from './vscode/projectAccounts';
 import { StatusBarController } from './vscode/statusBarController';
 
@@ -35,6 +38,7 @@ export interface TestApi {
   readonly autoSwitch: AutoSwitchController;
   readonly statusBar: StatusBarController;
   readonly crossWindow: CrossWindowSync;
+  readonly usageHistory: UsageHistoryStore;
 }
 
 export function activate(context: vscode.ExtensionContext): TestApi | undefined {
@@ -50,10 +54,20 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
       }
     }),
   );
-  const resolver = new CachedExecutableResolver(() => configuration.cliPath(), nodeResolverEnvironment());
+  const resolverEnvironment: ResolverEnvironment = {
+    ...nodeResolverEnvironment(),
+    // PATH entries inside an open folder are not searched (cswap and the installers); read on every
+    // lookup, so folders added or removed later count.
+    get workspaceFolders() {
+      return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
+    },
+  };
+  const resolver = new CachedExecutableResolver(() => configuration.cliPath(), resolverEnvironment);
+  // Held while the cswap update replaces cswap's files.
+  const cswapRunner = new PausableRunner(new NodeProcessRunner());
 
   const cli = new CswapCli({
-    runner: new NodeProcessRunner(),
+    runner: cswapRunner,
     resolveExecutable: () => resolver.resolve(),
     onExecutableMissing: () => resolver.invalidate(),
     settings: () => configuration.cliRunSettings(),
@@ -87,10 +101,25 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const statusBar = new StatusBarController({ refreshService, switchService, configuration, autoRefresh, describeError: describeCliError });
   const autoSwitch = new AutoSwitchController({ context, cli, gate, refreshService, switchService, configuration, logger, homeDir });
   const crossWindow = new CrossWindowSync(context.globalStorageUri, refreshService, logger);
-  const updateCheck = new CswapUpdateCheck(context, cli, resolver, logger, () => configuration.checkCswapUpdates());
+  const updateCheck = new CswapUpdateCheck({
+    context,
+    cli,
+    resolver,
+    environment: resolverEnvironment,
+    gate,
+    cswapRunner,
+    refreshService,
+    logger,
+    homeDir,
+    enabled: () => configuration.checkCswapUpdates(),
+    // The extension test host uses the machine's real cswap: it may only be offered an update.
+    automatic: () => context.extensionMode !== vscode.ExtensionMode.Test && configuration.autoUpdateCswap(),
+  });
   const projectAccounts = new ProjectAccounts({ cli, resolver, refreshService, gate, logger, homeDir });
   const accountAdder = new AccountAdder({ refreshService, managementService, gate, homeDir });
-  const weeklyResetNotifier = watchWeeklyResets(refreshService, configuration);
+  const notifications = watchNotifications(context, refreshService, configuration);
+  const cswapInstaller = new CswapInstaller({ resolver, environment: resolverEnvironment, refreshService, logger });
+  const usageHistory = new UsageHistoryStore(context.globalStorageUri, refreshService, logger, () => configuration.usageHistory());
   // Out of the way of start-up: one check shortly after activation, then at most daily.
   const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
   const dashboard = new DashboardController({
@@ -105,6 +134,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     logger,
     homeDir,
     describeError: describeCliError,
+    usageHistory,
   });
 
   context.subscriptions.push(
@@ -122,8 +152,12 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     autoSwitch,
     crossWindow,
     accountAdder,
-    weeklyResetNotifier,
+    notifications,
+    cswapInstaller,
+    usageHistory,
     { dispose: () => clearTimeout(updateTimer) },
+    // A cswap found before may now lie inside an open folder: look it up again on next use.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => resolver.invalidate()),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(`${CONFIG_SECTION}.displayNames`)) {
         refreshService.redecorate();
@@ -134,10 +168,10 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
         void refreshService.refresh({ trigger: 'configuration', requireFresh: true });
       }
     }),
-    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, accountAdder, homeDir }),
+    ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, accountAdder, cswapInstaller, usageHistory, homeDir }),
   );
 
-  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow } : undefined;
+  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow, usageHistory } : undefined;
 }
 
 export function deactivate(): void {

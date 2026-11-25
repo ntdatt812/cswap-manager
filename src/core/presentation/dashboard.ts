@@ -9,10 +9,13 @@ import type {
   DetailSection,
   Fact,
   Meter,
+  Sparkline,
   Tone,
 } from '../../shared/dashboardProtocol';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { CliError } from '../cli/cliErrors';
+import { displayNameKey } from '../model/displayNames';
+import { HISTORY_SPAN_MS, pointValue, summarizeWindow, type UsageHistory, type UsagePoint } from '../model/usageHistory';
 import type { Account, AccountUsage, AccountsSnapshot, UsageMetrics } from '../model/types';
 import type { AccountsState, FreshnessAssessment } from '../service/refreshService';
 import {
@@ -31,6 +34,7 @@ import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usage
 import { accountActions, manageRows } from './accountActions';
 import { buildCapacity, buildInsights, buildTimeline } from './dashboardInsights';
 import { autoSwitchModeLabel, autoSwitchStrategyLabel } from './quickSettings';
+import { fullestWindow } from './statusBar';
 import { usageStatusText, usageStatusTone } from './usageStatus';
 
 export interface DashboardOptions extends PresentationOptions {
@@ -43,6 +47,8 @@ export interface DashboardOptions extends PresentationOptions {
   readonly formatDecimal?: (value: number) => string;
   /** When the next automatic refresh is due, for the header's countdown. */
   readonly nextRefreshAt?: number;
+  /** Recorded readings (`cswapManager.usageHistory`); undefined when recording is off. */
+  readonly usageHistory?: UsageHistory;
 }
 
 const TONE_RANK: Record<Tone, number> = { ok: 0, neutral: 1, active: 2, warning: 3, error: 4 };
@@ -295,6 +301,52 @@ function freshnessSection(account: Account, snapshot: AccountsSnapshot, options:
   return { key: 'freshness', title: t('Freshness'), meters: [], facts, collapsible: true };
 }
 
+/** The weekly window, and the window that limits the account now when that is another one. */
+function historyWindowKeys(account: Account, points: readonly UsagePoint[]): string[] {
+  const weekly = 'sevenDay';
+  const keys: string[] = [];
+  if (account.usage?.windows.some((window) => window.key === weekly) === true || points.some((point) => pointValue(point.windows, weekly) !== undefined)) {
+    keys.push(weekly);
+  }
+  const limiting = fullestWindow(account)?.key;
+  if (limiting !== undefined && !keys.includes(limiting)) {
+    keys.push(limiting);
+  }
+  return keys;
+}
+
+function sparkline(windowKey: string, points: readonly UsagePoint[], options: DashboardOptions): Sparkline {
+  const { t, now } = options;
+  const summary = summarizeWindow(points, windowKey, now);
+  const label = windowLabel(windowKey);
+  const start = now - HISTORY_SPAN_MS;
+  const clamp = (value: number) => Math.max(0, Math.min(100, value));
+  const latest = summary.points[summary.points.length - 1];
+  const caption = summary.averagePerDay === undefined ? t('Not enough readings yet') : t('about {0} per day (measured)', formatPercent(summary.averagePerDay));
+  return {
+    id: `history:${windowKey}`,
+    label,
+    points: summary.points.map((point) => ({ x: Math.round(clamp(((point.at - start) / HISTORY_SPAN_MS) * 100) * 100) / 100, y: clamp(point.pct) })),
+    caption,
+    description:
+      latest === undefined ? `${label}: ${caption}` : t('{0} over the last 7 days: {1} readings, latest {2}. {3}', label, summary.points.length, formatPercent(latest.pct), caption),
+  };
+}
+
+/** "Last 7 days": the readings recorded on this computer, drawn as small lines; nothing is forecast. */
+function historySection(account: Account, options: DashboardOptions): DetailSection | undefined {
+  const key = options.usageHistory === undefined ? undefined : displayNameKey(account);
+  if (options.usageHistory === undefined || key === undefined) {
+    return undefined;
+  }
+  const points = options.usageHistory.accounts[key] ?? [];
+  const keys = historyWindowKeys(account, points);
+  if (keys.length === 0) {
+    return undefined;
+  }
+  return { key: 'history', title: options.t('Last 7 days'), meters: [], sparklines: keys.map((windowKey) => sparkline(windowKey, points, options)), facts: [] };
+}
+
 export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot, options: DashboardOptions): AccountDetail {
   const { t } = options;
   const active = snapshot.active.slot === account.slot;
@@ -316,6 +368,7 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
     .filter((part): part is string => part !== undefined)
     .join(' · ');
   const plan = planSection(account, options);
+  const history = historySection(account, options);
   return {
     slot: account.slot,
     title: accountName(account, t),
@@ -323,6 +376,7 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
     badges,
     sections: [
       ...usageSection(account, active, options),
+      ...(history === undefined ? [] : [history]),
       ...(plan === undefined ? [] : [plan]),
       accountSection(account, options),
       freshnessSection(account, snapshot, options),

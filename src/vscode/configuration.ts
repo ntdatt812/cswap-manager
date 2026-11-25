@@ -3,7 +3,8 @@ import type { CliRunSettings } from '../core/cli/cswapCli';
 import { cleanDisplayName, displayNameKey } from '../core/model/displayNames';
 import type { Account } from '../core/model/types';
 import { isBarStyle, isSortOrder, normalizeThresholds, type BarStyle, type SortOrder, type UsageThresholds } from '../core/presentation/format';
-import { isLanguageSetting, type LanguageSetting } from '../core/presentation/quickSettings';
+import { normalizeUsageAlertPct } from '../core/presentation/notifications';
+import { isLanguageSetting, type LanguageSetting, type NotificationSettings } from '../core/presentation/quickSettings';
 import {
   DEFAULT_STATUS_BAR_BUTTONS,
   DEFAULT_STATUS_BAR_PARTS,
@@ -170,9 +171,49 @@ export class ExtensionConfiguration {
     await this.config.update('notifyOnWeeklyReset', notify, vscode.ConfigurationTarget.Global);
   }
 
+  /** Usage % of the active account's limiting window that alerts (user scope only; 0 = off). */
+  notifyAtUsage(): number {
+    return normalizeUsageAlertPct(this.config.inspect<number>('notifyAtUsage')?.globalValue);
+  }
+
+  async setNotifyAtUsage(pct: number): Promise<void> {
+    await this.setUserSetting('notifyAtUsage', pct);
+  }
+
+  /** A reminder before an account's login expires and once it has (user scope only; on by default). */
+  notifyLoginExpiry(): boolean {
+    return this.config.inspect<boolean>('notifyLoginExpiry')?.globalValue !== false;
+  }
+
+  async setNotifyLoginExpiry(notify: boolean): Promise<void> {
+    await this.setUserSetting('notifyLoginExpiry', notify);
+  }
+
+  notificationSettings(): NotificationSettings {
+    return { weeklyReset: this.notifyOnWeeklyReset(), usageAlertPct: this.notifyAtUsage(), loginExpiry: this.notifyLoginExpiry() };
+  }
+
   /** Daily check of PyPI for a newer cswap (user scope only). */
   checkCswapUpdates(): boolean {
     return this.config.inspect<boolean>('checkCswapUpdates')?.globalValue !== false;
+  }
+
+  async setCheckCswapUpdates(check: boolean): Promise<void> {
+    await this.setUserSetting('checkCswapUpdates', check);
+  }
+
+  /** Update cswap in the background when a check finds a newer one (user scope only; on by default). */
+  autoUpdateCswap(): boolean {
+    return this.config.inspect<boolean>('autoUpdateCswap')?.globalValue !== false;
+  }
+
+  async setAutoUpdateCswap(update: boolean): Promise<void> {
+    await this.setUserSetting('autoUpdateCswap', update);
+  }
+
+  /** Recording usage readings for the dashboard's "Last 7 days" (user scope only; on by default). */
+  usageHistory(): boolean {
+    return this.config.inspect<boolean>('usageHistory')?.globalValue !== false;
   }
 
   /** Saved display names, keyed by `displayNameKey`; anything malformed is ignored. */
@@ -233,7 +274,7 @@ export class SettingNotLoadedError extends Error {
   }
 }
 
-/** Window-scoped settings the quick settings menu writes to the user scope. */
+/** Settings the quick settings menu writes to the user scope. */
 export const USER_SETTING_KEYS = [
   'language',
   'statusBar.mode',
@@ -248,5 +289,9 @@ export const USER_SETTING_KEYS = [
   'commandTimeoutSeconds',
   'refreshIntervalSeconds',
   'displayNames',
+  'notifyAtUsage',
+  'notifyLoginExpiry',
+  'checkCswapUpdates',
+  'autoUpdateCswap',
 ] as const;
 export type UserSettingKey = (typeof USER_SETTING_KEYS)[number];

@@ -29,6 +29,18 @@ export interface Meter {
   readonly facts: readonly Fact[];
 }
 
+/** A usage window's recorded readings over the last 7 days (measured values only, nothing projected). */
+export interface Sparkline {
+  readonly id: string;
+  readonly label: string;
+  /** Readings oldest first: `x` is the time across the last 7 days (0–100), `y` the usage % (0–100). */
+  readonly points: ReadonlyArray<{ readonly x: number; readonly y: number }>;
+  /** e.g. "about 8% per day (measured)", or that there are not enough readings yet. */
+  readonly caption: string;
+  /** Spoken and hover description of the line. */
+  readonly description: string;
+}
+
 /** An editable account property: its current value and the actions that change it. */
 export interface ManageRow {
   readonly label: string;
@@ -43,6 +55,8 @@ export interface DetailSection {
   readonly note?: string;
   readonly noteTone?: Tone;
   readonly meters: readonly Meter[];
+  /** Recorded usage over time ("Last 7 days"). */
+  readonly sparklines?: readonly Sparkline[];
   readonly facts: readonly Fact[];
   /** Editable properties, shown after the facts. */
   readonly manage?: readonly ManageRow[];
