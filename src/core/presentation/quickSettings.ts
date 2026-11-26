@@ -1,4 +1,5 @@
 import type { AutoSwitchStrategy } from '../cli/autoSwitchRules';
+import { parseCliVersion, upgradeTested } from '../cli/version';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { Translate } from './accountTree';
 import { formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThresholds } from './format';
@@ -121,12 +122,21 @@ export interface CswapUpdateSettings {
   readonly automatic: boolean;
 }
 
-/** `1.2.0`, or `1.2.0 · 1.3.0 available`; undefined while the version is not known. */
+/**
+ * `1.2.0`, `1.2.0 · 1.2.1 available`, or `… (not tested yet)` for a release line this extension was
+ * not tested with (`upgradeTested`); undefined while the version is not known.
+ */
 export function cswapVersionText(version: string | undefined, latest: string | undefined, t: Translate): string | undefined {
   if (version === undefined) {
     return undefined;
   }
-  return latest !== undefined && latest !== version ? t('{0} · {1} available', version, latest) : version;
+  if (latest === undefined || latest === version) {
+    return version;
+  }
+  const [from, to] = [parseCliVersion(version), parseCliVersion(latest)];
+  return from !== undefined && to !== undefined && !upgradeTested(from, to)
+    ? t('{0} · {1} available (not tested yet)', version, latest)
+    : t('{0} · {1} available', version, latest);
 }
 
 /** How cswap is kept up to date. */

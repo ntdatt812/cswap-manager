@@ -46,3 +46,17 @@ export function assessCompatibility(version: CliVersion | undefined): Compatibil
   const tested = TESTED_CLI_LINES.some((line) => line.major === version.major && line.minor === version.minor);
   return { level: tested ? 'tested' : 'untested', version };
 }
+
+/** `1.3` for 1.3.0: a release line, as `TESTED_CLI_LINES` lists them. */
+export function releaseLine(version: CliVersion): string {
+  return `${version.major}.${version.minor}`;
+}
+
+/**
+ * Whether moving to `latest` stays on ground this extension was tested on: a release line in
+ * `TESTED_CLI_LINES`, or a patch of the line already in use. Several commands read cswap's text
+ * output (add, priority, map, export, import), which a new line may change.
+ */
+export function upgradeTested(current: CliVersion, latest: CliVersion): boolean {
+  return assessCompatibility(latest).level === 'tested' || releaseLine(latest) === releaseLine(current);
+}

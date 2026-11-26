@@ -116,7 +116,8 @@ Terminal chạy thẳng `cswap run` (không qua shell). Thư mục phải đư�
 - **Lưu mức dùng để chuyển sang máy khác…** và **Nhập mức dùng từ máy khác…** — chia sẻ số liệu mức dùng (email và mức dùng, không có đăng nhập) để một máy làm việc đọc mức dùng cho các máy khác.
 
 ### Cập nhật cswap
-Mỗi ngày một lần tiện ích hỏi PyPI bản claude-swap mới nhất. Khi có bản mới hơn, nó **tự cập nhật cswap ở chế độ nền**: chạy thẳng uv hoặc pipx đã cài cswap (theo đường dẫn đầy đủ, không qua shell, nên không bao giờ dùng `uv` trong môi trường ảo của dự án) với `tool upgrade claude-swap` / `upgrade claude-swap`, sau khi mọi thao tác chuyển hay đổi tài khoản đã xong và tạm giữ các lệnh cswap của chính nó. Thanh trạng thái hiện *đang cập nhật cswap 1.2.0 → 1.3.0…*; xong thì đọc lại phiên bản cswap, làm mới danh sách tài khoản và báo *Đã cập nhật cswap: 1.2.0 → 1.3.0.* Mỗi lúc chỉ một cửa sổ VS Code cập nhật.
+Mỗi ngày một lần tiện ích hỏi PyPI bản claude-swap mới nhất. Khi có bản mới hơn, nó **tự cập nhật cswap ở chế độ nền**: chạy thẳng uv hoặc pipx đã cài cswap (theo đường dẫn đầy đủ, không qua shell, nên không bao giờ dùng `uv` trong môi trường ảo của dự án) với `tool upgrade claude-swap` / `upgrade claude-swap`, sau khi mọi thao tác chuyển hay đổi tài khoản đã xong và tạm giữ các lệnh cswap của chính nó. Thanh trạng thái hiện *đang cập nhật cswap 1.2.0 → 1.2.1…*; xong thì đọc lại phiên bản cswap, làm mới danh sách tài khoản và báo *Đã cập nhật cswap: 1.2.0 → 1.2.1.* Mỗi lúc chỉ một cửa sổ VS Code cập nhật.
+- Chỉ những bản Cswap Manager đã được kiểm mới được tự cài như vậy: bản vá của nhánh đã kiểm (1.1.x, 1.2.x) hoặc của nhánh bạn đang dùng. Nhánh mới hơn (ví dụ 1.3.0) thì sẽ hỏi bạn, kèm ghi chú là chưa được kiểm và hai nút **Vẫn cập nhật** / **Bỏ qua bản này**, vì vài lệnh đọc chữ cswap in ra và nhánh mới có thể đổi chữ đó. *Cài đặt nhanh › Nâng cao… › Phiên bản cswap* đánh dấu bản như vậy là *(chưa được kiểm)*.
 - Nếu thất bại, cảnh báo cho biết mã thoát và dòng lỗi cuối của trình cài (đã ẩn email và thư mục người dùng), kèm **Thử lại** và **Mở trong terminal** (chạy đúng chương trình và tham số đó trong một terminal hiện kết quả và không tự đóng). Trên Windows, một cswap đang chạy (ví dụ terminal `cswap run`) có thể chặn việc cập nhật: hãy đóng nó rồi thử lại.
 - Khi không xác định được trình cài (cả uv lẫn pipx đều có claude-swap) hoặc không tìm thấy nó, bạn nhận được lệnh để tự chạy.
 - Tắt tự cập nhật bằng `cswapManager.autoUpdateCswap` để được hỏi trước (*Cập nhật* / *Bỏ qua bản này*), hoặc tắt việc kiểm tra hằng ngày bằng `cswapManager.checkCswapUpdates`. *Cài đặt nhanh › Nâng cao… › Phiên bản cswap* để kiểm tra ngay và bật/tắt cả hai.
@@ -147,7 +148,7 @@ Khi mở nhiều cửa sổ VS Code, chỉ một cửa sổ chạy kiểm tra.
 | `cswapManager.sidebar.sortOrder` | `slot` | `slot`, `mostUsed`, `leastUsed` hoặc `soonestReset`. |
 | `cswapManager.display.warningThreshold` / `criticalThreshold` | `80` / `95` | Chỉ để tô màu, không đổi ngưỡng của cswap. |
 | `cswapManager.checkCswapUpdates` | `true` | Mỗi ngày kiểm tra PyPI xem có bản claude-swap mới hơn không. |
-| `cswapManager.autoUpdateCswap` | `true` | Khi kiểm tra thấy có cswap mới hơn, tự cập nhật ở chế độ nền mà không hỏi (tắt: hỏi trước). |
+| `cswapManager.autoUpdateCswap` | `true` | Khi kiểm tra thấy cswap mới hơn thuộc nhánh đã kiểm, tự cập nhật ở chế độ nền mà không hỏi; nhánh mới chưa kiểm thì hỏi trước (tắt: lần nào cũng hỏi). |
 
 Danh sách đầy đủ ở [README tiếng Anh](README.md#settings) và trong trang Settings của VS Code.
 
@@ -155,7 +156,7 @@ Danh sách đầy đủ ở [README tiếng Anh](README.md#settings) và trong t
 - Không có telemetry. Yêu cầu mạng duy nhất tiện ích tự gửi là kiểm tra phiên bản hằng ngày tới `pypi.org` (không gửi gì về bạn hay tài khoản; tắt bằng `cswapManager.checkCswapUpdates`). Mọi việc khác do `cswap` làm.
 - Lịch sử mức dùng chỉ nằm trên máy này (bộ nhớ của VS Code dành cho tiện ích): phần trăm mức dùng và thời điểm theo từng tài khoản, ghi bằng mã băm ngắn thay cho email, giữ 8 ngày. Tắt bằng `cswapManager.usageHistory`; **Cswap: Xoá lịch sử mức dùng** để xoá.
 - **Cài cswap…** không chạy gì khi bạn chưa xác nhận; nó hiện đúng lệnh sẽ chạy và chạy trong terminal bạn thấy được, không chạy script tải từ mạng.
-- **Tự cập nhật cswap** (mặc định bật; `cswapManager.autoUpdateCswap`) chạy mà không hỏi, nhưng chỉ chạy `tool upgrade claude-swap` / `upgrade claude-swap` bằng uv hoặc pipx đã cài cswap, theo đường dẫn đầy đủ và không qua shell. uv hoặc pipx tải bản mới từ kho gói mà chúng được cấu hình. Tắt đi để xác nhận từng lần cập nhật.
+- **Tự cập nhật cswap** (mặc định bật; `cswapManager.autoUpdateCswap`) chạy mà không hỏi, chỉ lên nhánh phát hành Cswap Manager đã được kiểm, và chỉ chạy `tool upgrade claude-swap` / `upgrade claude-swap` bằng uv hoặc pipx đã cài cswap, theo đường dẫn đầy đủ và không qua shell. uv hoặc pipx tải bản mới từ kho gói mà chúng được cấu hình. Tắt đi để xác nhận từng lần cập nhật.
 - Không bao giờ đọc tệp đăng nhập của Claude Code hay cswap. Token duy nhất tiện ích từng chạm tới là token bạn dán vào **Dán setup-token hoặc API key…**: chỉ nằm trong bộ nhớ cho đúng một lệnh và đi tới cswap qua stdin, không bao giờ là tham số, không vào log hay cài đặt.
 - `cswap` được chạy trực tiếp (không qua shell), từ thư mục home, với tham số cố định.
 - Log (**Output › Cswap Manager**) và báo cáo chẩn đoán không chứa đầu ra CLI, email, mã tài khoản hay đường dẫn thư mục home.

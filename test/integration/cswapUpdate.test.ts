@@ -97,10 +97,11 @@ interface Call {
   readonly cswapPaused: boolean;
 }
 
-function fixture(options: { automatic?: boolean; result?: ProcessResult; dirs?: string[]; versions?: string[] } = {}) {
+function fixture(options: { automatic?: boolean; result?: ProcessResult; dirs?: string[]; versions?: string[]; latest?: string } = {}) {
   const calls: Call[] = [];
   const logs: string[] = [];
-  const versions = [...(options.versions ?? ['1.2.0', '1.3.0'])];
+  const latest = options.latest ?? '1.2.1';
+  const versions = [...(options.versions ?? ['1.2.0', latest])];
   let invalidations = 0;
   let refreshes = 0;
   const gate = new OperationGate();
@@ -109,7 +110,7 @@ function fixture(options: { automatic?: boolean; result?: ProcessResult; dirs?: 
   const runner: ProcessRunner = {
     run: (file, args, runOptions) => {
       calls.push({ file, args, options: runOptions, gateBusy: gate.isBusy(), cswapPaused: cswapRunner.isPaused() });
-      return Promise.resolve(options.result ?? { kind: 'exited', exitCode: 0, signal: null, stdout: '', stderr: 'Updated claude-swap v1.2.0 -> v1.3.0', durationMs: 3 });
+      return Promise.resolve(options.result ?? { kind: 'exited', exitCode: 0, signal: null, stdout: '', stderr: `Updated claude-swap v1.2.0 -> v${latest}`, durationMs: 3 });
     },
   };
   const check = new CswapUpdateCheck({
@@ -140,7 +141,7 @@ function fixture(options: { automatic?: boolean; result?: ProcessResult; dirs?: 
     enabled: () => true,
     automatic: () => options.automatic ?? true,
     runner,
-    fetchLatest: () => Promise.resolve(version('1.3.0')),
+    fetchLatest: () => Promise.resolve(version(latest)),
   });
   return { check, calls, logs, globalState, gate, cswapRunner, counts: () => ({ invalidations, refreshes }) };
 }
@@ -168,9 +169,9 @@ suite('cswap update (fakes, extension host)', () => {
   test('updates in the background with the located uv, then confirms the new version', async () => {
     const { check, calls, logs, globalState, gate, cswapRunner, counts } = fixture();
     const state = await check.check(true);
-    assert.equal(state.latest?.text, '1.3.0');
+    assert.equal(state.latest?.text, '1.2.1');
     assert.ok(await waitFor(() => messages.shown.length > 0));
-    assert.deepEqual(messages.shown, [{ level: 'info', message: 'cswap was updated: 1.2.0 → 1.3.0.', buttons: [] }]);
+    assert.deepEqual(messages.shown, [{ level: 'info', message: 'cswap was updated: 1.2.0 → 1.2.1.', buttons: [] }]);
     assert.equal(calls.length, 1);
     const [call] = calls;
     assert.ok(call);
@@ -183,7 +184,7 @@ suite('cswap update (fakes, extension host)', () => {
     assert.ok(call.gateBusy, 'inside the operation gate');
     assert.ok(call.cswapPaused, 'cswap commands held');
     assert.deepEqual(counts(), { invalidations: 1, refreshes: 1 });
-    assert.equal(check.getState().current?.text, '1.3.0');
+    assert.equal(check.getState().current?.text, '1.2.1');
     assert.equal(globalState.get(RUNNING_KEY), undefined, 'the marker is cleared');
     assert.equal(gate.isBusy(), false);
     assert.equal(cswapRunner.isPaused(), false);
@@ -218,8 +219,23 @@ suite('cswap update (fakes, extension host)', () => {
     const { check, calls } = fixture({ automatic: false });
     await check.check(true);
     assert.ok(await waitFor(() => messages.shown.length > 0));
-    assert.deepEqual(messages.shown, [{ level: 'info', message: 'cswap 1.3.0 is available (you have 1.2.0).', buttons: ['Update', 'Skip this version'] }]);
+    assert.deepEqual(messages.shown, [{ level: 'info', message: 'cswap 1.2.1 is available (you have 1.2.0).', buttons: ['Update', 'Skip this version'] }]);
     assert.equal(calls.length, 0);
+  });
+
+  test('asks first, with a note, for a release line it was not tested with', async () => {
+    const { check, calls } = fixture({ latest: '1.3.0' });
+    await check.check(true);
+    assert.ok(await waitFor(() => messages.shown.length > 0));
+    assert.deepEqual(messages.shown, [
+      {
+        level: 'info',
+        message:
+          'cswap 1.3.0 is available (you have 1.2.0). Cswap Manager has not been tested with cswap 1.3 yet, so it was not installed automatically; some features may not work with it.',
+        buttons: ['Update anyway', 'Skip this version'],
+      },
+    ]);
+    assert.equal(calls.length, 0, 'nothing installed');
   });
 
   test('leaves the update to another window that is running one', async () => {
@@ -254,7 +270,7 @@ suite('cswap update (fakes, extension host)', () => {
     await check.check(true);
     assert.ok(await waitFor(() => messages.shown.length > 0));
     const [shown] = messages.shown;
-    assert.equal(shown?.message, 'cswap 1.3.0 is available (you have 1.2.0). Update cswap with the tool you installed it with, for example "uv tool upgrade claude-swap".');
+    assert.equal(shown?.message, 'cswap 1.2.1 is available (you have 1.2.0). Update cswap with the tool you installed it with, for example "uv tool upgrade claude-swap".');
     assert.deepEqual(shown?.buttons, ['Skip this version']);
     assert.equal(calls.length, 0);
   });

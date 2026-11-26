@@ -670,7 +670,7 @@ async function openCswapUpdatesPage(deps: QuickSettingsDependencies): Promise<Ou
       {
         label: `$(cloud-download) ${t('Update automatically')}`,
         description: onOff(configuration.autoUpdateCswap()),
-        detail: t('When a check finds a newer cswap, update it in the background with the uv or pipx that installed it.'),
+        detail: t('When a check finds a newer cswap, update it in the background with the uv or pipx that installed it. A version Cswap Manager was not tested with is offered instead.'),
         action: 'automatic',
       },
     ];

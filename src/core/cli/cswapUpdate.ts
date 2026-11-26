@@ -5,7 +5,7 @@ import { cliEnvironment } from './cswapCli';
 import { locateTool } from './cswapInstall';
 import { readEnv, type ResolverEnvironment } from './executableResolver';
 import type { ProcessResult } from './processRunner';
-import { parseCliVersion, type CliVersion } from './version';
+import { parseCliVersion, upgradeTested, type CliVersion } from './version';
 
 /** PyPI JSON API for the package cswap is published as (the same source cswap's own check uses). */
 export const PYPI_URL = 'https://pypi.org/pypi/claude-swap/json';
@@ -150,8 +150,9 @@ export async function planCswapUpgrade(
 }
 
 /**
- * After a check: `upgrade` right away when automatic updates are on, else `offer` (unless the user
- * skipped this version and did not ask for the check), else nothing.
+ * After a check: `upgrade` right away when automatic updates are on and the new version is tested
+ * (`upgradeTested`), else `offer` (unless the user skipped this version and did not ask for the
+ * check), else nothing.
  */
 export type UpdateDecision = 'none' | 'upgrade' | 'offer';
 
@@ -168,7 +169,7 @@ export function decideUpdate(input: {
   if (current === undefined || latest === undefined || !isNewer(latest, current)) {
     return 'none';
   }
-  if (input.automatic) {
+  if (input.automatic && upgradeTested(current, latest)) {
     return 'upgrade';
   }
   return input.requested || input.skipped !== latest.text ? 'offer' : 'none';

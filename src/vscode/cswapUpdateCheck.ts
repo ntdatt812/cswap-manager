@@ -24,7 +24,7 @@ import {
 import type { CachedExecutableResolver, ResolverEnvironment } from '../core/cli/executableResolver';
 import type { PausableRunner } from '../core/cli/pausableRunner';
 import { NodeProcessRunner, type ProcessRunner } from '../core/cli/processRunner';
-import type { CliVersion } from '../core/cli/version';
+import { releaseLine, upgradeTested, type CliVersion } from '../core/cli/version';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
 import type { Logger } from './logger';
@@ -222,10 +222,19 @@ export class CswapUpdateCheck {
     }
   }
 
+  /**
+   * Asks before updating; for a release line this extension was not tested with (`upgradeTested`)
+   * it says so, also why an automatic update did not install it.
+   */
   private async offer(current: CliVersion, latest: CliVersion): Promise<void> {
-    const update = t('Update');
+    const tested = upgradeTested(current, latest);
+    const update = tested ? t('Update') : t('Update anyway');
     const skip = t('Skip this version');
-    const choice = await vscode.window.showInformationMessage(t('cswap {0} is available (you have {1}).', latest.text, current.text), update, skip);
+    const available = t('cswap {0} is available (you have {1}).', latest.text, current.text);
+    const untested = this.deps.automatic()
+      ? t('Cswap Manager has not been tested with cswap {0} yet, so it was not installed automatically; some features may not work with it.', releaseLine(latest))
+      : t('Cswap Manager has not been tested with cswap {0} yet; some features may not work with it.', releaseLine(latest));
+    const choice = await vscode.window.showInformationMessage(tested ? available : `${available} ${untested}`, update, skip);
     if (choice === update) {
       await this.upgradeOnRequest(current, latest);
     } else if (choice === skip) {

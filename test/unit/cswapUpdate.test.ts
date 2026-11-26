@@ -15,7 +15,7 @@ import {
 import type { ResolverEnvironment } from '../../src/core/cli/executableResolver';
 import { PausableRunner } from '../../src/core/cli/pausableRunner';
 import { NodeProcessRunner, type ProcessResult, type ProcessRunOptions, type ProcessRunner } from '../../src/core/cli/processRunner';
-import { parseCliVersion, type CliVersion } from '../../src/core/cli/version';
+import { parseCliVersion, releaseLine, upgradeTested, type CliVersion } from '../../src/core/cli/version';
 import { OperationGate } from '../../src/core/service/operationGate';
 
 const version = (text: string): CliVersion => {
@@ -111,20 +111,43 @@ describe('cswap upgrade plan', () => {
 });
 
 describe('cswap update decision', () => {
-  const base = { current: version('1.2.0'), latest: version('1.3.0'), automatic: true, requested: false, skipped: undefined };
+  const base = { current: version('1.2.0'), latest: version('1.2.1'), automatic: true, requested: false, skipped: undefined };
 
   it('updates right away when automatic updates are on, even a skipped version', () => {
     assert.equal(decideUpdate(base), 'upgrade');
-    assert.equal(decideUpdate({ ...base, skipped: '1.3.0' }), 'upgrade');
+    assert.equal(decideUpdate({ ...base, skipped: '1.2.1' }), 'upgrade');
     assert.equal(decideUpdate({ ...base, requested: true }), 'upgrade');
+    assert.equal(decideUpdate({ ...base, current: version('1.1.4'), latest: version('1.2.0') }), 'upgrade', 'to a tested line');
   });
 
   it('offers otherwise, unless the user skipped this version and did not ask', () => {
     const manual = { ...base, automatic: false };
     assert.equal(decideUpdate(manual), 'offer');
-    assert.equal(decideUpdate({ ...manual, skipped: '1.3.0' }), 'none');
-    assert.equal(decideUpdate({ ...manual, skipped: '1.3.0', requested: true }), 'offer');
-    assert.equal(decideUpdate({ ...manual, skipped: '1.2.5' }), 'offer', 'an older skip does not hide a newer release');
+    assert.equal(decideUpdate({ ...manual, skipped: '1.2.1' }), 'none');
+    assert.equal(decideUpdate({ ...manual, skipped: '1.2.1', requested: true }), 'offer');
+    assert.equal(decideUpdate({ ...manual, skipped: '1.2.0' }), 'offer', 'an older skip does not hide a newer release');
+  });
+
+  it('only offers a release line the extension was not tested with, also when automatic', () => {
+    for (const latest of ['1.3.0', '2.0.0']) {
+      const untested = { ...base, latest: version(latest) };
+      assert.equal(decideUpdate(untested), 'offer', latest);
+      assert.equal(decideUpdate({ ...untested, skipped: latest }), 'none', `${latest} skipped`);
+      assert.equal(decideUpdate({ ...untested, skipped: latest, requested: true }), 'offer', `${latest} asked for`);
+    }
+  });
+
+  it('updates a patch of the line already in use, tested or not', () => {
+    assert.equal(decideUpdate({ ...base, current: version('1.3.0'), latest: version('1.3.1') }), 'upgrade');
+    assert.equal(decideUpdate({ ...base, current: version('1.3.0'), latest: version('1.4.0') }), 'offer');
+  });
+
+  it('names release lines and knows which moves are tested', () => {
+    assert.equal(releaseLine(version('1.3.7')), '1.3');
+    assert.equal(upgradeTested(version('1.2.0'), version('1.2.9')), true);
+    assert.equal(upgradeTested(version('1.1.0'), version('1.2.0')), true);
+    assert.equal(upgradeTested(version('1.2.0'), version('1.3.0')), false);
+    assert.equal(upgradeTested(version('1.2.0'), version('2.0.0')), false);
   });
 
   it('does nothing when there is nothing newer or a version is unknown', () => {

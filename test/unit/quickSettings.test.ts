@@ -83,7 +83,10 @@ describe('quick settings rows', () => {
     const row = (overrides: Partial<QuickSettingsValues>) =>
       buildQuickSettingsRows({ ...values, ...overrides }, t, 'advanced').flatMap((candidate) => (candidate.separator !== true && candidate.key === 'cswapVersion' ? [candidate.value] : []))[0];
     assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.2.0' }), '1.2.0 · updates automatically');
-    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.3.0' }), '1.2.0 · 1.3.0 available · updates automatically');
+    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.2.1' }), '1.2.0 · 1.2.1 available · updates automatically');
+    // A release line the extension was not tested with is marked.
+    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.3.0' }), '1.2.0 · 1.3.0 available (not tested yet) · updates automatically');
+    assert.equal(cswapVersionText('1.3.0', '1.3.1', t), '1.3.0 · 1.3.1 available', 'a patch of the line in use is not marked');
     assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: true, automatic: false } }), '1.2.0 · asks before updating');
     assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: false, automatic: true } }), '1.2.0 · not checked daily');
     assert.equal(cswapVersionText(undefined, '1.3.0', t), undefined);
