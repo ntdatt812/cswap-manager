@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 — 2026-11-26
 - **Columns line up exactly across plans**: a window an account lacks now shows `‒%` (a figure dash, as wide as a digit), so the columns after it no longer shift; an unknown percentage shows `?%`. The dashboard table keeps an empty line for such a window too, so the same windows line up across its rows.
 - **No 5-hour wording for weekly-only accounts, anywhere**: the threshold help no longer says "no 5-hour limit", and the Get Started pictures show weekly limits (valid for every plan). An account whose usage cannot be read counts by its plan name; while that is unsure (an unseen plan), the threshold help uses neutral wording and both thresholds stay listed.
 - Composed phrases use each language's own list and bracket punctuation (`、`, `（）`).
