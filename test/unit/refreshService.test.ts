@@ -115,6 +115,54 @@ describe('RefreshService', () => {
     assert.equal(cli.statusCalls, 1, 'verifyActive from the second request is merged');
   });
 
+  it('joins the queued follow-up when asked in the gap after a run ends, instead of starting a second run', async () => {
+    const cli = new ScriptedCli();
+    const gate = deferred<CliOutcome<ListPayload>>();
+    cli.listQueue.push(gate);
+    const service = new RefreshService({ cli });
+
+    const running = service.refresh({ trigger: 'interval' });
+    // Registered before the follow-up below, so it runs first when the run ends: the gap.
+    const inGap = running.then(() => service.refresh({ trigger: 'external', requireFresh: true }));
+    const followUp = service.refresh({ trigger: 'post-switch', requireFresh: true });
+    gate.resolve(ok('list', listPayload()));
+    assert.equal(await inGap, await followUp);
+    assert.equal(cli.listCalls, 2, 'the first run and one follow-up, no run beside it');
+  });
+
+  it('whenIdle waits for the run under way and its queued follow-up, and starts none itself', async () => {
+    const cli = new ScriptedCli();
+    const first = deferred<CliOutcome<ListPayload>>();
+    const second = deferred<CliOutcome<ListPayload>>();
+    cli.listQueue.push(first, second);
+    const service = new RefreshService({ cli });
+    await service.whenIdle();
+    assert.equal(cli.listCalls, 0, 'idle: resolves at once without a run');
+
+    void service.refresh({ trigger: 'interval' });
+    void service.refresh({ trigger: 'post-switch', requireFresh: true });
+    let idle = false;
+    const waiting = service.whenIdle().then(() => {
+      idle = true;
+    });
+    first.resolve(ok('list', listPayload()));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(idle, false, 'still waiting for the follow-up');
+    second.resolve(ok('list', listPayload()));
+    await waiting;
+    assert.equal(cli.listCalls, 2);
+    assert.equal(service.getState().refreshing, false);
+  });
+
+  it('whenIdle returns after dispose even while a run never reports back', async () => {
+    const cli = new ScriptedCli();
+    cli.listQueue.push(deferred<CliOutcome<ListPayload>>());
+    const service = new RefreshService({ cli });
+    void service.refresh({ trigger: 'manual' });
+    service.dispose();
+    await service.whenIdle();
+  });
+
   it('keeps the last good snapshot and marks it stale when a refresh fails', async () => {
     const cli = new ScriptedCli();
     let now = 1000;
@@ -191,6 +239,7 @@ describe('RefreshService', () => {
     const pending = service.refresh({ trigger: 'manual' });
     service.dispose();
     assert.equal(cli.signals[0]?.aborted, true);
+    assert.equal(service.getState().refreshing, false, 'a cancelled run does not stay "running"');
     gate.resolve(fail('list', 'cancelled'));
     assert.equal((await pending).ok, false);
     const after = await service.refresh({ trigger: 'manual' });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { AUTO_SWITCH_STRATEGIES } from '../../src/core/cli/autoSwitchRules';
+import { parseCliVersion, type CliVersion } from '../../src/core/cli/version';
 import { formatMessage } from '../../src/core/presentation/language';
 import {
   autoSwitchStrategyDetail,
@@ -11,6 +12,7 @@ import {
   isLanguageSetting,
   isSettingKey,
   languageLabel,
+  languageTitle,
   matchingLook,
   notificationsSummary,
   statusBarSummary,
@@ -24,6 +26,11 @@ import {
 } from '../../src/core/presentation/quickSettings';
 
 const t = (message: string, ...args: Array<string | number | boolean>) => formatMessage(message, args);
+const v = (text: string): CliVersion => {
+  const version = parseCliVersion(text);
+  assert.ok(version);
+  return version;
+};
 
 const values: QuickSettingsValues = {
   language: 'vi',
@@ -79,17 +86,24 @@ describe('quick settings rows', () => {
     assert.ok(rows.some((row) => row.separator === true));
   });
 
+  it('keeps the English word next to a translated Language label, so a mistaken pick can be undone', () => {
+    assert.equal(languageTitle(t), 'Language');
+    const vi = (message: string) => (message === 'Language' ? 'Ngôn ngữ' : message);
+    const row = buildQuickSettingsRows(values, vi).find((candidate) => candidate.separator !== true && candidate.key === 'language');
+    assert.equal(row?.label, 'Ngôn ngữ · Language');
+  });
+
   it('shows the cswap version, a newer release and how cswap is kept up to date', () => {
     const row = (overrides: Partial<QuickSettingsValues>) =>
       buildQuickSettingsRows({ ...values, ...overrides }, t, 'advanced').flatMap((candidate) => (candidate.separator !== true && candidate.key === 'cswapVersion' ? [candidate.value] : []))[0];
-    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.2.0' }), '1.2.0 · updates automatically');
-    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.2.1' }), '1.2.0 · 1.2.1 available · updates automatically');
+    assert.equal(row({ cswapVersion: v('1.2.0'), cswapLatest: v('1.2.0') }), '1.2.0 · updates automatically');
+    assert.equal(row({ cswapVersion: v('1.2.0'), cswapLatest: v('1.2.1') }), '1.2.0 · 1.2.1 available · updates automatically');
     // A release line the extension was not tested with is marked.
-    assert.equal(row({ cswapVersion: '1.2.0', cswapLatest: '1.3.0' }), '1.2.0 · 1.3.0 available (not tested yet) · updates automatically');
-    assert.equal(cswapVersionText('1.3.0', '1.3.1', t), '1.3.0 · 1.3.1 available', 'a patch of the line in use is not marked');
-    assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: true, automatic: false } }), '1.2.0 · asks before updating');
-    assert.equal(row({ cswapVersion: '1.2.0', cswapUpdates: { daily: false, automatic: true } }), '1.2.0 · not checked daily');
-    assert.equal(cswapVersionText(undefined, '1.3.0', t), undefined);
+    assert.equal(row({ cswapVersion: v('1.2.0'), cswapLatest: v('1.3.0') }), '1.2.0 · 1.3.0 available (not tested yet) · updates automatically');
+    assert.equal(cswapVersionText(v('1.3.0'), v('1.3.1'), t), '1.3.0 · 1.3.1 available', 'a patch of the line in use is not marked');
+    assert.equal(row({ cswapVersion: v('1.2.0'), cswapUpdates: { daily: true, automatic: false } }), '1.2.0 · asks before updating');
+    assert.equal(row({ cswapVersion: v('1.2.0'), cswapUpdates: { daily: false, automatic: true } }), '1.2.0 · not checked daily');
+    assert.equal(cswapVersionText(undefined, v('1.3.0'), t), undefined);
     assert.equal(cswapUpdatesLabel({ daily: false, automatic: false }, t), 'not checked daily');
   });
 

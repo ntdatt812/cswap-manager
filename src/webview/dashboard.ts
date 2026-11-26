@@ -420,11 +420,17 @@ function usageCell(row: DashboardRow): HTMLTableCellElement {
     'td',
     { className: 'col-usage' },
     row.usage.map((cell) =>
-      el('div', { className: 'usage-line' }, [
-        el('span', { className: 'usage-label', text: cell.label }),
-        bar(cell.label, cell.pct, cell.level, cell.pctText),
-        el('span', { className: `usage-pct level-${cell.level}`, text: cell.pctText }),
-      ]),
+      cell.absent !== undefined
+        ? el('div', { className: 'usage-line absent', attrs: { title: cell.absent, 'aria-label': `${cell.label}: ${cell.absent}` } }, [
+            el('span', { className: 'usage-label', text: cell.label }),
+            el('span', { attrs: { 'aria-hidden': 'true' } }),
+            el('span', { className: 'usage-pct', text: cell.pctText, attrs: { 'aria-hidden': 'true' } }),
+          ])
+        : el('div', { className: 'usage-line' }, [
+            el('span', { className: 'usage-label', text: cell.label }),
+            bar(cell.label, cell.pct, cell.level, cell.pctText),
+            el('span', { className: `usage-pct level-${cell.level}`, text: cell.pctText }),
+          ]),
     ),
   );
 }

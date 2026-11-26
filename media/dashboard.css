@@ -857,6 +857,10 @@ td.col-name {
   font-variant-numeric: tabular-nums;
 }
 
+.usage-line.absent .usage-pct {
+  color: var(--muted);
+}
+
 .usage-pct.level-warning,
 .level-text.level-warning {
   color: var(--tone-warning);

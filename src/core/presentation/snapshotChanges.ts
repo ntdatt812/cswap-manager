@@ -1,14 +1,14 @@
 import { hasIdentity, identityOf } from '../model/accountPolicy';
 import type { Account, AccountsSnapshot, UsageWindow } from '../model/types';
 import { loginDue } from './accountTree';
-import { epochOf } from './format';
+import { epochOf, WEEKLY_WINDOW } from './format';
 
 /** A weekly window whose reset time moved on by at least this much started a new period. */
 const NEW_PERIOD_MS = 24 * 3_600_000;
 
 /** cswap's 7-day window (`sevenDay` in `list --json`). */
 export function weeklyWindow(account: Account | undefined): UsageWindow | undefined {
-  return account?.usage?.windows.find((window) => window.key === 'sevenDay');
+  return account?.usage?.windows.find((window) => window.key === WEEKLY_WINDOW);
 }
 
 /**

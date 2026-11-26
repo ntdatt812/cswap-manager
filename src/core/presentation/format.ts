@@ -1,4 +1,5 @@
 import type { Account, UsageMetrics } from '../model/types';
+import type { Translate } from './accountTree';
 
 export type UsageLevel = 'unknown' | 'normal' | 'warning' | 'critical';
 
@@ -137,8 +138,11 @@ export function usageBar(pct: number, width = 10, style: BarStyle = 'blocks', op
  */
 export const FIGURE_SPACE = ' ';
 
-/** Shown in a window's column for an account that has no such window (e.g. no 5-hour limit). */
-export const NO_WINDOW = '–';
+/**
+ * U+2012 FIGURE DASH, as wide as a digit: `‒%` stands in a window's column for an account that has
+ * no such window (e.g. no 5-hour limit) and takes exactly the width of `5%`.
+ */
+export const NO_WINDOW = '‒';
 
 /** Pads the number a text starts with to `digits` digits, with figure spaces in front. */
 export function padDigits(text: string, digits: number): string {
@@ -175,9 +179,18 @@ export function compactDuration(ms: number): string {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-/** Short labels for window keys seen in cswap output or help; any other key is humanized. */
-const KNOWN_WINDOW_LABELS: Readonly<Record<string, string>> = { fiveHour: '5h', sevenDay: '7d' };
+/** cswap's account-wide window keys in `list --json`. */
+export const FIVE_HOUR_WINDOW = 'fiveHour';
+export const WEEKLY_WINDOW = 'sevenDay';
 
+/** Short labels for window keys seen in cswap output or help; any other key is humanized. */
+const KNOWN_WINDOW_LABELS: Readonly<Record<string, string>> = { [FIVE_HOUR_WINDOW]: '5h', [WEEKLY_WINDOW]: '7d' };
+
+export function capitalized(text: string): string {
+  return text.charAt(0).toLocaleUpperCase() + text.slice(1);
+}
+
+/** A window's short label for columns and bars: `5h`, `7d`, or the humanized key. */
 export function windowLabel(key: string): string {
   const known = KNOWN_WINDOW_LABELS[key];
   if (known !== undefined) {
@@ -188,7 +201,19 @@ export function windowLabel(key: string): string {
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .trim()
     .toLowerCase();
-  return words.length === 0 ? key : words.charAt(0).toUpperCase() + words.slice(1);
+  return words.length === 0 ? key : capitalized(words);
+}
+
+/** A window in words for sentences (`5-hour`, `weekly`), translated; other keys use their label. */
+export function windowInWords(key: string, t: Translate): string {
+  switch (key) {
+    case FIVE_HOUR_WINDOW:
+      return t('5-hour');
+    case WEEKLY_WINDOW:
+      return t('weekly');
+    default:
+      return windowLabel(key);
+  }
 }
 
 export function epochOf(iso: string | undefined): number | undefined {

@@ -26,6 +26,7 @@ import { UsageHistoryStore } from './vscode/usageHistoryStore';
 import { AccountAdder } from './vscode/addAccountFlow';
 import { watchNotifications } from './vscode/notifications';
 import { ProjectAccounts } from './vscode/projectAccounts';
+import { onDidShowPicker } from './vscode/quickPick';
 import { StatusBarController } from './vscode/statusBarController';
 
 /** Exposed only when running under the extension test harness. */
@@ -39,6 +40,8 @@ export interface TestApi {
   readonly statusBar: StatusBarController;
   readonly crossWindow: CrossWindowSync;
   readonly usageHistory: UsageHistoryStore;
+  /** The title of each picker the extension shows, as it is shown. */
+  readonly onDidShowPicker: vscode.Event<string>;
 }
 
 export function activate(context: vscode.ExtensionContext): TestApi | undefined {
@@ -171,7 +174,7 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
     ...registerCommands({ context, cli, resolver, refreshService, switchService, managementService, gate, configuration, accountsView, dashboard, autoSwitch, statusBar, updateCheck, projectAccounts, accountAdder, cswapInstaller, usageHistory, homeDir }),
   );
 
-  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow, usageHistory } : undefined;
+  return context.extensionMode === vscode.ExtensionMode.Test ? { refreshService, switchService, managementService, accountsView, dashboard, autoSwitch, statusBar, crossWindow, usageHistory, onDidShowPicker } : undefined;
 }
 
 export function deactivate(): void {

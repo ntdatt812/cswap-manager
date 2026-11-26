@@ -123,15 +123,17 @@ export class RefreshService implements Disposable {
     if (this.disposed) {
       return Promise.resolve(this.cancelledResult());
     }
+    // A queued follow-up is fresh enough for a requireFresh request, and for any request just after
+    // its run ended (it is about to start): join it rather than start a second cswap run.
+    if (this.followUp !== undefined && (this.current === undefined || request.requireFresh === true)) {
+      this.followUp.verifyActive ||= request.verifyActive === true;
+      return this.followUp.promise;
+    }
     if (this.current === undefined) {
       return this.start(request.verifyActive === true);
     }
     if (request.requireFresh !== true) {
       return this.current;
-    }
-    if (this.followUp !== undefined) {
-      this.followUp.verifyActive ||= request.verifyActive === true;
-      return this.followUp.promise;
     }
     const running = this.current;
     const followUp: FollowUp = {
@@ -145,8 +147,17 @@ export class RefreshService implements Disposable {
     return followUp.promise;
   }
 
+  /** Resolves once no refresh is running or queued (at once when idle or disposed); starts none. */
+  async whenIdle(): Promise<void> {
+    for (let pending = this.followUp?.promise ?? this.current; pending !== undefined && !this.disposed; pending = this.followUp?.promise ?? this.current) {
+      await pending;
+    }
+  }
+
   dispose(): void {
     this.disposed = true;
+    // A cancelled run never reports back, so nothing counts as running from here on.
+    this.state = { ...this.state, refreshing: false };
     this.controller?.abort();
     this.changed.dispose();
   }

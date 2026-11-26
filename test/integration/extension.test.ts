@@ -6,6 +6,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as vscode from 'vscode';
 import { displayNameKey } from '../../src/core/model/displayNames';
+import { signalReadDelay } from '../../src/core/service/activeSignal';
 import type { TestApi } from '../../src/extension';
 
 const EXTENSION_ID = 'nguyenthanhdat.cswap-manager';
@@ -35,6 +36,32 @@ const COMMANDS = [
   'cswapManager.installCswap',
   'cswapManager.clearUsageHistory',
 ];
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function waitFor(predicate: () => boolean, ms = 3_000): Promise<boolean> {
+  for (const end = Date.now() + ms; !predicate() && Date.now() < end; ) {
+    await pause(50);
+  }
+  return predicate();
+}
+
+/**
+ * Resolves just after the extension shows its next picker (Quick Settings and its screens). Keys are
+ * sent only once a picker is up: a picker can take a while to open on a busy machine, and a key
+ * sent before it does nothing, which made fixed waits fail now and then.
+ */
+function nextPicker(api: TestApi): Promise<void> {
+  return new Promise((resolve) => {
+    const subscription = api.onDidShowPicker(() => {
+      subscription.dispose();
+      // The widget takes keyboard commands once it has rendered.
+      setTimeout(resolve, 100);
+    });
+  });
+}
+
+const accept = () => vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
 
 suite('Cswap Manager (extension host)', () => {
   let api: TestApi;
@@ -151,12 +178,6 @@ suite('Cswap Manager (extension host)', () => {
     // The active account is marked by its icon; its spoken label names it in the UI language.
     const activeDescription = () =>
       api.accountsView.provider.getChildren().find((node) => node.id === `account:${activeSlot}`)?.accessibilityLabel ?? '';
-    const waitFor = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 40 && !predicate(); attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      return predicate();
-    };
     const config = vscode.workspace.getConfiguration('cswapManager');
     try {
       await config.update('language', 'vi', vscode.ConfigurationTarget.Global);
@@ -171,22 +192,18 @@ suite('Cswap Manager (extension host)', () => {
   test('toggles "Ask before switching" in place from Quick Settings', async () => {
     const config = () => vscode.workspace.getConfiguration('cswapManager');
     const confirmValue = () => config().inspect<boolean>('confirmSwitch')?.globalValue;
-    const waitFor = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      return predicate();
-    };
     const before = confirmValue();
     let opened: Thenable<unknown> | undefined;
     try {
       await config().update('confirmSwitch', true, vscode.ConfigurationTarget.Global);
+      const shown = nextPicker(api);
       opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'confirmSwitch');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await shown;
+      await accept();
       assert.ok(await waitFor(() => confirmValue() === false), `confirmSwitch is ${String(confirmValue())}`);
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      // The row switches in place: the same list stays open on it.
+      await pause(200);
+      await accept();
       assert.ok(await waitFor(() => confirmValue() === true), `confirmSwitch is ${String(confirmValue())}`);
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
@@ -198,27 +215,23 @@ suite('Cswap Manager (extension host)', () => {
   test('turns a notification on and off from Quick Settings › Advanced › Notifications', async () => {
     const config = () => vscode.workspace.getConfiguration('cswapManager');
     const notifyValue = () => config().inspect<boolean>('notifyOnWeeklyReset')?.globalValue;
-    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-    const waitFor = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
-        await pause(50);
-      }
-      return predicate();
-    };
     const before = notifyValue();
     let opened: Thenable<unknown> | undefined;
     try {
       await config().update('notifyOnWeeklyReset', false, vscode.ConfigurationTarget.Global);
+      let shown = nextPicker(api);
       opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'notifications');
-      await pause(500);
+      await shown;
       // Opens the Notifications screen, whose first row (weekly reset) is highlighted.
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      await pause(500);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      shown = nextPicker(api);
+      await accept();
+      await shown;
+      shown = nextPicker(api);
+      await accept();
       assert.ok(await waitFor(() => notifyValue() === true), `notifyOnWeeklyReset is ${String(notifyValue())}`);
       // The screen comes back on the same row.
-      await pause(500);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await shown;
+      await accept();
       assert.ok(await waitFor(() => notifyValue() === false), `notifyOnWeeklyReset is ${String(notifyValue())}`);
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
@@ -230,30 +243,26 @@ suite('Cswap Manager (extension host)', () => {
   test('switches automatic cswap updates on and off from Quick Settings › Advanced › cswap version', async () => {
     const config = () => vscode.workspace.getConfiguration('cswapManager');
     const autoValue = () => config().inspect<boolean>('autoUpdateCswap')?.globalValue;
-    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-    const waitFor = async (predicate: () => boolean) => {
-      for (let attempt = 0; attempt < 60 && !predicate(); attempt++) {
-        await pause(50);
-      }
-      return predicate();
-    };
     const before = autoValue();
     let opened: Thenable<unknown> | undefined;
     try {
       await config().update('autoUpdateCswap', true, vscode.ConfigurationTarget.Global);
+      let shown = nextPicker(api);
       opened = vscode.commands.executeCommand('cswapManager.quickSettings', 'cswapVersion');
-      await pause(500);
+      await shown;
       // Opens the cswap version screen on "Check now"; the third row is "Update automatically".
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      await pause(500);
+      shown = nextPicker(api);
+      await accept();
+      await shown;
       await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
       await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
-      await pause(200);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await pause(100);
+      shown = nextPicker(api);
+      await accept();
       assert.ok(await waitFor(() => autoValue() === false), `autoUpdateCswap is ${String(autoValue())}`);
       // The screen comes back on the same row.
-      await pause(500);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
+      await shown;
+      await accept();
       assert.ok(await waitFor(() => autoValue() === true), `autoUpdateCswap is ${String(autoValue())}`);
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
@@ -321,7 +330,6 @@ suite('Cswap Manager (extension host)', () => {
       return Promise.resolve(undefined);
     };
     const before = ['refreshIntervalSeconds', 'display.barStyle'].map((key) => config().inspect(key)?.globalValue);
-    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
     const pickNext = async (row: string) => {
       const opened = vscode.commands.executeCommand('cswapManager.quickSettings', row);
       await pause(500);
@@ -370,7 +378,9 @@ suite('Cswap Manager (extension host)', () => {
     const before = api.refreshService.getState().lastAttemptAt ?? 0;
     await fs.writeFile(api.crossWindow.file, JSON.stringify({ slot: shown + 1000, at: Date.now(), origin: 'another-window' }), 'utf8');
     let refreshed = false;
-    for (let attempt = 0; attempt < 60 && !refreshed; attempt++) {
+    // An unfocused test window reads the signal at a random point of the spread, then refreshes.
+    const deadline = Date.now() + signalReadDelay(false, 1) + 3_000;
+    while (!refreshed && Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       refreshed = (api.refreshService.getState().lastAttemptAt ?? 0) > before;
     }

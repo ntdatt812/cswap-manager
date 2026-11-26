@@ -1,5 +1,19 @@
 import * as vscode from 'vscode';
 
+const shown = new vscode.EventEmitter<string>();
+
+/**
+ * Fires with the title of each picker the extension shows (Quick Settings and its screens), right
+ * after it is shown. Extension-host tests wait on it rather than on a fixed time.
+ */
+export const onDidShowPicker = shown.event;
+
+/** Shows a picker and announces it (`onDidShowPicker`). */
+export function showPicker(picker: vscode.QuickPick<vscode.QuickPickItem> | vscode.InputBox): void {
+  picker.show();
+  shown.fire(picker.title ?? '');
+}
+
 /** Returned when the user pressed the title-bar ← Back button. */
 export const BACK = Symbol('back');
 export type Back = typeof BACK;
@@ -73,7 +87,7 @@ export function pickOne<T extends vscode.QuickPickItem>(items: readonly T[], opt
         void Promise.resolve().then(after).catch(() => undefined);
       }
     });
-    picker.show();
+    showPicker(picker);
   });
 }
 
@@ -118,7 +132,7 @@ export function pickMany<T extends vscode.QuickPickItem>(items: readonly T[], op
       picker.dispose();
       resolve(picked);
     });
-    picker.show();
+    showPicker(picker);
   });
 }
 
@@ -162,6 +176,6 @@ export function askWithBack(options: AskOptions): Promise<string | Back | undefi
       input.dispose();
       resolve(result);
     });
-    input.show();
+    showPicker(input);
   });
 }

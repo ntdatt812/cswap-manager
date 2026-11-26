@@ -46,7 +46,7 @@ Successful resolutions are cached until the setting changes, the workspace folde
 - `list --json` is the primary snapshot. `status --json` is called only when the caller asks for verification (post-switch, later phases) or when the list is ambiguous (missing `activeAccountNumber`, or flags disagree with it).
 - Status data is merged into a list account only when slot matches and emails do not contradict; its usage replaces the list usage only if `usageFetchedAt` is newer. Plan data always comes from `list`.
 - On conflicting sources the active slot is taken from `status` only if its identity is confirmed; otherwise it is reported as unknown with `consistency: conflict`.
-- Concurrent refreshes share one CLI run. `requireFresh` queues a single follow-up run instead of reusing an in-flight result.
+- Concurrent refreshes share one CLI run. `requireFresh` queues a single follow-up run instead of reusing an in-flight result; a request that arrives just after a run ends, before its follow-up has started, joins that follow-up. After `dispose()` nothing counts as refreshing (a cancelled run never reports back). `whenIdle()` resolves once no run is under way or queued, without starting one.
 
 ## Data states (for the UI phases)
 | State | Meaning |
@@ -120,7 +120,7 @@ Accepted: reversible actions (enable, clear threshold) run without a modal; abso
 - **Engine `^1.90.0`** with `@types/vscode ~1.90.0`; `@types/node ~20.19` matches the oldest supported extension-host Node.
 
 ## Known limitations
-- Automatic refresh pauses while the window is unfocused; another VS Code window learns about a switch made elsewhere on its next refresh (focus or interval).
+- Automatic refresh pauses while the window is unfocused. Another VS Code window learns about a switch made in a window through the cross-window signal (see *Keeping windows in step*), within 5 s; a switch made in a terminal shows on its next refresh (focus or interval), unless a window running auto-switch or a refresh sees it first.
 - Cross-account and strategy switches were not executed live during development; their handling is tested against fixtures derived from the CLI source.
 - The dashboard does not survive a window reload (no `WebviewPanelSerializer`); reopen it with the command.
 - The `spend` amounts are shown exactly as the CLI reports them (`used / limit currency`); their unit has not been verified.
@@ -137,7 +137,7 @@ Accepted: reversible actions (enable, clear threshold) run without a modal; abso
 ## Localization and picker layout (0.2.0)
 - Runtime strings go through one translator (`src/vscode/l10n.ts` → `localize`, exposed to the core as the injected `t`). Bundles live in `l10n/bundle.l10n.<lang>.json` keyed by the English text, named by VS Code's locale ids (`vi`, `zh-cn`, `zh-tw`, `ja`, `ko`; `SUPPORTED_LANGUAGES` in `src/core/presentation/language.ts`, where `zh-hk`/`zh-mo`/`zh-hant` map to `zh-tw` and other Chinese locales to `zh-cn`); `cswapManager.language` (`auto` → VS Code display language) picks the bundle, independently of VS Code's own language, and a change re-renders every surface. Contributions (command titles, settings, welcome views) use `package.nls.<lang>.json`, which VS Code applies only for its own display language.
 - `test/unit/l10n.test.ts` extracts every translator call with the TypeScript compiler API and fails, for every translated language, on non-literal keys, missing or stale translations, changed `{n}` placeholders, or altered `$(icon)`, `#setting#` and `command:` links (in the bundles and in `package.nls.<lang>.json`).
-- Not translated on purpose: the diagnostics report (meant for support, kept in English), compact durations such as `4d 0h` (same notation as the cswap CLI), and cswap's own error messages.
+- Not translated on purpose: the diagnostics report (meant for support, kept in English), compact durations such as `4d 0h` (same notation as the cswap CLI), cswap's own error messages, language names (each in its own language, `LANGUAGE_INFO`), and the English word in the language row and picker title (`Ngôn ngữ · Language`, `languageTitle`), so a language picked by mistake can be undone. List and bracket punctuation in composed phrases goes through the translator (`{0}, {1}`, `{0} ({1})`).
 - The Switch Account picker groups accounts (`quickSwitchGroup`): current; available sorted by highest usage ascending; at limit (critical threshold) sorted by soonest future reset; disabled or without usage last. Rows show text usage bars per window (10 cells for one window, 6 for several) and the next reset; plan, scopes and data age move to the detail line, and the subscription status is only shown when the plan has expired.
 
 ## Automatic switching (0.3.0)
@@ -194,7 +194,7 @@ A read-only security review found 1 high, 1 medium, 6 low and 3 info issues; all
 - Info: `add` output with a move is reported as a move; the PyPI request has an overall deadline; outdated limitation notes were updated.
 
 ## Keeping windows in step (0.6.0)
-- Auto-switch runs in one window, and windows only poll while focused, so other windows could show an old account. `CrossWindowSync` writes `active-account.signal.json` (slot, time, `vscode.env.sessionId`; no account data) into global storage when a fresh snapshot shows a different active slot, and watches that file; a signal from another window that disagrees with this window's slot triggers one refresh (`trigger: 'external'`). The decision logic (`ActiveSlotTracker`) only writes on a real change after the first load and ignores its own echo, so windows cannot ping-pong.
+- Auto-switch runs in one window, and windows only poll while focused, so other windows could show an old account. `CrossWindowSync` writes `active-account.signal.json` (slot, time, `vscode.env.sessionId`; no account data) into global storage when a fresh snapshot shows a different active slot, and watches that file; a signal from another window that disagrees with this window's slot triggers one refresh (`trigger: 'external'`). When the signal is read is decided by `SignalReadTimer` (`src/core/service/activeSignal.ts`, unit-tested with fake timers): the focused window after 300 ms; background windows at a random moment within 5 s, keeping a read already waiting when more events arrive, and reading at once when they come to the front, so one switch does not start cswap in every window at the moment Claude Code is busiest. Before deciding, the read waits for any refresh under way or queued (`RefreshService.whenIdle`), which may already show the new account. The decision logic (`ActiveSlotTracker`) only writes on a real change after the first load and ignores its own echo, so windows cannot ping-pong.
 - Settings changes already reach every window through VS Code, but only windows running the same extension version understand new settings: after an update each window needs its extension host restarted.
 
 ## Auto-switch security review (0.3.1)

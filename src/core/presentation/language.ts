@@ -8,14 +8,24 @@ export type UiLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 /** Chinese locales written in Traditional characters; every other `zh` locale gets Simplified. */
 const TRADITIONAL_CHINESE = /^zh-(tw|hk|mo|hant)(-|$)/;
 
-/** Locale for dates and numbers in each translated language. */
-export const LANGUAGE_LOCALES: Readonly<Record<Exclude<UiLanguage, 'en'>, string>> = {
-  vi: 'vi-VN',
-  'zh-cn': 'zh-CN',
-  'zh-tw': 'zh-TW',
-  ja: 'ja-JP',
-  ko: 'ko-KR',
+/**
+ * Each language's own name (shown in that language, so it can be found whatever the UI language
+ * is) and its locale for dates and numbers. A new language needs an entry here, a bundle and a
+ * `package.json` enum value (the l10n tests check they match).
+ */
+export const LANGUAGE_INFO: Readonly<Record<UiLanguage, { readonly name: string; readonly locale: string }>> = {
+  en: { name: 'English', locale: 'en' },
+  vi: { name: 'Tiếng Việt', locale: 'vi-VN' },
+  'zh-cn': { name: '简体中文', locale: 'zh-CN' },
+  'zh-tw': { name: '繁體中文', locale: 'zh-TW' },
+  ja: { name: '日本語', locale: 'ja-JP' },
+  ko: { name: '한국어', locale: 'ko-KR' },
 };
+
+/** Locale for dates and numbers: the language's own; English keeps VS Code's English variant (`en-GB`, …). */
+export function languageLocale(language: UiLanguage, displayLanguage: string): string {
+  return language === 'en' && displayLanguage.toLowerCase().startsWith('en') ? displayLanguage : LANGUAGE_INFO[language].locale;
+}
 
 /** Maps a setting value or a VS Code locale (`vi`, `vi-VN`, `zh-tw`, `ja`, `en-US`, …) to a supported language. */
 export function resolveLanguage(setting: string | undefined, displayLanguage: string): UiLanguage {

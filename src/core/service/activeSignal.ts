@@ -1,3 +1,5 @@
+import { defaultTimers, type TimerApi } from './refreshScheduler';
+
 /**
  * Cross-window "the active account changed" signal. Auto-switch runs in one VS Code window only,
  * and a window refreshes on its own only while focused, so other windows would keep showing the old
@@ -12,6 +14,69 @@ export interface ActiveSignal {
 }
 
 export const ACTIVE_SIGNAL_FILE = 'active-account.signal.json';
+
+/** Lets a burst of file events (write + rename) settle before the signal is read. */
+export const SIGNAL_SETTLE_MS = 300;
+/**
+ * Background windows read the signal at a random moment within this time: each re-read starts
+ * cswap, and a switch seen by every window at once would start it everywhere at the moment Claude
+ * Code is busiest.
+ */
+export const BACKGROUND_READ_WITHIN_MS = 5_000;
+
+/** When to read a new signal: soon in the focused window, at a random moment within 5 s elsewhere (`random` in [0, 1)). */
+export function signalReadDelay(focused: boolean, random: number): number {
+  return SIGNAL_SETTLE_MS + (focused ? 0 : random * (BACKGROUND_READ_WITHIN_MS - SIGNAL_SETTLE_MS));
+}
+
+/**
+ * Schedules the one pending read of the signal: a new signal event in the focused window reads it
+ * after `SIGNAL_SETTLE_MS`; in a background window it keeps a read already waiting (which picks up
+ * the newest signal anyway) instead of starting the wait over; gaining focus brings a waiting read
+ * forward.
+ */
+export class SignalReadTimer {
+  private handle: unknown;
+  private pending = false;
+
+  constructor(
+    private readonly read: () => void,
+    private readonly timers: TimerApi = defaultTimers,
+    private readonly random: () => number = Math.random,
+  ) {}
+
+  signalChanged(focused: boolean): void {
+    if (!this.pending || focused) {
+      this.schedule(focused);
+    }
+  }
+
+  focusChanged(focused: boolean): void {
+    if (this.pending && focused) {
+      this.schedule(true);
+    }
+  }
+
+  dispose(): void {
+    this.cancel();
+  }
+
+  private schedule(focused: boolean): void {
+    this.cancel();
+    this.pending = true;
+    this.handle = this.timers.setTimeout(() => {
+      this.pending = false;
+      this.read();
+    }, signalReadDelay(focused, this.random()));
+  }
+
+  private cancel(): void {
+    if (this.pending) {
+      this.timers.clearTimeout(this.handle);
+      this.pending = false;
+    }
+  }
+}
 
 /** Reads a signal; anything malformed is ignored rather than trusted. */
 export function parseActiveSignal(text: string): ActiveSignal | undefined {

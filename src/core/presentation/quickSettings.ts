@@ -1,13 +1,14 @@
 import type { AutoSwitchStrategy } from '../cli/autoSwitchRules';
-import { parseCliVersion, upgradeTested } from '../cli/version';
+import { upgradeTested, type CliVersion } from '../cli/version';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { Translate } from './accountTree';
-import { formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThresholds } from './format';
-import { capitalized, limitNames, NO_LIMITS_KNOWN, type LimitProfile } from './limits';
+import { capitalized, formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThresholds } from './format';
+import { LANGUAGE_INFO, SUPPORTED_LANGUAGES, type UiLanguage } from './language';
+import { limitNames, NO_LIMITS_KNOWN, type LimitProfile } from './limits';
 import { STATUS_BAR_BAR_WIDTH, STATUS_BAR_PARTS, type StatusBarButton, type StatusBarColors, type StatusBarPart } from './statusBar';
 
-export const LANGUAGE_SETTINGS = ['auto', 'en', 'vi', 'zh-cn', 'zh-tw', 'ja', 'ko'] as const;
-export type LanguageSetting = (typeof LANGUAGE_SETTINGS)[number];
+export type LanguageSetting = 'auto' | UiLanguage;
+export const LANGUAGE_SETTINGS: readonly LanguageSetting[] = ['auto', ...SUPPORTED_LANGUAGES];
 
 export function isLanguageSetting(value: unknown): value is LanguageSetting {
   return typeof value === 'string' && (LANGUAGE_SETTINGS as readonly string[]).includes(value);
@@ -111,8 +112,8 @@ export interface QuickSettingsValues {
   /** Account assigned to the open project with `cswap map`: text, or undefined when no folder is open. */
   readonly projectAccount?: string;
   /** Installed cswap version and the newer one, when known. */
-  readonly cswapVersion?: string;
-  readonly cswapLatest?: string;
+  readonly cswapVersion?: CliVersion;
+  readonly cswapLatest?: CliVersion;
   readonly cswapUpdates: CswapUpdateSettings;
 }
 
@@ -126,17 +127,14 @@ export interface CswapUpdateSettings {
  * `1.2.0`, `1.2.0 · 1.2.1 available`, or `… (not tested yet)` for a release line this extension was
  * not tested with (`upgradeTested`); undefined while the version is not known.
  */
-export function cswapVersionText(version: string | undefined, latest: string | undefined, t: Translate): string | undefined {
+export function cswapVersionText(version: CliVersion | undefined, latest: CliVersion | undefined, t: Translate): string | undefined {
   if (version === undefined) {
     return undefined;
   }
-  if (latest === undefined || latest === version) {
-    return version;
+  if (latest === undefined || latest.text === version.text) {
+    return version.text;
   }
-  const [from, to] = [parseCliVersion(version), parseCliVersion(latest)];
-  return from !== undefined && to !== undefined && !upgradeTested(from, to)
-    ? t('{0} · {1} available (not tested yet)', version, latest)
-    : t('{0} · {1} available', version, latest);
+  return upgradeTested(version, latest) ? t('{0} · {1} available', version.text, latest.text) : t('{0} · {1} available (not tested yet)', version.text, latest.text);
 }
 
 /** How cswap is kept up to date. */
@@ -161,22 +159,16 @@ export type QuickSettingsRow =
 
 /** Language names are shown in their own language so they can be found whatever the UI language is. */
 export function languageLabel(language: LanguageSetting, t: Translate): string {
-  switch (language) {
-    case 'auto':
-      return t('Automatic (follow VS Code)');
-    case 'en':
-      return 'English';
-    case 'vi':
-      return 'Tiếng Việt';
-    case 'zh-cn':
-      return '简体中文';
-    case 'zh-tw':
-      return '繁體中文';
-    case 'ja':
-      return '日本語';
-    case 'ko':
-      return '한국어';
-  }
+  return language === 'auto' ? t('Automatic (follow VS Code)') : LANGUAGE_INFO[language].name;
+}
+
+/**
+ * The language row and picker title keep the English word next to a translation (`Ngôn ngữ ·
+ * Language`), so someone who picked a language they cannot read can still find the way back.
+ */
+export function languageTitle(t: Translate): string {
+  const translated = t('Language');
+  return translated === 'Language' ? translated : `${translated} · Language`;
 }
 
 export function autoSwitchModeLabel(mode: AutoSwitchMode, t: Translate): string {
@@ -418,7 +410,7 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
 
 function mainRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
-    { key: 'language', iconId: 'globe', label: t('Language'), value: languageLabel(values.language, t) },
+    { key: 'language', iconId: 'globe', label: languageTitle(t), value: languageLabel(values.language, t) },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
     { key: 'projectAccount', iconId: 'folder', label: t('Account for this project'), value: values.projectAccount ?? t('no folder open') },
     { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },

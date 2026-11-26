@@ -3,8 +3,9 @@ import * as os from 'node:os';
 import * as nodePath from 'node:path';
 import * as vscode from 'vscode';
 import type { CachedExecutableResolver } from '../core/cli/executableResolver';
+import type { CliVersion } from '../core/cli/version';
 import { SORT_ORDERS } from '../core/presentation/format';
-import { limitProfile } from '../core/presentation/limits';
+import { limitProfileOf } from '../core/presentation/limits';
 import {
   LANGUAGE_SETTINGS,
   STATUS_BAR_LOOKS,
@@ -15,6 +16,7 @@ import {
   buildQuickSettingsRows,
   cswapVersionText,
   languageLabel,
+  languageTitle,
   matchingLook,
   refreshChoices,
   refreshLabel,
@@ -48,7 +50,7 @@ import type { AccountsSnapshot } from '../core/model/types';
 import { slotLabel } from '../core/presentation/accountTree';
 import { t } from './presentation';
 import type { ProjectAccounts } from './projectAccounts';
-import { askWithBack, BACK, pickMany, pickOne, type Back } from './quickPick';
+import { askWithBack, BACK, pickMany, pickOne, showPicker, type Back } from './quickPick';
 import { offerReload, showSaveFailed } from './settingErrors';
 import { statusBarButtonIcon, type StatusBarController } from './statusBarController';
 
@@ -63,7 +65,7 @@ export interface QuickSettingsDependencies {
   /** Where cswap is found now, for the cswap path screen. */
   readonly resolver?: Pick<CachedExecutableResolver, 'resolve'>;
   /** Known cswap version / newer release, for the Advanced row. */
-  readonly updateCheck?: { getState(): { readonly current?: { readonly text: string }; readonly latest?: { readonly text: string } } };
+  readonly updateCheck?: { getState(): { readonly current?: CliVersion; readonly latest?: CliVersion } };
 }
 
 /**
@@ -115,7 +117,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     autoSwitchRules: deps.autoSwitch.rulesText(),
     shareHistory: shareHistoryOn(rules),
     tokenUsage: tokenUsageLevel(rules),
-    limits: limitProfile(deps.refreshService?.getState().snapshot?.accounts ?? []),
+    limits: limitProfileOf(deps.refreshService?.getState().snapshot),
     statusBarParts: configuration.statusBarParts(),
     statusBarButtons: configuration.statusBarButtons(),
     barStyle: configuration.barStyle(),
@@ -125,8 +127,8 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     cliPath: displayPath(configuration.cliPath()),
     timeoutSeconds: Math.round(configuration.cliRunSettings().timeoutMs / 1000),
     ...(projectAccount === undefined ? {} : { projectAccount }),
-    ...(update?.current === undefined ? {} : { cswapVersion: update.current.text }),
-    ...(update?.latest === undefined ? {} : { cswapLatest: update.latest.text }),
+    ...(update?.current === undefined ? {} : { cswapVersion: update.current }),
+    ...(update?.latest === undefined ? {} : { cswapLatest: update.latest }),
     cswapUpdates: { daily: configuration.checkCswapUpdates(), automatic: configuration.autoUpdateCswap() },
   };
 }
@@ -221,7 +223,7 @@ function pickRow(deps: QuickSettingsDependencies, focus: SettingKey | undefined,
       picker.dispose();
       resolve(result);
     });
-    picker.show();
+    showPicker(picker);
   });
 }
 
@@ -657,7 +659,7 @@ async function openCswapUpdatesPage(deps: QuickSettingsDependencies): Promise<Ou
   let focus: CswapUpdateAction = 'check';
   for (;;) {
     const update = deps.updateCheck?.getState();
-    const version = cswapVersionText(update?.current?.text, update?.latest?.text, t);
+    const version = cswapVersionText(update?.current, update?.latest, t);
     const onOff = (on: boolean) => (on ? t('On') : t('Off'));
     const items: CswapUpdateItem[] = [
       { label: `$(sync) ${t('Check for a cswap update now')}`, ...(version === undefined ? {} : { description: version }), action: 'check' },
@@ -753,7 +755,7 @@ async function editRow(deps: QuickSettingsDependencies, key: ScreenKey): Promise
       return editValue(
         deps,
         'language',
-        t('Language'),
+        languageTitle(t),
         LANGUAGE_SETTINGS.map((language) => ({ value: language, label: languageLabel(language, t) })),
         configuration.languageSetting(),
       );

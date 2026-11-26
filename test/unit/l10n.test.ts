@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, it } from 'node:test';
-import { formatMessage, LANGUAGE_LOCALES, resolveLanguage, SUPPORTED_LANGUAGES } from '../../src/core/presentation/language';
+import { formatMessage, LANGUAGE_INFO, languageLocale, resolveLanguage, SUPPORTED_LANGUAGES } from '../../src/core/presentation/language';
 import { LANGUAGE_SETTINGS } from '../../src/core/presentation/quickSettings';
 import { PROJECT_ROOT, placeholders, readBundle, scanMessages } from '../helpers/l10nKeys';
 
@@ -17,10 +17,15 @@ describe('localization', () => {
     assert.ok(scan.keys.size > 200, `found ${scan.keys.size} messages`);
   });
 
-  it('offers every translated language in the language setting', () => {
-    for (const language of TRANSLATED) {
-      assert.ok((LANGUAGE_SETTINGS as readonly string[]).includes(language), language);
-      assert.ok(LANGUAGE_LOCALES[language], language);
+  it('offers every language in the setting, in package.json and in Quick Settings alike', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')) as {
+      contributes: { configuration: { properties: Record<string, { enum?: string[]; enumDescriptions?: string[] }> } };
+    };
+    const setting = manifest.contributes.configuration.properties['cswapManager.language'];
+    assert.deepEqual(setting?.enum, [...LANGUAGE_SETTINGS]);
+    assert.deepEqual(setting?.enumDescriptions, LANGUAGE_SETTINGS.map((language) => `%config.language.${language}%`));
+    for (const language of SUPPORTED_LANGUAGES) {
+      assert.ok(LANGUAGE_INFO[language].name.length > 0, language);
     }
   });
 
@@ -68,6 +73,12 @@ describe('language selection and formatting', () => {
     assert.equal(resolveLanguage('en', 'vi'), 'en');
     assert.equal(resolveLanguage(undefined, 'vi'), 'vi');
     assert.equal(resolveLanguage('xx', 'vi'), 'en');
+  });
+
+  it('formats dates and numbers in the chosen language, English in VS Code\'s English variant', () => {
+    assert.equal(languageLocale('ja', 'en'), 'ja-JP');
+    assert.equal(languageLocale('en', 'en-GB'), 'en-GB');
+    assert.equal(languageLocale('en', 'ja'), 'en', 'English chosen in a Japanese VS Code');
   });
 
   it('tells Simplified from Traditional Chinese, and reads Japanese and Korean locales', () => {

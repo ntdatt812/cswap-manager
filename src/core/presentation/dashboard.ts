@@ -11,6 +11,7 @@ import type {
   Meter,
   Sparkline,
   Tone,
+  UsageCell,
 } from '../../shared/dashboardProtocol';
 import type { AutoSwitchMode } from '../service/autoSwitchService';
 import type { CliError } from '../cli/cliErrors';
@@ -30,7 +31,8 @@ import {
   type PresentationOptions,
   type Translate,
 } from './accountTree';
-import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageLevel, windowLabel } from './format';
+import { compactDuration, epochOf, formatPercent, maxUsagePct, usageAgeMs, usageLevel, WEEKLY_WINDOW, windowLabel } from './format';
+import { reportedWindowKeys } from './limits';
 import { accountActions, manageRows } from './accountActions';
 import { buildCapacity, buildInsights, buildTimeline } from './dashboardInsights';
 import { autoSwitchModeLabel, autoSwitchStrategyLabel } from './quickSettings';
@@ -303,7 +305,7 @@ function freshnessSection(account: Account, snapshot: AccountsSnapshot, options:
 
 /** The weekly window, and the window that limits the account now when that is another one. */
 function historyWindowKeys(account: Account, points: readonly UsagePoint[]): string[] {
-  const weekly = 'sevenDay';
+  const weekly = WEEKLY_WINDOW;
   const keys: string[] = [];
   if (account.usage?.windows.some((window) => window.key === weekly) === true || points.some((point) => pointValue(point.windows, weekly) !== undefined)) {
     keys.push(weekly);
@@ -386,7 +388,31 @@ export function buildAccountDetail(account: Account, snapshot: AccountsSnapshot,
   };
 }
 
-function buildRow(account: Account, snapshot: AccountsSnapshot, options: DashboardOptions): DashboardRow {
+/**
+ * One usage line per window any account reports, in the same order on every row: an account
+ * without a window (another plan) gets an empty line, so the same windows line up across rows.
+ */
+function usageCells(account: Account, windowKeys: readonly string[], options: DashboardOptions): UsageCell[] {
+  const { t } = options;
+  const windows = account.usage?.windows ?? [];
+  if (windows.length === 0) {
+    return [];
+  }
+  return [...new Set([...windowKeys, ...windows.map((window) => window.key)])].map((key) => {
+    const window = windows.find((candidate) => candidate.key === key);
+    if (window === undefined) {
+      return { label: windowLabel(key), pctText: '–', level: 'unknown', absent: t('This account does not have this limit.') };
+    }
+    return {
+      label: windowLabel(key),
+      ...(window.pct === undefined ? {} : { pct: window.pct }),
+      pctText: window.pct === undefined ? t('unknown') : formatPercent(window.pct),
+      level: usageLevel(window.pct, options.thresholds),
+    };
+  });
+}
+
+function buildRow(account: Account, snapshot: AccountsSnapshot, options: DashboardOptions, windowKeys: readonly string[]): DashboardRow {
   const { t, now } = options;
   const active = snapshot.active.slot === account.slot;
   const status = statusOf(account, active, t);
@@ -409,12 +435,7 @@ function buildRow(account: Account, snapshot: AccountsSnapshot, options: Dashboa
     ...(secondary === undefined ? {} : { secondary }),
     active,
     ...(plan === undefined ? {} : { plan }),
-    usage: (account.usage?.windows ?? []).map((window) => ({
-      label: windowLabel(window.key),
-      ...(window.pct === undefined ? {} : { pct: window.pct }),
-      pctText: window.pct === undefined ? t('unknown') : formatPercent(window.pct),
-      level: usageLevel(window.pct, options.thresholds),
-    })),
+    usage: usageCells(account, windowKeys, options),
     ...(maxPct === undefined ? {} : { maxPct }),
     ...(resetEpoch === undefined ? {} : { resetEpoch, resetText: t('in {0}', compactDuration(resetEpoch - now)) }),
     statusText: status.text,
@@ -492,7 +513,8 @@ export function buildDashboardModel(state: AccountsState, options: DashboardOpti
       ? { state: 'error', message: options.describeError(state.lastError), messageTone: 'error', ...common, insights: [], timeline: [], rows: [], canSwitch: false }
       : { state: 'loading', ...common, insights: [], timeline: [], rows: [], canSwitch: false };
   }
-  const rows = [...snapshot.accounts].sort((a, b) => a.slot - b.slot).map((account) => buildRow(account, snapshot, options));
+  const windowKeys = reportedWindowKeys(snapshot.accounts, true);
+  const rows = [...snapshot.accounts].sort((a, b) => a.slot - b.slot).map((account) => buildRow(account, snapshot, options, windowKeys));
   if (rows.length === 0) {
     return {
       state: 'empty',

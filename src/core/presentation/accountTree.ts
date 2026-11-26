@@ -24,6 +24,7 @@ import {
   type BarStyle,
 } from './format';
 import { countdownText } from '../../shared/countdown';
+import { reportedWindowKeys } from './limits';
 
 /** Localization hook: `{0}`-style placeholders, as in `vscode.l10n.t`. */
 export type Translate = (message: string, ...args: Array<string | number | boolean>) => string;
@@ -106,12 +107,13 @@ export function rowColumns(accounts: readonly Account[]): RowColumns {
   return {
     slotDigits: Math.max(1, ...accounts.map((account) => String(account.slot).length)),
     percentDigits: Math.max(1, ...percents.map((pct) => (pct === undefined ? 1 : percentDigits(pct)))),
-    windowKeys: [...new Set(accounts.flatMap((account) => (account.usage?.windows ?? []).map((window) => window.key)))],
+    windowKeys: reportedWindowKeys(accounts, true),
   };
 }
 
+/** A percentage padded to the column; `?%` when unknown. */
 function alignedPercent(pct: number | undefined, columns: RowColumns): string {
-  return padDigits(pct === undefined ? '?' : formatPercent(pct), columns.percentDigits);
+  return padDigits(pct === undefined ? '?%' : formatPercent(pct), columns.percentDigits);
 }
 
 const LEVEL_COLOR: Record<UsageLevel, string | undefined> = {
@@ -384,7 +386,8 @@ export function usageColumnsText(account: Account, options: PresentationOptions,
   const parts = keys.map((key) => {
     const window = windows.find((candidate) => candidate.key === key);
     const label = windowLabel(key);
-    const value = window === undefined ? padDigits(NO_WINDOW, columns.percentDigits) : alignedPercent(window.pct, columns);
+    // `‒%` (figure dash) is exactly as wide as `5%`, so the columns after it stay aligned.
+    const value = window === undefined ? padDigits(`${NO_WINDOW}%`, columns.percentDigits) : alignedPercent(window.pct, columns);
     return [style.label?.(label) ?? label, style.bar?.(window ?? { key }), value].filter((piece) => piece !== undefined).join(' ');
   });
   const firstReset = windows.map((window) => epochOf(window.resetsAt)).find((epoch) => epoch !== undefined);

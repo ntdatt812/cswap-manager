@@ -116,6 +116,11 @@ export interface UsageCell {
   readonly pct?: number;
   readonly pctText: string;
   readonly level: Level;
+  /**
+   * The account has no such window (another plan): the line keeps its place so the same windows
+   * line up across rows; the text explains it.
+   */
+  readonly absent?: string;
 }
 
 export interface DashboardRow {

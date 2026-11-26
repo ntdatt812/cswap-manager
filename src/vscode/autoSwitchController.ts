@@ -14,7 +14,7 @@ import type { CswapCli } from '../core/cli/cswapCli';
 import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/model/autoSwitch';
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
-import { limitNames, limitProfile, showWeeklyThreshold, switchThresholdHelp, weeklyThresholdHelp, type LimitProfile } from '../core/presentation/limits';
+import { limitNames, limitProfileOf, switchThresholdHelp, weeklyThresholdHelp, weeklyThresholdVisible, type LimitProfile } from '../core/presentation/limits';
 import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel, shareHistoryOn, tokenUsageLabel, tokenUsageLevel, type TokenUsageLevel } from '../core/presentation/quickSettings';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
@@ -549,7 +549,7 @@ export class AutoSwitchController implements vscode.Disposable {
     const weeklySet = rules?.weeklyThreshold !== undefined;
     const entries: Array<{ key: AutoSwitchRuleKey; label: string; value: string; help: string }> = [
       { key: 'autoswitch.threshold', label: t('Switch threshold'), value: valueText(rules?.threshold, '%'), help: switchThresholdHelp(limits, weeklySet, t) },
-      ...(showWeeklyThreshold(limits, weeklySet)
+      ...(weeklyThresholdVisible(limits, weeklySet)
         ? [{ key: 'autoswitch.weeklyThreshold' as const, label: t('Weekly threshold'), value: valueText(rules?.weeklyThreshold, '%'), help: weeklyThresholdHelp(limits, t) }]
         : []),
       { key: 'autoswitch.cooldownSeconds', label: t('Cooldown'), value: valueText(rules?.cooldownSeconds, ' s'), help: t('Minimum time between two automatic switches.') },
@@ -613,7 +613,7 @@ export class AutoSwitchController implements vscode.Disposable {
 
   /** The limits the accounts report, so menus name only those (no 5-hour wording without one). */
   private limits(): LimitProfile {
-    return limitProfile(this.deps.refreshService.getState().snapshot?.accounts ?? []);
+    return limitProfileOf(this.deps.refreshService.getState().snapshot);
   }
 
   /** Saves one rule in cswap's config and verifies it by reading the config back. */
