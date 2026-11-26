@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { formatMessage, resolveLanguage, type UiLanguage } from '../core/presentation/language';
+import { formatMessage, LANGUAGE_LOCALES, resolveLanguage, type UiLanguage } from '../core/presentation/language';
 
 let language: UiLanguage = 'en';
 let bundle: Readonly<Record<string, string>> = {};
@@ -40,7 +40,7 @@ export function currentLanguage(): UiLanguage {
 
 /** BCP 47 locale for dates and numbers in the chosen UI language. */
 export function currentLocale(): string {
-  return language === 'vi' ? 'vi-VN' : vscode.env.language || 'en';
+  return language === 'en' ? vscode.env.language || 'en' : LANGUAGE_LOCALES[language];
 }
 
 export function localize(message: string, ...args: Array<string | number | boolean>): string {

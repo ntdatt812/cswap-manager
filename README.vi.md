@@ -24,7 +24,7 @@ Xem mức dùng của mọi tài khoản Claude trong nháy mắt, chuyển tài
 - **Tự động chuyển** bằng chính `cswap auto` của cswap, có cả **Tự chuyển khi hết hạn mức** bật/tắt bằng một bước.
 - **Tài khoản theo dự án**: gán một thư mục với một tài khoản và mở Claude Code bằng tài khoản đó (`cswap map`, `cswap run`).
 - **Máy khác**: xuất/nhập tài khoản, hoặc chia sẻ số liệu mức dùng giữa các máy.
-- **Giao diện tiếng Việt** bên cạnh tiếng Anh (`cswapManager.language`).
+- **Sáu ngôn ngữ giao diện**: English, Tiếng Việt, 简体中文, 繁體中文, 日本語 và 한국어 (`cswapManager.language`; `auto` theo VS Code). Tên lệnh và mô tả cài đặt cũng được dịch, theo ngôn ngữ hiển thị của VS Code.
 
 ## Bắt đầu
 1. Cài cswap từ [PyPI](https://pypi.org/project/claude-swap/): `uv tool install claude-swap` (hoặc `pipx install claude-swap`). Hoặc để tiện ích làm: khi chưa có cswap, **Cài cswap…** chạy đúng lệnh đó trong terminal sau khi bạn xác nhận (cài `uv` trước bằng winget hoặc Homebrew nếu cần) và tự làm mới khi cswap đã có.
@@ -140,7 +140,7 @@ Khi mở nhiều cửa sổ VS Code, chỉ một cửa sổ chạy kiểm tra.
 | Cài đặt | Mặc định | Mô tả |
 |---|---|---|
 | `cswapManager.cliPath` | trống (tự dò) | Đường dẫn đầy đủ tới `cswap.exe`. Chỉ cài đặt người dùng, workspace không đổi được. Không hỗ trợ shim `.cmd`/`.bat`. |
-| `cswapManager.language` | `auto` | Ngôn ngữ giao diện tiện ích: `auto` (theo VS Code), `en` hoặc `vi`. |
+| `cswapManager.language` | `auto` | Ngôn ngữ giao diện tiện ích: `auto` (theo VS Code), `en`, `vi`, `zh-cn` (简体中文), `zh-tw` (繁體中文), `ja` (日本語) hoặc `ko` (한국어). |
 | `cswapManager.refreshIntervalSeconds` | `120` | Làm mới tự động khi khung Tài khoản, thanh trạng thái hoặc bảng điều khiển đang hiện và cửa sổ đang được chọn. `0` là tắt; tối thiểu 30. |
 | `cswapManager.statusBar.mode` | `slotUsage` | `slotUsage`, `slot`, `nameUsage`, `custom` hoặc `hidden`. |
 | `cswapManager.confirmSwitch` | `true` | Hỏi trước khi chuyển tài khoản. Chỉ cài đặt người dùng. |

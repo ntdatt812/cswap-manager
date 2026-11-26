@@ -6,7 +6,7 @@ import { formatPercent, usageBar, type BarStyle, type SortOrder, type UsageThres
 import { capitalized, limitNames, NO_LIMITS_KNOWN, type LimitProfile } from './limits';
 import { STATUS_BAR_BAR_WIDTH, STATUS_BAR_PARTS, type StatusBarButton, type StatusBarColors, type StatusBarPart } from './statusBar';
 
-export const LANGUAGE_SETTINGS = ['auto', 'en', 'vi'] as const;
+export const LANGUAGE_SETTINGS = ['auto', 'en', 'vi', 'zh-cn', 'zh-tw', 'ja', 'ko'] as const;
 export type LanguageSetting = (typeof LANGUAGE_SETTINGS)[number];
 
 export function isLanguageSetting(value: unknown): value is LanguageSetting {
@@ -168,6 +168,14 @@ export function languageLabel(language: LanguageSetting, t: Translate): string {
       return 'English';
     case 'vi':
       return 'Tiếng Việt';
+    case 'zh-cn':
+      return '简体中文';
+    case 'zh-tw':
+      return '繁體中文';
+    case 'ja':
+      return '日本語';
+    case 'ko':
+      return '한국어';
   }
 }
 

@@ -176,7 +176,7 @@
   "cswap could not be started.": "cswap could not be started.",
   "cswap could not read usage to choose an account.": "cswap could not read usage to choose an account.",
   "Cswap Dashboard": "Cswap Dashboard",
-  "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Current Login\".": "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Current Login\".",
+  "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Account…\".": "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Account…\".",
   "Cswap diagnostics report is ready (redacted).": "Cswap diagnostics report is ready (redacted).",
   "cswap did not add the account (it cancelled without changes).": "cswap did not add the account (it cancelled without changes).",
   "cswap did not report usage for this account.": "cswap did not report usage for this account.",

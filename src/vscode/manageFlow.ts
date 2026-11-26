@@ -196,7 +196,7 @@ async function confirmRemove(account: Account, snapshot: AccountsSnapshot): Prom
     {
       modal: true,
       detail: [
-        t('cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using "Add Current Login".'),
+        t('cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using "Add Account…".'),
         ...(active ? [t('This is the active account: Claude Code stays logged in to it, but cswap will no longer manage it.')] : []),
       ].join('\n\n'),
     },

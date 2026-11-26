@@ -24,7 +24,7 @@ See the usage of all your Claude accounts at a glance, switch the account Claude
 - **Automatic switching** with cswap's own `cswap auto`, including **Switch when an account is used up** in one step.
 - **Per-project accounts**: tie a folder to an account and open Claude Code with it (`cswap map`, `cswap run`).
 - **Another computer**: export and import accounts, or share usage readings between computers.
-- **Vietnamese UI** next to English (`cswapManager.language`).
+- **Six UI languages**: English, Tiếng Việt, 简体中文, 繁體中文, 日本語 and 한국어 (`cswapManager.language`; `auto` follows VS Code). Command titles and setting descriptions are translated too and follow VS Code's display language.
 
 ## Getting started
 1. Install cswap from [PyPI](https://pypi.org/project/claude-swap/): `uv tool install claude-swap` (or `pipx install claude-swap`). Or let the extension do it: when cswap is missing, **Install cswap…** runs that command in a terminal after you confirm it (installing `uv` first through winget or Homebrew if needed) and refreshes once cswap is there.
@@ -161,7 +161,7 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | Setting | Default | Description |
 |---|---|---|
 | `cswapManager.cliPath` | empty (auto-detect) | Full path to `cswap.exe`. User settings only — a workspace cannot change it. `.cmd`/`.bat` shims are not supported. |
-| `cswapManager.language` | `auto` | Language of the extension's UI: `auto` (follow VS Code), `en` or `vi` (Tiếng Việt). Command titles and setting descriptions follow VS Code's display language. |
+| `cswapManager.language` | `auto` | Language of the extension's UI: `auto` (follow VS Code), `en`, `vi` (Tiếng Việt), `zh-cn` (简体中文), `zh-tw` (繁體中文), `ja` (日本語) or `ko` (한국어). Command titles and setting descriptions follow VS Code's display language. |
 | `cswapManager.refreshIntervalSeconds` | `120` | Automatic refresh while the sidebar, status bar or dashboard is shown and the window is focused. `0` turns it off; minimum 30. |
 | `cswapManager.statusBar.mode` | `slotUsage` | `slotUsage`, `slot`, `nameUsage`, `custom` (see `statusBar.parts`) or `hidden`. |
 | `cswapManager.statusBar.parts` | `icon`, `slot`, `usage` | With mode `custom`: any of `icon`, `slot`, `name`, `plan`, `bar`, `usage`, `reset`. |

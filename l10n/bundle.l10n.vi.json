@@ -176,7 +176,7 @@
   "cswap could not be started.": "Không khởi động được cswap.",
   "cswap could not read usage to choose an account.": "cswap không đọc được mức dùng để chọn tài khoản.",
   "Cswap Dashboard": "Bảng điều khiển Cswap",
-  "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Current Login\".": "cswap xoá đăng nhập đã lưu của tài khoản này, hồ sơ phiên và các thư mục đã gán. Tài khoản Claude của bạn không bị ảnh hưởng; có thể thêm lại sau bằng cách đăng nhập rồi dùng \"Thêm tài khoản đang đăng nhập\".",
+  "cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using \"Add Account…\".": "cswap xoá đăng nhập đã lưu của tài khoản này, hồ sơ phiên và các thư mục đã gán. Tài khoản Claude của bạn không bị ảnh hưởng; có thể thêm lại sau bằng cách đăng nhập rồi dùng \"Thêm tài khoản…\".",
   "Cswap diagnostics report is ready (redacted).": "Báo cáo chẩn đoán Cswap đã sẵn sàng (đã ẩn thông tin nhạy cảm).",
   "cswap did not add the account (it cancelled without changes).": "cswap không thêm tài khoản (đã huỷ, không thay đổi gì).",
   "cswap did not report usage for this account.": "cswap không trả về mức dùng cho tài khoản này.",

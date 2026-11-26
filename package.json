@@ -679,12 +679,20 @@
           "enum": [
             "auto",
             "en",
-            "vi"
+            "vi",
+            "zh-cn",
+            "zh-tw",
+            "ja",
+            "ko"
           ],
           "enumDescriptions": [
             "%config.language.auto%",
             "%config.language.en%",
-            "%config.language.vi%"
+            "%config.language.vi%",
+            "%config.language.zh-cn%",
+            "%config.language.zh-tw%",
+            "%config.language.ja%",
+            "%config.language.ko%"
           ],
           "markdownDescription": "%config.language.description%",
           "order": 1
