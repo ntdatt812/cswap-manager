@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 — 2026-11-26
 - **More languages**: the UI, command titles and setting descriptions are now also in 简体中文, 繁體中文, 日本語 and 한국어, next to English and Tiếng Việt. `cswapManager.language` (*Quick Settings › Language*) offers them; `auto` follows VS Code, with `zh-tw`/`zh-hk`/`zh-mo` getting Traditional and other Chinese locales Simplified. Dates and numbers follow the chosen language.
 - The remove-account confirmation now points to **Add Account…** (it still named an old button).
 - **Fits every plan**: menus and help name only the limits your accounts actually report. With weekly-only accounts (such as Ultra) nothing speaks of a 5-hour limit any more: *Usage of token accounts* reads *Weekly limits*, *Overall limits only* compares weekly limits, the switch threshold says *Switch when the weekly limit reaches this usage*, and the separate weekly threshold is hidden unless it is set (it would do the same job). With accounts on different plans, the wording names the plans, e.g. *5-hour (Max) and weekly*.
