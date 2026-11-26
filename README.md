@@ -73,6 +73,8 @@ Shortcuts: `Ctrl+Alt+S` opens the picker and `Ctrl+Alt+Shift+S` switches to the 
 
 Switches are confirmed by default; choose **Switch, don't ask again** in the dialog to stop asking (turn it back on under **Quick Settings › Ask before switching**). The extension only reports success after re-reading cswap's state and confirming the new active account.
 
+Confirmation dialogs follow your colour theme: on its first run Cswap Manager sets VS Code's `window.dialogStyle` to `custom` (not on macOS, and not when you already chose a style), with **Undo**. Change it under *Quick Settings › Advanced… › Dialogs*.
+
 Switching does not interrupt running Claude Code sessions: cswap replaces the stored login and Claude Code picks it up by itself on its next request, with no restart (per cswap; on macOS with the Keychain this can take up to ~30 seconds).
 
 ### Dashboard
@@ -156,7 +158,7 @@ Not available in the extension (use the CLI): `purge`, `unclaimed`, `tui`/`watch
 With several VS Code windows open, only one of them runs the checks. A check never runs at the same time as a manual switch or account change, and is never interrupted halfway.
 
 ## Settings
-**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language: language, ask before switching, the account for this project, refresh interval, auto-switch with its strategy, per-model limits and rules, status bar, progress bar style, usage colours and account order. **Advanced…** holds the rest: chat history across accounts, weekly-reset alerts, usage of token accounts, cswap path and version, command time limit, moving accounts to another computer and **All settings…** (VS Code's Settings page). Each screen has a **← Back** button.
+**Cswap: Quick Settings…** (the ⚙ in the status bar, the Accounts view or the switch picker) changes the common settings in the extension's own language, grouped by what you want to do: the language at the top; **Switching** (ask before switching, the account for this project, chat history across accounts); **Auto-switch** (on, notify only or off; its strategy, per-model limits and rules are listed only while it runs); **Display** (status bar, progress bar style, usage colours, account order). **Advanced…** holds the rest: **Usage and alerts** (notifications, refresh interval, usage of token accounts), **cswap** (path, version, command time limit) and **Other** (another computer, dialogs, **All settings…**). Each screen has a **← Back** button.
 
 | Setting | Default | Description |
 |---|---|---|

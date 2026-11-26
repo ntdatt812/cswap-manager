@@ -67,7 +67,7 @@
   "command.enableAccount.title": "Bật lại xoay vòng",
   "command.setThreshold.title": "Đặt ngưỡng chuyển…",
   "command.clearThreshold.title": "Xoá ngưỡng chuyển",
-  "command.moveAccount.title": "Chuyển sang slot…",
+  "command.moveAccount.title": "Dời sang slot…",
   "capabilities.untrustedWorkspaces.description": "Chạy được ở Restricted Mode; giá trị workspace của các cài đặt nhạy cảm (như xác nhận chuyển tài khoản) bị bỏ qua.",
   "command.autoSwitch.title": "Tự động chuyển tài khoản…",
   "command.toggleSwitchAtLimit.title": "Bật/tắt tự chuyển khi hết hạn mức",

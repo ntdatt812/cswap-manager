@@ -12,6 +12,7 @@ import { AccountsView } from './vscode/accountsView';
 import { AutoRefreshController } from './vscode/autoRefresh';
 import { AutoSwitchController } from './vscode/autoSwitchController';
 import { registerCommands } from './vscode/commands';
+import { useThemedDialogsOnce } from './vscode/dialogStyle';
 import { CONFIG_SECTION, ExtensionConfiguration } from './vscode/configuration';
 import { DashboardController } from './vscode/dashboardPanel';
 import { configureLocalization } from './vscode/l10n';
@@ -125,6 +126,10 @@ export function activate(context: vscode.ExtensionContext): TestApi | undefined 
   const usageHistory = new UsageHistoryStore(context.globalStorageUri, refreshService, logger, () => configuration.usageHistory());
   // Out of the way of start-up: one check shortly after activation, then at most daily.
   const updateTimer = setTimeout(() => void updateCheck.check(), 30_000);
+  // The test host keeps VS Code's own dialog style; tests call this with a stand-in state.
+  if (context.extensionMode !== vscode.ExtensionMode.Test) {
+    void useThemedDialogsOnce(context.globalState);
+  }
   const dashboard = new DashboardController({
     extensionUri: context.extensionUri,
     autoSwitch: autoSwitch.service,

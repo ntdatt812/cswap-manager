@@ -8,6 +8,7 @@ import { neutralizeLinks } from '../core/security/redact';
 import type { OperationGate } from '../core/service/operationGate';
 import { sameAccountsAt } from '../core/service/managementService';
 import type { RefreshService } from '../core/service/refreshService';
+import { confirm } from './confirm';
 import { errorReason, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
 
@@ -53,9 +54,12 @@ async function pickJsonToSave(deps: TransferDependencies, title: string, prefix:
     return file;
   }
   const saveAnyway = t('Save Here Anyway');
-  const choice = await vscode.window.showWarningMessage(
-    t('This file would be inside the open project.'),
-    { modal: true, detail: t('Files in a project folder are easily committed, synced or shared by mistake. A folder outside the project, such as your home folder, is safer.') },
+  const choice = await confirm(
+    {
+      question: t('This file would be inside the open project.'),
+      detail: t('Files in a project folder are easily committed, synced or shared by mistake. A folder outside the project, such as your home folder, is safer.'),
+      risky: true,
+    },
     saveAnyway,
   );
   return choice === saveAnyway ? file : undefined;
@@ -97,17 +101,17 @@ export async function exportAccounts(deps: TransferDependencies, slot?: number):
     return;
   }
   const proceed = t('Choose Where to Save…');
-  const confirm = await vscode.window.showWarningMessage(
-    account === undefined ? t('Export the logins of all accounts to a file?') : t('Export the login of {0} to a file?', sanitizeLabel(slotLabel(account, t))),
+  const choice = await confirm(
     {
-      modal: true,
+      question: account === undefined ? t('Export the logins of all accounts to a file?') : t('Export the login of {0} to a file?', sanitizeLabel(slotLabel(account, t))),
       detail: t(
         'The file holds the logins in plain text: anyone who gets it can use these Claude accounts. Keep it private, copy it to the other computer only over a channel you trust, and delete it once it is imported there.',
       ),
+      risky: true,
     },
     proceed,
   );
-  if (confirm !== proceed) {
+  if (choice !== proceed) {
     return;
   }
   const file = await pickJsonToSave(deps, t('Export accounts'), slot === undefined ? 'cswap-accounts' : `cswap-account-${slot}`, t('Export'));
@@ -155,13 +159,13 @@ export async function importAccounts(deps: TransferDependencies): Promise<void> 
   }
   const keep = t('Import');
   const replace = t('Import and Replace Existing');
-  const choice = await vscode.window.showWarningMessage(
-    sanitizeLabel(t('Import the accounts in {0}?', path.basename(file.fsPath))),
+  const choice = await confirm(
     {
-      modal: true,
+      question: sanitizeLabel(t('Import the accounts in {0}?', path.basename(file.fsPath))),
       detail: t(
         'cswap adds the accounts in this file to this computer. Accounts that are already here stay as they are, unless you choose to replace them: that overwrites their stored login with the one in the file, which may be older. Import only files you exported yourself.',
       ),
+      risky: true,
     },
     keep,
     replace,

@@ -15,6 +15,7 @@ import {
   type UsageReading,
 } from '../core/model/usageHistory';
 import type { RefreshService } from '../core/service/refreshService';
+import { confirm } from './confirm';
 import type { Logger } from './logger';
 import { t } from './presentation';
 import { onFocusedSnapshotChange } from './snapshotTransitions';
@@ -284,9 +285,12 @@ async function renameWithRetry(from: string, to: string): Promise<void> {
 /** `Cswap: Clear Usage History`, after a modal confirmation. */
 export async function clearUsageHistory(store: UsageHistoryStore): Promise<void> {
   const clear = t('Clear');
-  const choice = await vscode.window.showWarningMessage(
-    t('Clear the usage history of every account?'),
-    { modal: true, detail: t('The readings this computer recorded for the dashboard\'s "Last 7 days" are deleted. cswap and your accounts are not affected.') },
+  const choice = await confirm(
+    {
+      question: t('Clear the usage history of every account?'),
+      detail: t('The readings this computer recorded for the dashboard\'s "Last 7 days" are deleted. cswap and your accounts are not affected.'),
+      risky: true,
+    },
     clear,
   );
   if (choice !== clear) {

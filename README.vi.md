@@ -68,6 +68,8 @@ Hiện tài khoản đang dùng, ví dụ `#5 · 7d 40%`, chuyển vàng/đỏ k
 
 Gõ để lọc theo slot, email hoặc gói. `Ctrl+Alt+Shift+S` chuyển thẳng sang tài khoản kế tiếp còn dùng được (đổi phím trong **Keyboard Shortcuts**). Mặc định có hỏi xác nhận trước khi chuyển; chọn **Chuyển, không hỏi lại** để bỏ hỏi (bật lại trong **Cài đặt nhanh › Hỏi trước khi chuyển**). Tiện ích chỉ báo thành công sau khi đọc lại trạng thái của cswap và thấy đúng tài khoản mới.
 
+Hộp xác nhận theo theme màu đang dùng: lần chạy đầu, Cswap Manager đặt `window.dialogStyle` của VS Code thành `custom` (trừ macOS và trừ khi bạn đã tự chọn kiểu), có nút **Hoàn tác**. Đổi lại trong *Cài đặt nhanh › Nâng cao… › Hộp thoại*.
+
 Chuyển tài khoản không làm gián đoạn phiên Claude Code đang chạy: cswap thay đăng nhập đã lưu và Claude Code tự dùng nó từ yêu cầu kế tiếp, không cần khởi động lại (theo cswap; trên macOS với Keychain có thể mất tới khoảng 30 giây).
 
 ### Bảng điều khiển
@@ -88,7 +90,7 @@ Bật/tắt từng loại ở *Cài đặt nhanh › Nâng cao… › Thông bá
 Từ menu chuột phải, **Quản lý tài khoản…** hoặc bảng điều khiển:
 - **Tắt khỏi xoay vòng / Bật lại xoay vòng** — tự động chuyển của cswap bỏ qua tài khoản bị tắt; bạn vẫn chuyển thẳng sang được.
 - **Đặt / xoá ngưỡng chuyển** — phần trăm (50–99.9) mà tự động chuyển của cswap rời tài khoản này.
-- **Chuyển sang slot** — đổi số slot; nếu slot đã có tài khoản, hai tài khoản đổi chỗ cho nhau. Cũng làm được bằng kéo thả trong khung Tài khoản, có **Hoàn tác**.
+- **Dời sang slot** — đổi số slot; nếu slot đã có tài khoản, hai tài khoản đổi chỗ cho nhau. Cũng làm được bằng kéo thả trong khung Tài khoản, có **Hoàn tác**.
 - **Độ ưu tiên** (0–1000) — dùng cho chiến lược tự động chuyển *theo độ ưu tiên*.
 - **Xoá khỏi cswap…** (chỉ ở menu chuột phải) — cswap xoá đăng nhập đã lưu, hồ sơ phiên và ánh xạ thư mục của tài khoản đó. Tài khoản Claude của bạn không bị ảnh hưởng.
 
@@ -135,7 +137,7 @@ Không có trong tiện ích (dùng CLI): `purge`, `unclaimed`, `tui`/`watch` v�
 Khi mở nhiều cửa sổ VS Code, chỉ một cửa sổ chạy kiểm tra.
 
 ## Cài đặt
-**Cài đặt nhanh…** (nút ⚙ trên thanh trạng thái, khung Tài khoản hoặc bảng chọn chuyển tài khoản) đổi các cài đặt thường dùng bằng ngôn ngữ của tiện ích: ngôn ngữ, hỏi trước khi chuyển, tài khoản của dự án, chu kỳ làm mới, tự động chuyển, thanh trạng thái, kiểu thanh tiến trình, màu theo mức dùng và thứ tự tài khoản. **Nâng cao…** chứa phần còn lại, gồm đường dẫn và phiên bản cswap, thời gian chờ lệnh và **Tất cả cài đặt…**.
+**Cài đặt nhanh…** (nút ⚙ trên thanh trạng thái, khung Tài khoản hoặc bảng chọn chuyển tài khoản) đổi các cài đặt thường dùng bằng ngôn ngữ của tiện ích, xếp theo việc bạn muốn làm: ngôn ngữ ở trên cùng; **Chuyển tài khoản** (hỏi trước khi chuyển, tài khoản của dự án này, lịch sử chat giữa các tài khoản); **Tự động chuyển** (bật, chỉ báo hoặc tắt; chiến lược, giới hạn theo model và luật chỉ hiện khi tính năng đang chạy); **Hiển thị** (thanh trạng thái, kiểu thanh tiến trình, màu theo mức dùng, thứ tự tài khoản). **Nâng cao…** chứa phần còn lại: **Mức dùng và thông báo** (thông báo, chu kỳ làm mới, mức dùng của tài khoản token), **cswap** (đường dẫn, phiên bản, thời gian chờ lệnh) và **Khác** (máy khác, hộp thoại, **Tất cả cài đặt…**).
 
 | Cài đặt | Mặc định | Mô tả |
 |---|---|---|

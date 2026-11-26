@@ -14,6 +14,7 @@ import {
 } from '../core/cli/cswapInstall';
 import type { CachedExecutableResolver, ResolverEnvironment } from '../core/cli/executableResolver';
 import type { RefreshService } from '../core/service/refreshService';
+import { confirm } from './confirm';
 import type { Logger } from './logger';
 import { t } from './presentation';
 import { createGuardedTerminal } from './terminals';
@@ -169,9 +170,9 @@ async function confirmInstall(first: InstallStep, next: InstallTool | undefined)
       ? []
       : [t('uv (the Python tool installer from Astral) is installed first with {0}. When it is ready, claude-swap is installed with uv in a second terminal.', installer)]),
     t('Cswap Manager looks for cswap for up to 10 minutes and refreshes when it is ready.'),
-  ].join('\n\n');
+  ];
   const install = t('Install');
-  return (await vscode.window.showInformationMessage(t('Install claude-swap (the cswap command)?'), { modal: true, detail }, install)) === install;
+  return (await confirm({ question: t('Install claude-swap (the cswap command)?'), detail }, install)) === install;
 }
 
 async function showManualInstructions(): Promise<void> {

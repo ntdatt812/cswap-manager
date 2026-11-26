@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import { displayNameKey } from '../../src/core/model/displayNames';
 import { signalReadDelay } from '../../src/core/service/activeSignal';
 import type { TestApi } from '../../src/extension';
+import { useThemedDialogsOnce } from '../../src/vscode/dialogStyle';
 
 const EXTENSION_ID = 'nguyenthanhdat.cswap-manager';
 const COMMANDS = [
@@ -330,15 +331,20 @@ suite('Cswap Manager (extension host)', () => {
       return Promise.resolve(undefined);
     };
     const before = ['refreshIntervalSeconds', 'display.barStyle'].map((key) => config().inspect(key)?.globalValue);
+    // Opens the row (on whichever page lists it), picks the value after the current one, and waits
+    // for the list to come back.
     const pickNext = async (row: string) => {
+      let shown = nextPicker(api);
       const opened = vscode.commands.executeCommand('cswapManager.quickSettings', row);
-      await pause(500);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      await pause(500);
+      await shown;
+      shown = nextPicker(api);
+      await accept();
+      await shown;
       await vscode.commands.executeCommand('workbench.action.quickOpenSelectNext');
       await pause(200);
-      await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-      await pause(800);
+      shown = nextPicker(api);
+      await accept();
+      await shown;
       await vscode.commands.executeCommand('workbench.action.closeQuickOpen');
       await opened;
     };
@@ -414,6 +420,64 @@ suite('Cswap Manager (extension host)', () => {
       false,
       'the file is deleted',
     );
+  });
+
+  test("asks in a modal with the extension's own Cancel button (so it follows the extension's language)", async () => {
+    const window = vscode.window as unknown as { showWarningMessage: (...args: unknown[]) => Thenable<unknown> };
+    const original = window.showWarningMessage;
+    const asked: unknown[][] = [];
+    window.showWarningMessage = (...args: unknown[]) => {
+      asked.push(args);
+      return Promise.resolve(undefined);
+    };
+    try {
+      await vscode.commands.executeCommand('cswapManager.clearUsageHistory');
+    } finally {
+      window.showWarningMessage = original;
+    }
+    const [question, options, ...items] = asked[0] ?? [];
+    assert.match(String(question), /usage history/);
+    assert.equal((options as vscode.MessageOptions).modal, true);
+    assert.deepEqual(items.at(-1), { title: 'Cancel', isCloseAffordance: true });
+    assert.equal(items.length, 2, 'Clear, then Cancel');
+  });
+
+  test('turns on themed dialogs once on the first run, with Undo, and leaves a chosen style alone', async () => {
+    const settings = () => vscode.workspace.getConfiguration('window');
+    const before = settings().inspect('dialogStyle')?.globalValue;
+    const window = vscode.window as unknown as { showInformationMessage: (...args: unknown[]) => Thenable<unknown> };
+    const original = window.showInformationMessage;
+    let answer: 'undo' | undefined;
+    window.showInformationMessage = (...args: unknown[]) => Promise.resolve(answer === 'undo' ? args[1] : undefined);
+    const freshState = (): vscode.Memento => {
+      const memory = new Map<string, unknown>();
+      return {
+        keys: () => [...memory.keys()],
+        get: (key: string) => memory.get(key),
+        update: (key: string, value: unknown) => {
+          memory.set(key, value);
+          return Promise.resolve();
+        },
+      };
+    };
+    try {
+      await settings().update('dialogStyle', undefined, vscode.ConfigurationTarget.Global);
+      const state = freshState();
+      await useThemedDialogsOnce(state, 'win32');
+      assert.equal(settings().inspect('dialogStyle')?.globalValue, 'custom');
+      await settings().update('dialogStyle', 'native', vscode.ConfigurationTarget.Global);
+      await useThemedDialogsOnce(state, 'win32');
+      assert.equal(settings().inspect('dialogStyle')?.globalValue, 'native', 'decided once: a later change stays');
+      await useThemedDialogsOnce(freshState(), 'win32');
+      assert.equal(settings().inspect('dialogStyle')?.globalValue, 'native', 'a style the user chose stays');
+      await settings().update('dialogStyle', undefined, vscode.ConfigurationTarget.Global);
+      answer = 'undo';
+      await useThemedDialogsOnce(freshState(), 'win32');
+      assert.equal(settings().inspect('dialogStyle')?.globalValue, 'native', 'Undo goes back to system dialogs');
+    } finally {
+      window.showInformationMessage = original;
+      await settings().update('dialogStyle', before, vscode.ConfigurationTarget.Global);
+    }
   });
 
   test('shows a display name in the sidebar as soon as it is saved, without calling cswap', async function () {

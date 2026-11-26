@@ -599,7 +599,7 @@
         {
           "command": "cswapManager.switchToAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:inactive:/",
-          "group": "1_switch@1"
+          "group": "1_use@1"
         },
         {
           "command": "cswapManager.showAccountDetails",
@@ -609,37 +609,37 @@
         {
           "command": "cswapManager.showAccountDetails",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "1_switch@2"
+          "group": "2_info@1"
         },
         {
           "command": "cswapManager.setDisplayName",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@0"
+          "group": "4_organize@1"
         },
         {
           "command": "cswapManager.disableAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:enabled(:|$)/",
-          "group": "2_manage@3"
+          "group": "3_rotation@1"
         },
         {
           "command": "cswapManager.enableAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:disabled(:|$)/",
-          "group": "2_manage@4"
+          "group": "3_rotation@2"
         },
         {
           "command": "cswapManager.setThreshold",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@5"
+          "group": "3_rotation@3"
         },
         {
           "command": "cswapManager.clearThreshold",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:.*:threshold(:|$)/",
-          "group": "2_manage@6"
+          "group": "3_rotation@4"
         },
         {
           "command": "cswapManager.moveAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@7"
+          "group": "4_organize@2"
         },
         {
           "command": "cswapManager.removeAccount",
@@ -649,17 +649,17 @@
         {
           "command": "cswapManager.openClaudeAs",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "1_switch@3"
+          "group": "1_use@2"
         },
         {
           "command": "cswapManager.assignProjectAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@8"
+          "group": "1_use@3"
         },
         {
           "command": "cswapManager.exportAccount",
           "when": "view == cswapManager.accounts && viewItem =~ /^cswap\\.account:/",
-          "group": "2_manage@9"
+          "group": "4_organize@3"
         }
       ]
     },

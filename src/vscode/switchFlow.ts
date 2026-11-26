@@ -8,6 +8,7 @@ import { neutralizeLinks, redactText } from '../core/security/redact';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
 import type { SwitchOutcome, SwitchService } from '../core/service/switchService';
 import type { ExtensionConfiguration } from './configuration';
+import { confirm } from './confirm';
 import { describeCliError, describeNoSwitchReason, errorReason } from './messages';
 import { presentationOptions, t } from './presentation';
 import { pickOne } from './quickPick';
@@ -53,16 +54,15 @@ function targetLabel(deps: SwitchFlowDependencies, target: SwitchTarget): string
   return account === undefined ? t('slot {0}', target.slot) : t('slot {0} ({1})', target.slot, accountName(account, t));
 }
 
-async function confirm(deps: SwitchFlowDependencies, target: SwitchTarget): Promise<boolean> {
+async function confirmSwitch(deps: SwitchFlowDependencies, target: SwitchTarget): Promise<boolean> {
   if (!deps.configuration.confirmSwitch()) {
     return true;
   }
   const proceed = t('Switch');
   const always = t("Switch, don't ask again");
-  const choice = await vscode.window.showWarningMessage(
-    neutralizeLinks(t('Switch Claude Code to {0}?', targetLabel(deps, target))),
+  const choice = await confirm(
     {
-      modal: true,
+      question: neutralizeLinks(t('Switch Claude Code to {0}?', targetLabel(deps, target))),
       detail: `${t('cswap replaces the active Claude Code login.')} ${t('Running Claude Code sessions keep running and pick up the new account by themselves; no restart needed.')}`,
     },
     proceed,
@@ -134,7 +134,7 @@ export async function runSwitch(deps: SwitchFlowDependencies, target: SwitchTarg
     void vscode.window.showInformationMessage(t('Slot {0} is already the active account.', target.slot));
     return undefined;
   }
-  if (!(await confirm(deps, target))) {
+  if (!(await confirmSwitch(deps, target))) {
     return undefined;
   }
   const outcome = await vscode.window.withProgress(

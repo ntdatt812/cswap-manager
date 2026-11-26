@@ -47,6 +47,7 @@ import {
 } from '../core/presentation/statusBar';
 import type { AutoSwitchController, MenuResult } from './autoSwitchController';
 import type { ExtensionConfiguration, UserSettingKey } from './configuration';
+import { setThemedDialogs, themedDialogsOn } from './dialogStyle';
 import type { AccountsSnapshot } from '../core/model/types';
 import { slotLabel } from '../core/presentation/accountTree';
 import { t } from './presentation';
@@ -131,6 +132,7 @@ function currentValues(deps: QuickSettingsDependencies): QuickSettingsValues {
     ...(update?.current === undefined ? {} : { cswapVersion: update.current }),
     ...(update?.latest === undefined ? {} : { cswapLatest: update.latest }),
     cswapUpdates: { daily: configuration.checkCswapUpdates(), automatic: configuration.autoUpdateCswap() },
+    themedDialogs: themedDialogsOn(),
   };
 }
 
@@ -145,6 +147,7 @@ function rowItems(deps: QuickSettingsDependencies, page: QuickSettingsPage): Row
 /** On/off rows that switch in place, without a screen of their own. */
 const TOGGLES = {
   confirmSwitch: (deps: QuickSettingsDependencies) => deps.configuration.setConfirmSwitch(!deps.configuration.confirmSwitch()),
+  dialogStyle: () => setThemedDialogs(!themedDialogsOn()),
 } satisfies Partial<Record<SettingKey, (deps: QuickSettingsDependencies) => Promise<void>>>;
 type ToggleKey = keyof typeof TOGGLES;
 /** Rows that open a screen of their own. */

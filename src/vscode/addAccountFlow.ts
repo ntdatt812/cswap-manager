@@ -5,6 +5,7 @@ import { renewedLoginSlot } from '../core/presentation/snapshotChanges';
 import type { AddOutcome, ManagementService } from '../core/service/managementService';
 import type { OperationGate } from '../core/service/operationGate';
 import type { RefreshService } from '../core/service/refreshService';
+import { confirm } from './confirm';
 import { describeCliError, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
 import { onFocusedSnapshotChange } from './snapshotTransitions';
@@ -196,8 +197,7 @@ export class AccountAdder implements vscode.Disposable {
 
   /** Asks in a modal, then runs `cswap add --slot` with progress and reports the outcome. */
   private async confirmAndAddCurrent(slot: number, question: string, detail: string, proceed: string): Promise<void> {
-    const confirm = await vscode.window.showWarningMessage(question, { modal: true, detail }, proceed);
-    if (confirm !== proceed) {
+    if ((await confirm({ question, detail }, proceed)) !== proceed) {
       return;
     }
     const outcome = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Cswap: adding the current login…') }, () =>
@@ -241,20 +241,20 @@ export class AccountAdder implements vscode.Disposable {
       return;
     }
     const proceed = t('Add');
-    const confirm = await vscode.window.showWarningMessage(
-      kind === 'api-key' ? t('Add this API key to cswap slot {0}?', slot) : t('Add this setup-token to cswap slot {0}?', slot),
+    const choice = await confirm(
       {
-        modal: true,
+        question: kind === 'api-key' ? t('Add this API key to cswap slot {0}?', slot) : t('Add this setup-token to cswap slot {0}?', slot),
         detail: [
           t('Claude Code stays logged in to its current account.'),
           kind === 'api-key'
             ? t('An API key is billed per token, and by default cswap auto-switch does not move onto API-key accounts.')
             : t('cswap cannot read a setup-token account\'s usage unless "Usage of token accounts" is on in Quick Settings (each reading spends 1 Haiku token).'),
-        ].join('\n\n'),
+        ],
+        risky: kind === 'api-key',
       },
       proceed,
     );
-    if (confirm !== proceed) {
+    if (choice !== proceed) {
       return;
     }
     const outcome = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: t('Cswap: adding the account…') }, () =>

@@ -14,6 +14,7 @@ import type { RefreshService } from '../core/service/refreshService';
 import { DISPLAY_NAME_MAX, cleanDisplayName, displayNameKey } from '../core/model/displayNames';
 import { PRIORITY_MAX, PRIORITY_MIN, parsePriority } from '../core/model/priorities';
 import type { ExtensionConfiguration } from './configuration';
+import { confirm } from './confirm';
 import { describeCliError, showBusy, showCliFailure } from './messages';
 import { t } from './presentation';
 import { showSaveFailed } from './settingErrors';
@@ -120,7 +121,7 @@ async function confirmDisable(account: Account, snapshot: AccountsSnapshot): Pro
     remaining === 0 ? t('No other account would remain in rotation.') : undefined,
   ].filter((line): line is string => line !== undefined);
   const proceed = t('Disable');
-  const choice = await vscode.window.showWarningMessage(t('Disable {0} in rotation?', label(account)), { modal: true, detail: details.join('\n\n') }, proceed);
+  const choice = await confirm({ question: t('Disable {0} in rotation?', label(account)), detail: details }, proceed);
   return choice === proceed ? { kind: 'setDisabled', slot: account.slot, disabled: true } : undefined;
 }
 
@@ -150,14 +151,14 @@ async function confirmMove(account: Account, targetSlot: number, snapshot: Accou
       ? t('Slot {0} becomes free.', account.slot)
       : neutralizeLinks(sanitizeLabel(t('{0} moves to slot {1}.', accountName(occupant, t), account.slot)));
   const proceed = t('Move');
-  const choice = await vscode.window.showWarningMessage(
-    t('Move {0} to slot {1}?', label(account), targetSlot),
+  const choice = await confirm(
     {
-      modal: true,
+      question: t('Move {0} to slot {1}?', label(account), targetSlot),
       detail: [
         consequence,
         t('Stored logins and session history move with their accounts. Slot numbers used in commands or scripts (for example "cswap switch {0}") will then refer to a different account.', targetSlot),
-      ].join('\n\n'),
+      ],
+      risky: true,
     },
     proceed,
   );
@@ -191,14 +192,14 @@ async function operationFor(action: AccountActionId, account: Account, snapshot:
 async function confirmRemove(account: Account, snapshot: AccountsSnapshot): Promise<ManageOperation | undefined> {
   const active = snapshot.active.slot === account.slot;
   const remove = t('Remove');
-  const choice = await vscode.window.showWarningMessage(
-    t('Remove {0} from cswap?', label(account)),
+  const choice = await confirm(
     {
-      modal: true,
+      question: t('Remove {0} from cswap?', label(account)),
       detail: [
         t('cswap deletes the login it stored for this account, its session profile and its folder mappings. Your Claude account itself is not affected; you can add it again later by logging in to it and using "Add Account…".'),
         ...(active ? [t('This is the active account: Claude Code stays logged in to it, but cswap will no longer manage it.')] : []),
-      ].join('\n\n'),
+      ],
+      risky: true,
     },
     remove,
   );

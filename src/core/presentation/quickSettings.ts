@@ -36,6 +36,7 @@ export const SETTING_KEYS = [
   'cswapVersion',
   'timeout',
   'transfer',
+  'dialogStyle',
   'allSettings',
   'notifications',
   'advanced',
@@ -115,6 +116,8 @@ export interface QuickSettingsValues {
   readonly cswapVersion?: CliVersion;
   readonly cswapLatest?: CliVersion;
   readonly cswapUpdates: CswapUpdateSettings;
+  /** VS Code's `window.dialogStyle` is `custom`: dialogs follow the colour theme. */
+  readonly themedDialogs: boolean;
 }
 
 /** `cswapManager.checkCswapUpdates` and `cswapManager.autoUpdateCswap`. */
@@ -229,7 +232,15 @@ export function refreshLabel(seconds: number, t: Translate): string {
   if (seconds <= 0) {
     return t('Off');
   }
+  if (seconds === 60) {
+    return t('every minute');
+  }
   return seconds % 60 === 0 ? t('every {0} min', seconds / 60) : t('every {0}s', seconds);
+}
+
+/** cswap's wait after a switch: `cooldown 5 min`, or seconds when it is not whole minutes. */
+export function cooldownLabel(seconds: number, t: Translate): string {
+  return seconds > 0 && seconds % 60 === 0 ? t('cooldown {0} min', seconds / 60) : t('cooldown {0}s', seconds);
 }
 
 /** The offered intervals, plus the current one when it was set to something else by hand. */
@@ -411,11 +422,31 @@ export function buildQuickSettingsRows(values: QuickSettingsValues, t: Translate
 function mainRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
     { key: 'language', iconId: 'globe', label: languageTitle(t), value: languageLabel(values.language, t) },
+    { separator: true, label: t('Switching') },
     { key: 'confirmSwitch', iconId: 'question', label: t('Ask before switching'), value: values.confirmSwitch ? t('On') : t('Off') },
     { key: 'projectAccount', iconId: 'folder', label: t('Account for this project'), value: values.projectAccount ?? t('no folder open') },
-    { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
+    {
+      key: 'shareHistory',
+      iconId: 'comment-discussion',
+      label: t('Chat history across accounts'),
+      value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
+    },
     { separator: true, label: t('Auto-switch') },
-    { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: autoSwitchModeLabel(values.autoSwitchMode, t) },
+    { key: 'autoSwitch', iconId: 'sync', label: t('Auto-switch'), value: values.autoSwitchMode === 'switch' ? t('On') : autoSwitchModeLabel(values.autoSwitchMode, t) },
+    // How it switches matters only while it runs; turned off, the list stays short.
+    ...(values.autoSwitchMode === 'off' ? [] : autoSwitchDetailRows(values, t)),
+    { separator: true, label: t('Display') },
+    { key: 'statusBar', iconId: 'layout-statusbar', label: t('Status bar'), value: statusBarSummary(values.statusBarParts, values.statusBarButtons, t) },
+    { key: 'barStyle', iconId: 'symbol-numeric', label: t('Progress bar style'), value: `${barStyleLabel(values.barStyle, t)} ${barStyleSample(values.barStyle)}` },
+    { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
+    { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
+    { separator: true, label: t('More') },
+    { key: 'advanced', iconId: 'ellipsis', label: t('Advanced…'), value: t('notifications, refresh, token accounts, cswap, another computer, dialogs') },
+  ];
+}
+
+function autoSwitchDetailRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
+  return [
     {
       key: 'autoStrategy',
       iconId: 'lightbulb',
@@ -424,25 +455,14 @@ function mainRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[]
     },
     { key: 'autoModel', iconId: 'symbol-class', label: t('Per-model limits'), value: modelLabel(values.autoSwitchModel, t) },
     { key: 'autoRules', iconId: 'law', label: t('Auto-switch rules'), value: values.autoSwitchRules ?? t('rules not loaded') },
-    { separator: true, label: t('Display') },
-    { key: 'statusBar', iconId: 'layout-statusbar', label: t('Status bar'), value: statusBarSummary(values.statusBarParts, values.statusBarButtons, t) },
-    { key: 'barStyle', iconId: 'symbol-numeric', label: t('Progress bar style'), value: `${barStyleLabel(values.barStyle, t)} ${barStyleSample(values.barStyle)}` },
-    { key: 'thresholds', iconId: 'symbol-color', label: t('Usage colours'), value: thresholdsLabel(values.thresholds, t) },
-    { key: 'sortOrder', iconId: 'list-ordered', label: t('Account order'), value: sortOrderLabel(values.sortOrder, t) },
-    { separator: true, label: t('More') },
-    { key: 'advanced', iconId: 'ellipsis', label: t('Advanced…'), value: t('chat history, notifications, token usage, cswap, another computer') },
   ];
 }
 
 function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsRow[] {
   return [
-    {
-      key: 'shareHistory',
-      iconId: 'comment-discussion',
-      label: t('Chat history across accounts'),
-      value: values.shareHistory === undefined ? t('rules not loaded') : values.shareHistory ? t('Shared') : t('Separate per account'),
-    },
+    { separator: true, label: t('Usage and alerts') },
     { key: 'notifications', iconId: 'bell', label: t('Notifications…'), value: notificationsSummary(values.notifications, t) },
+    { key: 'refresh', iconId: 'history', label: t('Auto refresh'), value: refreshLabel(values.refreshSeconds, t) },
     { key: 'tokenUsage', iconId: 'key', label: t('Usage of token accounts'), value: tokenUsageLabel(values.tokenUsage, t, values.limits) },
     { separator: true, label: t('cswap') },
     { key: 'cliPath', iconId: 'terminal', label: t('cswap path'), value: values.cliPath === '' ? t('auto-detect') : values.cliPath },
@@ -455,6 +475,7 @@ function advancedRows(values: QuickSettingsValues, t: Translate): QuickSettingsR
     { key: 'timeout', iconId: 'watch', label: t('Command time limit'), value: t('{0} s', values.timeoutSeconds) },
     { separator: true, label: t('Other') },
     { key: 'transfer', iconId: 'arrow-swap', label: t('Another computer'), value: t('export, import, usage readings') },
+    { key: 'dialogStyle', iconId: 'window', label: t('Dialogs'), value: values.themedDialogs ? t('In the colour theme') : t('System style') },
     { key: 'allSettings', iconId: 'settings-gear', label: t('All settings…'), value: t('VS Code settings page') },
   ];
 }

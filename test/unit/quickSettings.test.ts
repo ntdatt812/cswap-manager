@@ -7,6 +7,7 @@ import {
   autoSwitchStrategyDetail,
   autoSwitchStrategyLabel,
   buildQuickSettingsRows,
+  cooldownLabel,
   cswapUpdatesLabel,
   cswapVersionText,
   isLanguageSetting,
@@ -51,6 +52,7 @@ const values: QuickSettingsValues = {
   cliPath: '',
   timeoutSeconds: 30,
   cswapUpdates: { daily: true, automatic: true },
+  themedDialogs: true,
 };
 
 describe('quick settings rows', () => {
@@ -68,7 +70,7 @@ describe('quick settings rows', () => {
     const value = (key: string) => settings.find((row) => row.key === key)?.value;
     assert.equal(value('language'), 'Tiếng Việt');
     assert.equal(value('confirmSwitch'), 'Off');
-    assert.equal(value('autoSwitch'), 'Switch automatically');
+    assert.equal(value('autoSwitch'), 'On', 'the row says On instead of repeating its own name');
     assert.equal(value('autoStrategy'), 'Use quota that resets soonest first');
     assert.equal(value('statusBar'), 'With progress bar · 1 button(s)');
     assert.equal(value('thresholds'), 'yellow 80% · red 95%');
@@ -81,9 +83,60 @@ describe('quick settings rows', () => {
     assert.equal(value('cliPath'), 'auto-detect');
     assert.equal(value('timeout'), '30 s');
     assert.equal(value('notifications'), '90% · login expiry · weekly reset');
+    assert.equal(value('dialogStyle'), 'In the colour theme');
     assert.equal(value('cswapVersion'), 'updates automatically', 'version not known yet');
     assert.ok(advanced.some((row) => row.separator !== true && row.key === 'notifications'), 'notifications sit on the Advanced page');
     assert.ok(rows.some((row) => row.separator === true));
+  });
+
+  it('groups the main page by task: language, switching, auto-switch, display', () => {
+    const labels = buildQuickSettingsRows(values, t, 'main').map((row) => (row.separator === true ? `— ${row.label}` : row.key));
+    assert.deepEqual(labels, [
+      'language',
+      '— Switching',
+      'confirmSwitch',
+      'projectAccount',
+      'shareHistory',
+      '— Auto-switch',
+      'autoSwitch',
+      'autoStrategy',
+      'autoModel',
+      'autoRules',
+      '— Display',
+      'statusBar',
+      'barStyle',
+      'thresholds',
+      'sortOrder',
+      '— More',
+      'advanced',
+    ]);
+    const advanced = buildQuickSettingsRows(values, t, 'advanced').map((row) => (row.separator === true ? `— ${row.label}` : row.key));
+    assert.deepEqual(advanced, [
+      '— Usage and alerts',
+      'notifications',
+      'refresh',
+      'tokenUsage',
+      '— cswap',
+      'cliPath',
+      'cswapVersion',
+      'timeout',
+      '— Other',
+      'transfer',
+      'dialogStyle',
+      'allSettings',
+    ]);
+  });
+
+  it('lists how auto-switch works only while it runs', () => {
+    const keys = (mode: QuickSettingsValues['autoSwitchMode']) =>
+      buildQuickSettingsRows({ ...values, autoSwitchMode: mode }, t, 'main').flatMap((row) => (row.separator === true ? [] : [row.key]));
+    for (const key of ['autoStrategy', 'autoModel', 'autoRules'] as const) {
+      assert.equal(keys('off').includes(key), false, key);
+      assert.equal(keys('notify').includes(key), true, key);
+    }
+    const autoSwitch = (mode: QuickSettingsValues['autoSwitchMode']) =>
+      buildQuickSettingsRows({ ...values, autoSwitchMode: mode }, t, 'main').flatMap((row) => (row.separator !== true && row.key === 'autoSwitch' ? [row.value] : []))[0];
+    assert.deepEqual([autoSwitch('off'), autoSwitch('notify'), autoSwitch('switch')], ['Off', 'Notify only', 'On']);
   });
 
   it('keeps the English word next to a translated Language label, so a mistaken pick can be undone', () => {
@@ -160,7 +213,14 @@ describe('refresh interval choices', () => {
   it('labels minutes, seconds and off', () => {
     assert.equal(refreshLabel(0, t), 'Off');
     assert.equal(refreshLabel(300, t), 'every 5 min');
+    assert.equal(refreshLabel(60, t), 'every minute');
     assert.equal(refreshLabel(45, t), 'every 45s');
+  });
+
+  it('gives the auto-switch cooldown in minutes when it is whole minutes', () => {
+    assert.equal(cooldownLabel(300, t), 'cooldown 5 min');
+    assert.equal(cooldownLabel(90, t), 'cooldown 90s');
+    assert.equal(cooldownLabel(0, t), 'cooldown 0s');
   });
 
   it('keeps a hand-set interval in the list, sorted, without duplicates', () => {

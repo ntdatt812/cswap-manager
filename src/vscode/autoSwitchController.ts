@@ -15,7 +15,17 @@ import { findEvent, type AutoSwitchRules, type AutoTickResult } from '../core/mo
 import { relativeAge } from '../core/presentation/accountTree';
 import { formatPercent } from '../core/presentation/format';
 import { limitNames, limitProfileOf, switchThresholdHelp, weeklyThresholdHelp, weeklyThresholdVisible, type LimitProfile } from '../core/presentation/limits';
-import { autoSwitchModeLabel, autoSwitchStrategyDetail, autoSwitchStrategyLabel, shareHistoryOn, tokenUsageLabel, tokenUsageLevel, type TokenUsageLevel } from '../core/presentation/quickSettings';
+import {
+  autoSwitchModeLabel,
+  autoSwitchStrategyDetail,
+  autoSwitchStrategyLabel,
+  cooldownLabel,
+  refreshLabel,
+  shareHistoryOn,
+  tokenUsageLabel,
+  tokenUsageLevel,
+  type TokenUsageLevel,
+} from '../core/presentation/quickSettings';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import {
   AutoSwitchService,
@@ -31,6 +41,7 @@ import type { RefreshService } from '../core/service/refreshService';
 import type { SwitchService } from '../core/service/switchService';
 import { renderTooltip } from './accountsTreeProvider';
 import { CONFIG_SECTION, type ExtensionConfiguration } from './configuration';
+import { confirm } from './confirm';
 import type { Logger } from './logger';
 import { describeCliError } from './messages';
 import { CLOCK_TICK_MS, formatDateTime, t } from './presentation';
@@ -91,7 +102,14 @@ const strategyLabel = (strategy: string | undefined): string => autoSwitchStrate
 /** The strategy that spends quota before it resets instead of letting it expire unused. */
 const CONSUME_FIRST: AutoSwitchStrategy = 'consume-first';
 
-function rulesSummary(rules: AutoSwitchRules | undefined, withStrategy = true): string {
+interface SummaryParts {
+  /** The check interval (default on). */
+  readonly interval?: boolean;
+  /** The strategy (default on). */
+  readonly strategy?: boolean;
+}
+
+function rulesSummary(rules: AutoSwitchRules | undefined, show: SummaryParts = {}): string {
   if (rules === undefined) {
     return t('rules not loaded');
   }
@@ -99,8 +117,11 @@ function rulesSummary(rules: AutoSwitchRules | undefined, withStrategy = true): 
   if (rules.weeklyThreshold !== undefined) {
     parts.push(t('weekly at {0}', formatPercent(rules.weeklyThreshold)));
   }
-  parts.push(t('cooldown {0}s', rules.cooldownSeconds ?? '?'), t('every {0}s', rules.intervalSeconds ?? '?'));
-  if (withStrategy) {
+  parts.push(rules.cooldownSeconds === undefined ? t('cooldown {0}s', '?') : cooldownLabel(rules.cooldownSeconds, t));
+  if (show.interval !== false) {
+    parts.push(rules.intervalSeconds === undefined ? t('every {0}s', '?') : refreshLabel(rules.intervalSeconds, t));
+  }
+  if (show.strategy !== false) {
     parts.push(strategyLabel(rules.strategy));
   }
   return parts.join(' · ');
@@ -275,7 +296,7 @@ export class AutoSwitchController implements vscode.Disposable {
   /** cswap's thresholds, cooldown and check interval (not the strategy); undefined until loaded. */
   rulesText(): string | undefined {
     const rules = this.service.getState().rules;
-    return rules === undefined ? undefined : rulesSummary(rules, false);
+    return rules === undefined ? undefined : rulesSummary(rules, { strategy: false });
   }
 
   /** Returns false when the user declined turning automatic switching on. */
@@ -482,19 +503,20 @@ export class AutoSwitchController implements vscode.Disposable {
 
   private async confirmAutomaticSwitching(loaded: AutoSwitchRules | undefined, strategy?: AutoSwitchStrategy): Promise<boolean> {
     const rules = loaded !== undefined && strategy !== undefined ? { ...loaded, strategy } : loaded;
+    const consumeFirst = (strategy ?? rules?.strategy) === CONSUME_FIRST;
+    const seconds = Math.round(this.service.intervalMs() / 1000);
     const proceed = t('Turn on');
-    const choice = await vscode.window.showWarningMessage(
-      t('Let cswap switch accounts automatically?'),
+    const choice = await confirm(
       {
-        modal: true,
+        question: t('Turn on automatic account switching?'),
         detail: [
-          (strategy ?? rules?.strategy) === CONSUME_FIRST
-            ? t('While VS Code is open, cswap checks usage every {0} seconds and moves early to an account with quota left whose week resets sooner, so that quota is not wasted.', Math.round(this.service.intervalMs() / 1000))
-            : t('While VS Code is open, cswap checks usage every {0} seconds and switches the active Claude Code account when it reaches the limit.', Math.round(this.service.intervalMs() / 1000)),
-          t('Running Claude Code sessions keep running and pick up the new account by themselves; no restart needed.'),
-          t('Rules: {0}.', rulesSummary(rules)),
-          t('You get a notification for every switch and can turn this off at any time.'),
-        ].join('\n\n'),
+          consumeFirst
+            ? t('While VS Code is open, cswap checks usage every {0} seconds and moves early to an account with quota left whose week resets sooner, so that quota is not wasted.', seconds)
+            : t('While VS Code is open, cswap checks usage every {0} seconds and switches the active Claude Code account when it reaches the limit.', seconds),
+          // The first paragraph already gives the interval, and the consume-first strategy.
+          t('Rules: {0}.', rulesSummary(rules, { interval: false, strategy: !consumeFirst })),
+          `${t('Running Claude Code sessions keep running and pick up the new account by themselves; no restart needed.')} ${t('You get a notification for every switch and can turn this off at any time.')}`,
+        ],
       },
       proceed,
     );
