@@ -19,12 +19,25 @@ export type QuickSwitchAction =
   | { readonly kind: 'strategy'; readonly strategy: SwitchStrategy }
   | { readonly kind: 'account'; readonly slot: number; readonly active: boolean };
 
+export type PickerTone = 'warning' | 'critical';
+
+/**
+ * The coloured icons shipped in `media/picker/` (`<icon>-<tone>-<theme>.svg`): a quick pick
+ * ignores theme-icon colours, so the colour has to be in the image. Undefined for any other pair.
+ */
+export function colouredPickerIcon(iconId: string | undefined, tone: PickerTone | undefined): string | undefined {
+  const name = `${iconId}-${tone}`;
+  return ['pass-filled-warning', 'pass-filled-critical', 'warning-warning', 'error-critical'].includes(name) ? name : undefined;
+}
+
 export interface QuickSwitchItemModel {
   /** Display-ready: text from cswap is already neutralised here, and it may hold usage-bar icons. */
   readonly label: string;
   readonly description?: string;
   readonly detail?: string;
   readonly iconId?: string;
+  /** An account near (`warning`) or at (`critical`) its limit, for a coloured icon. */
+  readonly tone?: PickerTone;
   readonly separator?: boolean;
   readonly action?: QuickSwitchAction;
 }
@@ -144,10 +157,12 @@ export function buildQuickSwitchItems(snapshot: AccountsSnapshot, options: Prese
   const accountItem = (account: Account): QuickSwitchItemModel => {
     const active = snapshot.active.slot === account.slot;
     const detail = detailLine(account, active, snapshot, options);
+    const level = hasUnavailableUsage(account) ? 'unknown' : accountLevel(account, options.thresholds);
     return {
       label: [padDigits(String(account.slot), columns.slotDigits), ...usageColumns(account, options, columns), sanitizeLabel(accountName(account, t))].join(' · '),
       ...(detail.length > 0 ? { detail } : {}),
       iconId: accountIcon(account, active, options),
+      ...(level === 'warning' || level === 'critical' ? { tone: level } : {}),
       action: { kind: 'account', slot: account.slot, active },
     };
   };

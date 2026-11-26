@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "No colour.",
   "config.statusBarButtons.description": "Buttons shown next to the account in the status bar: `refresh`, `dashboard` and `settings` (Quick Settings).",
   "config.barStyle.description": "Look of every usage progress bar: in the sidebar, the account switcher and the status bar.",
+  "config.pickerColors.description": "In the Switch Account picker, give accounts near their limit a yellow icon and accounts at their limit a red one, like the status bar's colours. The picker cannot colour text, only the icon. Easiest to change from **Cswap: Quick Settings…**.",
   "command.setDisplayName.title": "Set Display Name…",
   "config.displayNames.description": "Names shown instead of the email (capitals, spaces and accents allowed). Set them from an account's **Set Display Name…** action; they stay in VS Code and are never sent to cswap. Keys are short hashes that identify an account without storing its email.",
   "command.addAccount.title": "Add Account…",

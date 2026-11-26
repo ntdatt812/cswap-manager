@@ -864,6 +864,12 @@
           "order": 8.1,
           "markdownDescription": "%config.barStyle.description%"
         },
+        "cswapManager.display.pickerColors": {
+          "type": "boolean",
+          "default": true,
+          "order": 8.2,
+          "markdownDescription": "%config.pickerColors.description%"
+        },
         "cswapManager.checkCswapUpdates": {
           "type": "boolean",
           "default": true,

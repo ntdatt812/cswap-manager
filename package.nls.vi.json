@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "Không tô màu.",
   "config.statusBarButtons.description": "Các nút hiện cạnh tài khoản trên thanh trạng thái: `refresh` (làm mới), `dashboard` (bảng điều khiển) và `settings` (Cài đặt nhanh).",
   "config.barStyle.description": "Kiểu của mọi thanh tiến trình mức dùng: ở sidebar, khung chọn tài khoản và thanh trạng thái.",
+  "config.pickerColors.description": "Trong bảng chọn chuyển tài khoản, tài khoản sắp chạm ngưỡng có biểu tượng màu vàng, tài khoản đã chạm ngưỡng có biểu tượng màu đỏ, giống màu ở thanh trạng thái. Bảng chọn không tô màu được chữ, chỉ tô được biểu tượng. Đổi dễ nhất ở **Cswap: Cài đặt nhanh…**.",
   "command.setDisplayName.title": "Đặt tên hiển thị…",
   "config.displayNames.description": "Tên hiển thị thay cho email (cho phép chữ hoa, dấu cách, tiếng Việt). Đặt bằng thao tác **Đặt tên hiển thị…** của tài khoản; tên chỉ lưu trong VS Code, không gửi cho cswap. Khoá là mã băm ngắn để nhận ra tài khoản mà không lưu email.",
   "command.addAccount.title": "Thêm tài khoản…",

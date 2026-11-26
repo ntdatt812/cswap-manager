@@ -21,6 +21,7 @@ import {
   refreshChoices,
   refreshLabel,
   sortOrderLabel,
+  thresholdsLabel,
   statusBarButtonLabel,
   statusBarColorsLabel,
   statusBarLookLabel,
@@ -703,6 +704,44 @@ async function openCswapUpdatesPage(deps: QuickSettingsDependencies): Promise<Ou
   }
 }
 
+type UsageColoursAction = 'thresholds' | 'picker';
+type UsageColoursItem = vscode.QuickPickItem & { readonly action: UsageColoursAction };
+
+/** The yellow/red thresholds (two boxes), and the switch picker's coloured icons switching on/off in place. */
+async function openUsageColoursPage(deps: QuickSettingsDependencies): Promise<Outcome> {
+  const { configuration } = deps;
+  let focus: UsageColoursAction = 'thresholds';
+  for (;;) {
+    const items: UsageColoursItem[] = [
+      { label: `$(symbol-color) ${t('Yellow and red thresholds')}`, description: thresholdsLabel(configuration.thresholds(), t), action: 'thresholds' },
+      {
+        label: `$(paintcan) ${t('Colours in the switch picker')}`,
+        description: configuration.pickerColors() ? t('On') : t('Off'),
+        detail: t('Accounts near or at their limit get a yellow or red icon in the Switch Account picker, which cannot colour text.'),
+        action: 'picker',
+      },
+    ];
+    const picked = await pickOne(items, {
+      title: t('Usage colours'),
+      placeholder: t('Pick a setting to change it. Esc closes.'),
+      back: true,
+      isActive: (item) => item.action === focus,
+    });
+    if (picked === undefined) {
+      return 'close';
+    }
+    if (picked === BACK) {
+      return 'list';
+    }
+    focus = picked.action;
+    if (picked.action === 'picker') {
+      await writeUserSetting(deps, 'display.pickerColors', !configuration.pickerColors());
+    } else if ((await editThresholds(deps)) === 'close') {
+      return 'close';
+    }
+  }
+}
+
 // ---- Other screens ------------------------------------------------------------------------------
 
 async function editThresholds(deps: QuickSettingsDependencies, typedWarning?: string): Promise<Outcome> {
@@ -788,7 +827,7 @@ async function editRow(deps: QuickSettingsDependencies, key: ScreenKey): Promise
     case 'barStyle':
       return chooseBarStyle(deps);
     case 'thresholds':
-      return editThresholds(deps);
+      return openUsageColoursPage(deps);
     case 'sortOrder':
       return editValue(
         deps,

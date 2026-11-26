@@ -18,7 +18,7 @@ See the usage of all your Claude accounts at a glance, switch the account Claude
   ```
   The windows are the ones cswap reports for each account, so a plan with only weekly limits shows no 5-hour column, and the menus speak of weekly limits only. With accounts on different plans, an account without a window keeps its column (`5h ‒%`, as wide as a percentage), in the sidebar, the switch picker and the dashboard table.
 - **Status bar**: the active account with a countdown to the next refresh, yellow or red near the limit: `#1 · 5h 38% · 7d 46% · 0:42`.
-- **Switch picker and shortcuts**: `Ctrl+Alt+S` lists *Pick automatically*, *Current account*, *Available* and *At limit*, with a usage bar per window and the time to reset; `Ctrl+Alt+Shift+S` switches straight to the next available account.
+- **Switch picker and shortcuts**: `Ctrl+Alt+S` lists *Pick automatically*, *Current account*, *Available* and *At limit*, with a usage bar per window and the time to reset; accounts near or at their limit get a yellow or red icon (*Quick Settings › Usage colours*). `Ctrl+Alt+Shift+S` switches straight to the next available account.
 - **Dashboard**: suggestions with one-click switching, quota left, a sortable account table, a 7-day reset timeline and full account details.
 - **Add accounts**: after `/login` in Claude Code, or by pasting a setup-token (`claude setup-token`) or API key, which goes to cswap on standard input only.
 - **Automatic switching** with cswap's own `cswap auto`, including **Switch when an account is used up** in one step.
@@ -172,6 +172,7 @@ With several VS Code windows open, only one of them runs the checks. A check nev
 | `cswapManager.sidebar.sortOrder` | `slot` | `slot`, `mostUsed`, `leastUsed` or `soonestReset`. |
 | `cswapManager.display.warningThreshold` / `criticalThreshold` | `80` / `95` | Usage colours only; they do not change cswap. |
 | `cswapManager.display.barStyle` | `blocks` | Every usage bar (sidebar, switcher, status bar): `blocks` █░ (eighths of a cell, steps of about 1%), `parallelograms` ▰▱ (eighths too in the switcher, status bar and tooltips, drawn with the extension's own icons; whole cells in the sidebar), `circles` ●○ and `squares` ■□ (half cells, about 5%). |
+| `cswapManager.display.pickerColors` | `true` | In the Switch Account picker, a yellow icon for accounts near their limit and a red one at it (the picker cannot colour text). |
 | `cswapManager.displayNames` | empty | Display names set with *Set Display Name…*, keyed by a hash of the account's identity. Stays in VS Code. |
 | `cswapManager.checkCswapUpdates` | `true` | Check PyPI once a day for a newer claude-swap release. |
 | `cswapManager.autoUpdateCswap` | `true` | When a check finds a newer cswap in a tested release line, update it in the background without asking; a newer, untested line is offered instead (off: always ask first). |

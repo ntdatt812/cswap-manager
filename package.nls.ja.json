@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "色なし。",
   "config.statusBarButtons.description": "ステータス バーでアカウントの横に表示するボタン: `refresh`、`dashboard`、`settings` (クイック設定)。",
   "config.barStyle.description": "サイド バー、アカウント切り替えピッカー、ステータス バーに表示されるすべての使用量の進行状況バーの外観。",
+  "config.pickerColors.description": "アカウント切り替えの一覧で、上限に近いアカウントのアイコンを黄色、上限に達したアカウントのアイコンを赤で表示します (ステータス バーと同じ色)。一覧では文字に色を付けられず、アイコンのみに色が付きます。**Cswap: クイック設定…** から変更するのが簡単です。",
   "command.setDisplayName.title": "表示名を設定…",
   "config.displayNames.description": "メール アドレスの代わりに表示する名前 (大文字、空白、アクセント記号を使用可)。アカウントの **表示名を設定…** 操作から設定します。名前は VS Code 内にのみ保存され、cswap には送信されません。キーは、メール アドレスを保存せずにアカウントを識別する短いハッシュです。",
   "command.addAccount.title": "アカウントを追加…",

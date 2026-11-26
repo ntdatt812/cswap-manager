@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "不著色。",
   "config.statusBarButtons.description": "狀態列中帳戶旁顯示的按鈕：`refresh`（重新整理）、`dashboard`（儀表板）和 `settings`（快速設定）。",
   "config.barStyle.description": "所有用量進度列的外觀：包括側邊欄、帳戶切換器和狀態列中的進度列。",
+  "config.pickerColors.description": "在切換帳戶清單中，接近額度的帳戶顯示黃色圖示，達到額度的帳戶顯示紅色圖示，與狀態列的色彩一致。此清單無法為文字上色，只能為圖示上色。最方便在 **Cswap: 快速設定…** 中變更。",
   "command.setDisplayName.title": "設定顯示名稱…",
   "config.displayNames.description": "取代電子郵件顯示的名稱（可使用大寫、空格和重音字元）。請從帳戶的 **設定顯示名稱…** 動作設定；名稱只保存在 VS Code 中，絕不傳送給 cswap。索引鍵是可識別帳戶但不儲存其電子郵件的簡短雜湊。",
   "command.addAccount.title": "新增帳戶…",

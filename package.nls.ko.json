@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "색 없음.",
   "config.statusBarButtons.description": "상태 표시줄에서 계정 옆에 표시할 버튼: `refresh`(새로 고침), `dashboard`(대시보드), `settings`(빠른 설정).",
   "config.barStyle.description": "사이드바, 계정 전환기, 상태 표시줄에 있는 모든 사용량 진행률 표시줄의 모양입니다.",
+  "config.pickerColors.description": "계정 전환 목록에서 한도에 가까운 계정은 노란색 아이콘, 한도에 도달한 계정은 빨간색 아이콘으로 표시합니다(상태 표시줄과 같은 색). 목록에서는 글자에 색을 입힐 수 없고 아이콘에만 색이 들어갑니다. **Cswap: 빠른 설정…**에서 바꾸는 것이 가장 쉽습니다.",
   "command.setDisplayName.title": "표시 이름 설정…",
   "config.displayNames.description": "이메일 대신 표시되는 이름입니다(대문자, 공백, 한글 및 악센트 문자 허용). 계정의 **표시 이름 설정…** 작업에서 설정하며, VS Code에만 저장되고 cswap으로 전송되지 않습니다. 키는 이메일을 저장하지 않고 계정을 식별하는 짧은 해시입니다.",
   "command.addAccount.title": "계정 추가…",

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { SwitchTarget } from '../core/cli/cswapCli';
 import type { Account } from '../core/model/types';
 import { accountName } from '../core/presentation/accountTree';
-import { buildQuickSwitchItems, type QuickSwitchAction } from '../core/presentation/quickSwitch';
+import { buildQuickSwitchItems, colouredPickerIcon, type QuickSwitchAction, type QuickSwitchItemModel } from '../core/presentation/quickSwitch';
 import { sanitizeLabel } from '../core/presentation/statusBar';
 import { neutralizeLinks, redactText } from '../core/security/redact';
 import { assessFreshness, type RefreshService } from '../core/service/refreshService';
@@ -17,6 +17,22 @@ export interface SwitchFlowDependencies {
   readonly switchService: SwitchService;
   readonly configuration: ExtensionConfiguration;
   readonly homeDir: string;
+  /** Where the coloured picker icons are shipped; plain icons without it. */
+  readonly context?: Pick<vscode.ExtensionContext, 'extensionUri'>;
+}
+
+/**
+ * Every row's icon goes in the icon column (`iconPath`), so the rows line up; accounts near or at
+ * their limit get a coloured image when `display.pickerColors` is on (a quick pick ignores
+ * theme-icon colours and cannot colour text).
+ */
+function pickerIcon(deps: SwitchFlowDependencies, model: QuickSwitchItemModel): vscode.QuickPickItem['iconPath'] {
+  const coloured = deps.context !== undefined && deps.configuration.pickerColors() ? colouredPickerIcon(model.iconId, model.tone) : undefined;
+  if (coloured !== undefined && deps.context !== undefined) {
+    const folder = vscode.Uri.joinPath(deps.context.extensionUri, 'media', 'picker');
+    return { light: vscode.Uri.joinPath(folder, `${coloured}-light.svg`), dark: vscode.Uri.joinPath(folder, `${coloured}-dark.svg`) };
+  }
+  return model.iconId === undefined ? undefined : new vscode.ThemeIcon(model.iconId);
 }
 
 interface ActionItem extends vscode.QuickPickItem {
@@ -164,13 +180,14 @@ export async function runQuickSwitch(deps: SwitchFlowDependencies): Promise<Swit
     model.separator
       ? { label: model.label, kind: vscode.QuickPickItemKind.Separator }
       : {
-          label: `${model.iconId ? `$(${model.iconId}) ` : ''}${model.label}`,
+          label: model.label,
+          iconPath: pickerIcon(deps, model),
           ...(model.description === undefined ? {} : { description: model.description }),
           ...(model.detail === undefined ? {} : { detail: sanitizeLabel(model.detail) }),
           ...(model.action === undefined ? {} : { action: model.action }),
         },
   );
-  items.push({ label: '', kind: vscode.QuickPickItemKind.Separator }, { label: `$(add) ${t('Add Account…')}`, addAccount: true });
+  items.push({ label: '', kind: vscode.QuickPickItemKind.Separator }, { label: t('Add Account…'), iconPath: new vscode.ThemeIcon('add'), addAccount: true });
   const active = snapshot.active.slot === undefined ? t('unknown') : `#${snapshot.active.slot}`;
   const picked = await pickOne(items, {
     title: t('Cswap: switch account (active: {0})', active),

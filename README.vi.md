@@ -18,7 +18,7 @@ Xem mức dùng của mọi tài khoản Claude trong nháy mắt, chuyển tài
   ```
   Các khung là đúng những khung cswap báo cho từng tài khoản: gói chỉ có hạn mức tuần sẽ không có cột 5 giờ, và các menu cũng chỉ nói tới hạn mức tuần. Khi các tài khoản thuộc nhiều gói khác nhau, tài khoản thiếu khung nào vẫn giữ cột của khung đó (`5h ‒%`, rộng đúng bằng một con số phần trăm), ở thanh bên, bảng chọn chuyển tài khoản và bảng tài khoản trên bảng điều khiển.
 - **Thanh trạng thái**: tài khoản đang dùng kèm đếm ngược tới lần làm mới kế tiếp, chuyển vàng/đỏ khi gần chạm giới hạn: `#1 · 5h 38% · 7d 46% · 0:42`.
-- **Bảng chọn chuyển tài khoản và phím tắt**: `Ctrl+Alt+S` mở danh sách *Tự động chọn*, *Tài khoản đang dùng*, *Còn dùng được* và *Chạm ngưỡng*, mỗi tài khoản có thanh mức dùng theo từng khung và thời gian tới reset; `Ctrl+Alt+Shift+S` chuyển thẳng sang tài khoản kế tiếp còn dùng được.
+- **Bảng chọn chuyển tài khoản và phím tắt**: `Ctrl+Alt+S` mở danh sách *Tự động chọn*, *Tài khoản đang dùng*, *Còn dùng được* và *Chạm ngưỡng*, mỗi tài khoản có thanh mức dùng theo từng khung và thời gian tới reset; tài khoản sắp chạm hoặc đã chạm ngưỡng có biểu tượng vàng hoặc đỏ (*Cài đặt nhanh › Màu theo mức dùng*). `Ctrl+Alt+Shift+S` chuyển thẳng sang tài khoản kế tiếp còn dùng được.
 - **Bảng điều khiển**: gợi ý kèm nút chuyển một chạm, quota còn lại, bảng tài khoản sắp xếp được, lịch reset 7 ngày tới và chi tiết từng tài khoản.
 - **Thêm tài khoản**: sau khi `/login` trong Claude Code, hoặc dán setup-token (`claude setup-token`) hay API key; token chỉ được chuyển cho cswap qua đầu vào chuẩn (stdin).
 - **Tự động chuyển** bằng chính `cswap auto` của cswap, có cả **Tự chuyển khi hết hạn mức** bật/tắt bằng một bước.

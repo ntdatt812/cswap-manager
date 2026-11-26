@@ -114,6 +114,11 @@ export class ExtensionConfiguration {
   }
 
   /** The countdown to the next automatic refresh at the end of the status bar item (on by default). */
+  /** Coloured icons for accounts near or at their limit in the Switch Account picker. */
+  pickerColors(): boolean {
+    return this.config.get<boolean>('display.pickerColors', true) !== false;
+  }
+
   statusBarCountdown(): boolean {
     return this.config.get<boolean>('statusBar.countdown', true) !== false;
   }
@@ -280,6 +285,7 @@ export const USER_SETTING_KEYS = [
   'statusBar.mode',
   'statusBar.parts',
   'display.barStyle',
+  'display.pickerColors',
   'statusBar.colors',
   'statusBar.countdown',
   'statusBar.buttons',

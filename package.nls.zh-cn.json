@@ -86,6 +86,7 @@
   "config.statusBarColors.none": "不着色。",
   "config.statusBarButtons.description": "状态栏中显示在账户旁边的按钮：`refresh`（刷新）、`dashboard`（仪表板）和 `settings`（快速设置）。",
   "config.barStyle.description": "所有用量进度条的外观：包括侧边栏、账户切换器和状态栏中的进度条。",
+  "config.pickerColors.description": "在切换账户列表中，接近限额的账户显示黄色图标，达到限额的账户显示红色图标，与状态栏的颜色一致。该列表无法为文字着色，只能为图标着色。最方便在 **Cswap: 快速设置…** 中更改。",
   "command.setDisplayName.title": "设置显示名称…",
   "config.displayNames.description": "代替电子邮件显示的名称（可使用大写字母、空格和中文等字符）。可通过账户的 **设置显示名称…** 操作进行设置；这些名称保存在 VS Code 中，绝不会发送给 cswap。键是能识别账户而无需保存其电子邮件的短哈希值。",
   "command.addAccount.title": "添加账户…",

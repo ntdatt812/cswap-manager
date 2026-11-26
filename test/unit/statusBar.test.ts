@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { describe, it } from 'node:test';
 import { cliError } from '../../src/core/cli/cliErrors';
 import { parseListOutput } from '../../src/core/model/parsers';
@@ -6,10 +8,11 @@ import { buildSnapshot } from '../../src/core/model/reconcile';
 import type { AccountsSnapshot } from '../../src/core/model/types';
 import type { Translate } from '../../src/core/presentation/accountTree';
 import { DEFAULT_THRESHOLDS, FIGURE_SPACE } from '../../src/core/presentation/format';
-import { buildQuickSwitchItems } from '../../src/core/presentation/quickSwitch';
+import { buildQuickSwitchItems, colouredPickerIcon } from '../../src/core/presentation/quickSwitch';
 import { buildStatusBarModel, sanitizeLabel, statusBarParts, type StatusBarOptions, type StatusBarPart } from '../../src/core/presentation/statusBar';
 import type { AccountsState } from '../../src/core/service/refreshService';
 import { fixture } from '../helpers/fixtures';
+import { PROJECT_ROOT } from '../helpers/l10nKeys';
 
 const t: Translate = (message, ...args) => message.replace(/\{(\d+)\}/g, (_, index: string) => String(args[Number(index)]));
 const NOW = Date.parse('2026-11-24T04:00:00Z');
@@ -184,6 +187,35 @@ describe('buildQuickSwitchItems', () => {
       7,
       8,
     ]);
+  });
+
+  it('marks accounts near or at their limit with a tone for a coloured icon, and only those', () => {
+    const tones = Object.fromEntries(
+      items.flatMap((item) => (item.action?.kind === 'account' ? [[item.action.slot, `${item.iconId}${item.tone === undefined ? '' : `/${item.tone}`}`]] : [])),
+    );
+    assert.deepEqual(tones, {
+      1: 'warning/warning',
+      2: 'error/critical',
+      3: 'account',
+      4: 'account',
+      5: 'pass-filled',
+      6: 'error/critical',
+      7: 'account',
+      8: 'circle-slash',
+    });
+    // Every tone that occurs has a coloured image shipped in media/picker.
+    for (const item of items) {
+      if (item.tone !== undefined) {
+        assert.ok(colouredPickerIcon(item.iconId, item.tone), `${item.iconId}/${item.tone}`);
+      }
+    }
+    assert.equal(colouredPickerIcon('pass-filled', 'critical'), 'pass-filled-critical', 'the current account at its limit');
+    for (const [icon, tone] of [['pass-filled', 'warning'], ['pass-filled', 'critical'], ['warning', 'warning'], ['error', 'critical']] as const) {
+      for (const theme of ['light', 'dark']) {
+        assert.ok(fs.existsSync(path.join(PROJECT_ROOT, 'media', 'picker', `${colouredPickerIcon(icon, tone)}-${theme}.svg`)), `${icon}-${tone}-${theme}`);
+      }
+    }
+    assert.equal(colouredPickerIcon('account', undefined), undefined);
   });
 
   it('shows a usage bar with the next reset and keeps details on the second line', () => {
